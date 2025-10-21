@@ -2,6 +2,7 @@ package com.org.clientService.Entity;
 
 import java.util.Date;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -11,41 +12,51 @@ import lombok.Data;
 
 @Entity
 @Data
-@Table(name = "CLIENTS")
+@Table(name = "CLIENT")
 public class Client {
 	
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	private long id;
 	
+	@Column(name = "firstname")
 	private String firstName;
+	
+	@Column(name = "lastname")
 	private String lastName;
+
+	@Column(name = "dob")
 	private Date dob;
+
+	@Column(name = "age")
 	private int age;
-	private Address address;
-	private int phoneNumber;
-	private int emergencyPhoneNumber;
+	//private Address address;
+
+	@Column(name = "phonenumber")
+	private String phoneNumber;
+
+	@Column(name = "emergencyphonenumber")
+	private String emergencyPhoneNumber;
+
+	@Column(name = "email")
 	private String email;
+
+	@Column(name = "pronouns")
 	private String pronouns;
+
+	@Column(name = "gender")
 	private String gender;
+	/*
+	@Column(name = "qualification")
 	private String qualification;
+	
+	@Column(name = "currentOccupation")
 	private String currentOccupation;
-	private ModesOfSession modeOfSession;
-	private Day preferredDay;
+	*/
+	@Column(name = "modeofsession")
+	private String modeOfSession;
 	
-	private enum ModesOfSession{
-		ONLINE,
-		OFFLINE_AT_HALUSURU,
-		OFFLINE_AT_SESHADRIPURAM
-	}
+	@Column(name = "preferredday")
+	private int preferredDay;
 	
-	private enum Day {
-	    MONDAY,
-	    TUESDAY,
-	    WEDNESDAY,
-	    THURSDAY,
-	    FRIDAY,
-	    SATURDAY,
-	    SUNDAY
-	}
 }
