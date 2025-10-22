@@ -1,6 +1,6 @@
 package com.org.clientService.Entity;
 
-import java.util.Date;
+import java.sql.Date;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
