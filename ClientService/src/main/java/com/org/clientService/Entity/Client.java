@@ -17,6 +17,7 @@ public class Client {
 	@Id
 	private String clientId;
 
+	private String therapistId;
 	private String firstName;
 	private String lastName;
 	private Date dob;

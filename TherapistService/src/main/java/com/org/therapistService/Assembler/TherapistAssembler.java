@@ -2,6 +2,8 @@ package com.org.therapistService.Assembler;
 
 import com.org.therapistService.Entity.Therapist;
 import com.org.therapistService.Entity.TherapistDto;
+import com.org.therapistService.Entity.TherapistServices;
+import com.org.therapistService.Entity.TherapistServicesDto;
 
 public class TherapistAssembler {
 
@@ -29,6 +31,28 @@ public class TherapistAssembler {
 		therapistDto.setYearsOfExperience(therapist.getYearsOfExperience());
 		
 		return therapistDto;
+	}
+	
+	public TherapistServices assembleDtoToEntity(TherapistServicesDto therapistServicesDto) {
+		TherapistServices therapistServices = new TherapistServices();
+		therapistServices.setTherapistId(therapistServicesDto.getTherapistId());
+		therapistServices.setServiceType(therapistServicesDto.getServiceType());
+		therapistServices.setPrice(therapistServicesDto.getPrice());
+		therapistServices.setDuration(therapistServicesDto.getDuration());
+		therapistServices.setActive(therapistServicesDto.isActive());
+		
+		return therapistServices;
+	}
+	
+	public TherapistServicesDto assembleEntityToDto(TherapistServices therapistServices) {
+		TherapistServicesDto therapistServicesDto = new TherapistServicesDto();
+		therapistServicesDto.setTherapistId(therapistServices.getTherapistId());
+		therapistServicesDto.setServiceType(therapistServices.getServiceType());
+		therapistServicesDto.setPrice(therapistServices.getPrice());
+		therapistServicesDto.setDuration(therapistServices.getDuration());
+		therapistServicesDto.setActive(therapistServices.isActive());
+		
+		return therapistServicesDto;
 	}
 	
 }

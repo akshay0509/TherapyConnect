@@ -14,6 +14,5 @@ public class TherapistDto {
 	private String phoneNumber;
 	private String email;
 	private String gender;
-	//private String qualification;
 	private int yearsOfExperience;
 }

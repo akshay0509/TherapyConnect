@@ -9,13 +9,20 @@ import org.springframework.stereotype.Service;
 import com.org.therapistService.Assembler.TherapistAssembler;
 import com.org.therapistService.Entity.Therapist;
 import com.org.therapistService.Entity.TherapistDto;
+import com.org.therapistService.Entity.TherapistServices;
+import com.org.therapistService.Entity.TherapistServicesDto;
 import com.org.therapistService.Repository.TherapistRepository;
+import com.org.therapistService.Repository.TherapistServicesRepository;
 
 @Service
 public class TherapistService {
 
 	@Autowired
 	private TherapistRepository therapistRepository;
+	
+	@Autowired
+	private TherapistServicesRepository therapistServicesRepository;
+	
 	private TherapistAssembler therapistAssembler = new TherapistAssembler();
 	
 	public List<TherapistDto> getAllTherapists(){
@@ -32,5 +39,10 @@ public class TherapistService {
 	public void createTherapist(TherapistDto therapistDto) {
 		Therapist therapist = therapistAssembler.assembleDtoToEntity(therapistDto);
 		therapistRepository.save(therapist);
+	}
+	
+	public void createTherapistServices(TherapistServicesDto therapistServicesDto) {
+		TherapistServices therapistServices = therapistAssembler.assembleDtoToEntity(therapistServicesDto);
+		therapistServicesRepository.save(therapistServices);
 	}
 }
