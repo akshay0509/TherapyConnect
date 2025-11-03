@@ -2,6 +2,8 @@ package com.org.therapistService.Entity;
 
 import java.util.UUID;
 
+import com.org.therapistService.Enums.ServiceType;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -37,9 +39,4 @@ public class TherapistServices {
             this.serviceId = "SRV" + uniquePart;
         }
     }
-	
-	public enum ServiceType{
-		INDIVIDUAL_THERAPY,
-		COUPLES_THERAPY
-	}
 }

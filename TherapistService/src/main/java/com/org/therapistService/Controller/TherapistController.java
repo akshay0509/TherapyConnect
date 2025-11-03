@@ -35,11 +35,11 @@ public class TherapistController {
 	}
 	
 	@PostMapping("/{therapistId}/create-client")
-	public ResponseEntity<Long> createClient(
-			@PathVariable Long therapistId,
+	public ResponseEntity<String> createClient(
+			@PathVariable String therapistId,
 			@RequestBody ClientDto clientDto){
 		
-		Long clientId = clientServiceProxy.createClient(clientDto);
+		String clientId = clientServiceProxy.createClient(clientDto);
 		return ResponseEntity.ok(clientId);
 	}
 }

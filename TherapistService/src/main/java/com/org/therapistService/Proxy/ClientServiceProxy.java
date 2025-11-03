@@ -1,7 +1,6 @@
 package com.org.therapistService.Proxy;
 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
@@ -13,9 +12,17 @@ public class ClientServiceProxy {
 	@Autowired
 	private RestTemplate restTemplate;
 	
-	public Long createClient(ClientDto clientDto) {
-		String url = "http://client-service/client";
-		ResponseEntity<Long> response = restTemplate.postForEntity(url, clientDto, Long.class);
-		return response.getBody();
+	private final String clientServiceBaseUrl = "http://client-service";
+	
+	public String createClient(ClientDto clientDto) {
+		String url = clientServiceBaseUrl + "/client";
+		String response = restTemplate.postForObject(url, clientDto, String.class);
+		return response;
+	}
+	
+	public ClientDto getClient(String clientId) {
+		String url = clientServiceBaseUrl + "/client/{clientId}";
+		ClientDto response = restTemplate.getForObject(url, ClientDto.class, clientId);
+		return response;
 	}
 }

@@ -3,6 +3,8 @@ package com.org.therapistService.Entity;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+import com.org.therapistService.Enums.SessionType;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -43,10 +45,4 @@ public class TherapistAvailability {
             this.slotId = "SLT" + uniquePart;
         }
     }
-	
-	public enum SessionType{
-		ONLINE,
-		OFFLINE_AT_HALUSURU,
-		OFFLINE_AT_SESHADRIPURAM
-	}
 }

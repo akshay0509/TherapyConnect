@@ -3,6 +3,8 @@ package com.org.therapistService.Entity;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+import com.org.therapistService.Enums.AppointmentStatus;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -57,11 +59,4 @@ public class TherapistAppointments {
             this.appointmentId = "APP" + uniquePart;
         }
     }
-	
-	public enum AppointmentStatus {
-	    SCHEDULED,
-	    COMPLETED,
-	    CANCELLED_BY_CLIENT,
-	    CANCELLED_BY_THERAPIST
-	}
 }

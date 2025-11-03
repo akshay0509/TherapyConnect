@@ -1,7 +1,6 @@
 package com.org.therapistService.Entity;
 
-import java.sql.Date;
-import java.sql.Time;
+import java.time.LocalDateTime;
 
 import lombok.Data;
 
@@ -9,6 +8,5 @@ import lombok.Data;
 public class ClientReminderDto {
 	
 	private String email;
-	private Date AppointmentDate;
-	private Time AppointmentTime;
+	private LocalDateTime AppointmentTime;
 }
