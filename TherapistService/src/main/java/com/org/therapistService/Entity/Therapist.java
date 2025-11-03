@@ -2,11 +2,11 @@ package com.org.therapistService.Entity;
 
 
 import java.sql.Date;
+import java.util.UUID;
 
 import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import lombok.Data;
 
@@ -16,8 +16,7 @@ import lombok.Data;
 public class Therapist {
 
 	@Id
-	@GeneratedValue(strategy = GenerationType.IDENTITY)
-	private long id;
+	private String therapistId;
 	
 	private String firstName;
 	private String lastName;
@@ -25,6 +24,13 @@ public class Therapist {
 	private String phoneNumber;
 	private String email;
 	private String gender;
-	//private String qualification;
 	private int yearsOfExperience;
+	
+	@PrePersist
+    public void generateId() {
+        if (this.therapistId == null) {
+            String uniquePart = UUID.randomUUID().toString().substring(0, 8);
+            this.therapistId = "THP" + uniquePart;
+        }
+    }
 }
