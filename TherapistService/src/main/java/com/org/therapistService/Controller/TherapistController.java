@@ -11,6 +11,10 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.org.therapistService.Entity.ClientDto;
+import com.org.therapistService.Entity.TherapistAppointmentsDto;
+import com.org.therapistService.Entity.TherapistAvailabilityDto;
+import com.org.therapistService.Entity.TherapistAvailabilityOverridesDto;
+import com.org.therapistService.Entity.TherapistAvailabilityRulesDto;
 import com.org.therapistService.Entity.TherapistDto;
 import com.org.therapistService.Entity.TherapistServicesDto;
 import com.org.therapistService.Proxy.ClientServiceProxy;
@@ -44,23 +48,33 @@ public class TherapistController {
 		return ResponseEntity.ok(clientId);
 	}
 	
+	@GetMapping("/therapist-services")
+	public List<TherapistServicesDto> getAllTherapistServices(){
+		return therapistService.getAllTherapistServices();
+	}
+	
 	@PostMapping("/therapist/create-service")
 	public void createTherapistService(@RequestBody TherapistServicesDto therapistServicesDto) {
 		therapistService.createTherapistServices(therapistServicesDto);
 	}
 	
+	@PostMapping("/therapist/create-availability")
+	public void createTherapistAvailability(@RequestBody TherapistAvailabilityDto therapistAvailabilityDto) {
+		therapistService.createTherapistAvailability(therapistAvailabilityDto);
+	}
+	
 	@PostMapping("/therapist/create-appointment")
-	public void createTherapistAppointment(@RequestBody TherapistDto therapistDto) {
-		therapistService.createTherapist(therapistDto);
+	public void createTherapistAppointment(@RequestBody TherapistAppointmentsDto therapistAppointmentsDto) {
+		therapistService.createTherapistAppointments(therapistAppointmentsDto);
 	}
 	
 	@PostMapping("/therapist/create-availability-rules")
-	public void createTherapistAvailabilityRules(@RequestBody TherapistDto therapistDto) {
-		therapistService.createTherapist(therapistDto);
+	public void createTherapistAvailabilityRules(@RequestBody TherapistAvailabilityRulesDto therapistAvailabilityRulesDto) {
+		therapistService.createTherapistAvailabilityRules(therapistAvailabilityRulesDto);
 	}
 	
 	@PostMapping("/therapist/create-availability-overrides")
-	public void createTherapistAvailabilityOverrides(@RequestBody TherapistDto therapistDto) {
-		therapistService.createTherapist(therapistDto);
+	public void createTherapistAvailabilityOverrides(@RequestBody TherapistAvailabilityOverridesDto therapistAvailabilityOverridesDto) {
+		therapistService.createTherapistAvailabilityOverrides(therapistAvailabilityOverridesDto);
 	}
 }

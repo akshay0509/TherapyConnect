@@ -7,7 +7,8 @@ import lombok.Data;
 
 @Data
 public class TherapistDto {
-
+	
+	private String therapistId;
 	private String firstName;
 	private String lastName;
 	private Date dob;

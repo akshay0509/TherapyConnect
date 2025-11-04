@@ -32,7 +32,6 @@ public class TherapistAvailability {
 	private LocalDateTime endTime;
 
 	@Enumerated(EnumType.STRING)
-	//@Column(name = "session_type", nullable = false)
 	private SessionType sessionType;
 	
 	@Column(nullable = true)
