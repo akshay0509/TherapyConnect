@@ -12,6 +12,6 @@ public class TherapistAvailabilityRulesDto {
 	private LocalTime dayOfWeek;
 	private LocalTime startTime;
 	private LocalTime endTime;
-	private boolean isActive;
+	private Boolean isActive;
 	
 }

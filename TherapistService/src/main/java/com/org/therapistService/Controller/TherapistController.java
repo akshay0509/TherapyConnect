@@ -53,6 +53,11 @@ public class TherapistController {
 		return therapistService.getAllTherapistServices();
 	}
 	
+	@GetMapping("/therapist-services/{therapistId}")
+	public List<TherapistServicesDto> getTherapistServices(@PathVariable String therapistId){
+		return therapistService.getTherapistServices(therapistId);
+	}
+	
 	@PostMapping("/therapist/create-service")
 	public void createTherapistService(@RequestBody TherapistServicesDto therapistServicesDto) {
 		therapistService.createTherapistServices(therapistServicesDto);

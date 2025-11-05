@@ -12,5 +12,5 @@ public class TherapistServicesDto {
 	private ServiceType serviceType;
 	private int duration;
 	private float price;
-	private boolean isActive;
+	private Boolean isActive;
 }

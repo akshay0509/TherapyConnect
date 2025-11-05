@@ -11,11 +11,14 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.Data;
 
 @Entity
 @Data
-@Table(name = "THERAPIST_SERVICES")
+@Table(name = "THERAPIST_SERVICES", uniqueConstraints = {
+	    @UniqueConstraint(columnNames = {"therapistId", "serviceType"}) 
+	})
 public class TherapistServices {
 
 	@Id
@@ -25,7 +28,6 @@ public class TherapistServices {
 	private String therapistId;
 	
 	@Enumerated(EnumType.STRING)
-	//@Column(name = "service_type", nullable = false)
 	private ServiceType serviceType;
 	
 	private int duration;

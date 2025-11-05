@@ -11,6 +11,6 @@ public class TherapistAvailabilityOverridesDto {
 	private String therapistId;
 	private LocalDateTime startTime;
 	private LocalDateTime endTime;
-	private boolean isAvailable;
+	private Boolean isAvailable;
 	
 }
