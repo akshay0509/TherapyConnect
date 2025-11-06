@@ -34,10 +34,8 @@ public class EmailReminderScheduler {
 		List<TherapistAppointments> therapistAppointmentsList = therapistAppointmentsRepository.findByReminderSentFalseAndStatusAndStartTimeBetween(AppointmentStatus.SCHEDULED, LocalDateTime.now(), tomorrow);
 		
 		for(TherapistAppointments therapistAppointment : therapistAppointmentsList) {
-			clientReminderDto = new ClientReminderDto();
 			ClientDto clientDto = clientServiceProxy.getClient(therapistAppointment.getClientId());
-			clientReminderDto.setAppointmentTime(therapistAppointment.getStartTime());
-			clientReminderDto.setEmail(clientDto.getEmail());
+			clientReminderDto = new ClientReminderDto(clientDto.getEmail(), therapistAppointment.getStartTime());
 			
 			emailReminderProducer.sendMessage(therapistAppointment.getClientId(), clientReminderDto);
 		}
