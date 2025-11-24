@@ -9,5 +9,5 @@ import com.org.therapistService.Entity.TherapistAvailabilityOverrides;
 
 public interface TherapistAvailabilityOverridesRepository extends JpaRepository<TherapistAvailabilityOverrides, String>{
 
-	List<TherapistAvailabilityOverrides> findByTherapistIdAndStartTimeBetween(Long therapistId, LocalDateTime start, LocalDateTime end);
+	List<TherapistAvailabilityOverrides> findByTherapistIdAndStartTimeBetween(String therapistId, LocalDateTime start, LocalDateTime end);
 }

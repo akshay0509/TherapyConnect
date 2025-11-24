@@ -8,5 +8,5 @@ import com.org.therapistService.Entity.TherapistAvailability;
 
 public interface TherapistAvailabilityRepository extends JpaRepository<TherapistAvailability, String>{
 
-	boolean existsByTherapistIdAndStartTime(Long therapistId, LocalDateTime startTime);
+	boolean existsByTherapistIdAndStartTime(String therapistId, LocalDateTime startTime);
 }

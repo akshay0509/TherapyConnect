@@ -10,7 +10,7 @@ import com.org.therapistService.Entity.TherapistAvailabilityRules;
 public interface TherapistAvailabilityRulesRepository extends JpaRepository<TherapistAvailabilityRules, String> {
 
 	List<TherapistAvailabilityRules> findByTherapistIdAndDayOfWeekAndIsActiveTrue(
-			Long therapistId,
+			String therapistId,
 			int dayOfWeek
 			);
 	

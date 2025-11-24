@@ -26,7 +26,7 @@ public class TherapistAvailabilityGenerator {
     private TherapistAvailabilityRepository therapistAvailabilityRepository;
 
 	@Scheduled(cron = "0 0 2 * * *")
-	public void generateTherapistAvailability( String therapistId, LocalDate startDate, LocalDate endDate) {
+	public void generateTherapistAvailabilitySlots(String therapistId, LocalDate startDate, LocalDate endDate) {
 		
 		List<String> therapistIds = therapistAvailabilityRulesRepository.findAllDistinctTherapistIds();
 		
