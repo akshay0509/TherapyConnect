@@ -11,4 +11,6 @@ public interface TherapistServicesRepository extends JpaRepository<TherapistServ
 	List<TherapistServices> findByTherapistId(
 			String therapistId
 	       );
+	
+	List<TherapistServices> findByTherapistIdAndIsActiveTrue(String therapistId);
 }
