@@ -92,9 +92,15 @@ public class TherapistService {
 		return dtoList;
 	}
 	
-	public void createTherapistAvailability(TherapistAvailabilityDto therapistAvailabilityDto) {
-		TherapistAvailability therapistAvailability = therapistAssembler.assembleDtoToEntity(therapistAvailabilityDto);
-		therapistAvailabilityRepository.save(therapistAvailability);
+	public List<TherapistAvailabilityDto> getTherapistAvailability(String therapistId) {
+		List<TherapistAvailability> list = therapistAvailabilityRepository.findByTherapistId(therapistId);
+		List<TherapistAvailabilityDto> dtoList = new ArrayList<TherapistAvailabilityDto>();
+		TherapistAvailabilityDto dto;
+		for(TherapistAvailability rec : list) {
+			dto = therapistAssembler.assembleEntityToDto(rec);
+			dtoList.add(dto);
+		}
+		return dtoList;
 	}
 	
 	public List<TherapistAvailabilityDto> getAllTherapistAvailability(){
