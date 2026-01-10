@@ -1,0 +1,17 @@
+{"properties": [
+  {
+    "name": "spring.cloud.gateway.server.webflux.discovery.locator.lower-case-service-id",
+    "type": "java.lang.String",
+    "description": "A description for 'spring.cloud.gateway.server.webflux.discovery.locator.lower-case-service-id'"
+  },
+  {
+    "name": "spring.cloud.gateway.server.webmvc.discovery.locator.enabled",
+    "type": "java.lang.String",
+    "description": "A description for 'spring.cloud.gateway.server.webmvc.discovery.locator.enabled'"
+  },
+  {
+    "name": "spring.cloud.gateway.server.webmvc.discovery.locator.lower-case-service-id",
+    "type": "java.lang.String",
+    "description": "A description for 'spring.cloud.gateway.server.webmvc.discovery.locator.lower-case-service-id'"
+  }
+]}

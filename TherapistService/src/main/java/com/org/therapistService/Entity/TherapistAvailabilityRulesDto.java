@@ -9,7 +9,7 @@ public class TherapistAvailabilityRulesDto {
 
 	private String ruleId;
 	private String therapistId;
-	private LocalTime dayOfWeek;
+	private int dayOfWeek;
 	private LocalTime startTime;
 	private LocalTime endTime;
 	private Boolean isActive;

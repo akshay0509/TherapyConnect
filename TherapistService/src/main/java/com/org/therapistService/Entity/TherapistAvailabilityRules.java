@@ -29,7 +29,7 @@ public class TherapistAvailabilityRules {
 	private String therapistId;
 
 	@Column(nullable = false)
-	private LocalTime dayOfWeek;
+	private int dayOfWeek;
 	
 	@Column(nullable = false)
 	private LocalTime startTime;
