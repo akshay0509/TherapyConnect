@@ -6,6 +6,8 @@ import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -33,6 +35,8 @@ public class AvailabilitySlotGeneratorService {
 	
 	@Autowired
 	private TherapistServicesRepository therapistServicesRepository;
+	
+	private static final Logger logger = LogManager.getLogger(AvailabilitySlotGeneratorService.class);
 
 	public List<TherapistAvailability> generateTherapistAvailabilitySlots(String therapistId, LocalDate startDate, LocalDate endDate) {
 

@@ -69,6 +69,7 @@ public class TherapistAssembler {
 		TherapistAvailabilityRules therapistAvailabilityRules = new TherapistAvailabilityRules();
 		therapistAvailabilityRules.setTherapistId(therapistAvailabilityRulesDto.getTherapistId());
 		therapistAvailabilityRules.setActive(therapistAvailabilityRulesDto.getIsActive());
+		therapistAvailabilityRules.setSessionType(therapistAvailabilityRulesDto.getSessionType());
 		therapistAvailabilityRules.setDayOfWeek(therapistAvailabilityRulesDto.getDayOfWeek());
 		therapistAvailabilityRules.setStartTime(therapistAvailabilityRulesDto.getStartTime());
 		therapistAvailabilityRules.setEndTime(therapistAvailabilityRulesDto.getEndTime());
@@ -81,6 +82,7 @@ public class TherapistAssembler {
 		therapistAvailabilityRulesDto.setRuleId(therapistAvailabilityRules.getRuleId());
 		therapistAvailabilityRulesDto.setTherapistId(therapistAvailabilityRules.getTherapistId());
 		therapistAvailabilityRulesDto.setIsActive(therapistAvailabilityRules.isActive());
+		therapistAvailabilityRulesDto.setSessionType(therapistAvailabilityRules.getSessionType());
 		therapistAvailabilityRulesDto.setDayOfWeek(therapistAvailabilityRules.getDayOfWeek());
 		therapistAvailabilityRulesDto.setStartTime(therapistAvailabilityRules.getStartTime());
 		therapistAvailabilityRulesDto.setEndTime(therapistAvailabilityRules.getEndTime());

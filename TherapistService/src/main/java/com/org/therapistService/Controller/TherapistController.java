@@ -94,14 +94,19 @@ public class TherapistController {
 	@PostMapping("/create-availability-overrides")
 	public void createTherapistAvailabilityOverrides(@RequestBody TherapistAvailabilityOverridesDto therapistAvailabilityOverridesDto) {
 		therapistService.createTherapistAvailabilityOverrides(therapistAvailabilityOverridesDto);
-	}
+	}	
 
-	@PostMapping("/{therapistId}/generate-slots")
-	public void generateSlots(
+	@PostMapping("/generate-slots/{therapistId}")
+	public ResponseEntity<String> generateSlots(
 			@PathVariable String therapistId,
-			@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
-			@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+			@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+			@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
+		
+		if (endDate.isBefore(startDate)) {
+            return ResponseEntity.badRequest().body("End date cannot be before start date.");
+        }
 
-		availabilitySlotGeneratorService.generateTherapistAvailabilitySlots(therapistId, from, to);
+		availabilitySlotGeneratorService.generateTherapistAvailabilitySlots(therapistId, startDate, endDate);
+		return ResponseEntity.ok(String.format("Successfully generated slots"));
 	}
 }
