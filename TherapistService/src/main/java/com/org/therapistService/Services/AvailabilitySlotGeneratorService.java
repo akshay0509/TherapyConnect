@@ -6,8 +6,8 @@ import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -36,9 +36,10 @@ public class AvailabilitySlotGeneratorService {
 	@Autowired
 	private TherapistServicesRepository therapistServicesRepository;
 	
-	private static final Logger logger = LogManager.getLogger(AvailabilitySlotGeneratorService.class);
+	private static final Logger logger = LoggerFactory.getLogger(AvailabilitySlotGeneratorService.class);
 
 	public List<TherapistAvailability> generateTherapistAvailabilitySlots(String therapistId, LocalDate startDate, LocalDate endDate) {
+		logger.info("inside generateTherapistAvailabilitySlots");
 
 		List<TherapistAvailability> newSlotsToSave = new ArrayList<>();
 		
@@ -86,9 +87,11 @@ public class AvailabilitySlotGeneratorService {
 		}
 		// 8. Save all new slots in a single batch
 		if (!newSlotsToSave.isEmpty()) {
+			logger.info("exiting generateTherapistAvailabilitySlots");
 			return therapistAvailabilityRepository.saveAll(newSlotsToSave);
 		}
 
+		logger.info("exiting generateTherapistAvailabilitySlots");
 		return new ArrayList<>();
 
 	}

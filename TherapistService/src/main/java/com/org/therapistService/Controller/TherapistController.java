@@ -48,13 +48,13 @@ public class TherapistController {
 	}
 
 	//get all services for a therapist
-	@GetMapping("/therapist-services/{therapistId}")
+	@GetMapping("{therapistId}/therapist-services")
 	public List<TherapistServicesDto> getTherapistServices(@PathVariable String therapistId){
 		return therapistService.getTherapistServices(therapistId);
 	}
 
 	//get a therapist availability
-	@GetMapping("/therapist-availability/{therapistId}")
+	@GetMapping("{therapistId}/therapist-availability")
 	public void getTherapistAvailability(@PathVariable String therapistId) {
 		therapistService.getTherapistAvailability(therapistId);
 	}
@@ -70,7 +70,7 @@ public class TherapistController {
 	public ResponseEntity<String> createClient(
 			@PathVariable String therapistId,
 			@RequestBody ClientDto clientDto){
-
+		
 		String clientId = clientServiceProxy.createClient(clientDto);
 		return ResponseEntity.ok(clientId);
 	}
@@ -96,7 +96,7 @@ public class TherapistController {
 		therapistService.createTherapistAvailabilityOverrides(therapistAvailabilityOverridesDto);
 	}	
 
-	@PostMapping("/generate-slots/{therapistId}")
+	@PostMapping("{therapistId}/generate-slots")
 	public ResponseEntity<String> generateSlots(
 			@PathVariable String therapistId,
 			@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,

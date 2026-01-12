@@ -1,5 +1,7 @@
 package com.org.therapistService;
 
+import java.util.Collections;
+
 import org.apache.kafka.clients.admin.NewTopic;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -9,6 +11,8 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.kafka.config.TopicBuilder;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.web.client.RestTemplate;
+
+import com.org.therapistService.Config.TraceIdInterceptor;
 
 @EnableDiscoveryClient
 @SpringBootApplication
@@ -22,7 +26,9 @@ public class TherapistServiceApplication {
 	@Bean
 	@LoadBalanced
 	RestTemplate restTemmplate() { 
-		return new RestTemplate();
+		RestTemplate restTemplate = new RestTemplate();
+		restTemplate.setInterceptors(Collections.singletonList(new TraceIdInterceptor()));
+		return restTemplate;
 	}
 	
 	@Bean

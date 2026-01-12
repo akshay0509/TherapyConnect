@@ -1,4 +1,4 @@
-package com.org.clientService;
+package com.org.gatewayService;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;

@@ -1,47 +1,42 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<Configuration status="WARN" monitorInterval="30">
+    <Properties>
+        <Property name="LOG_PATH">./logs/client-service</Property>
+        <Property name="ARCHIVE_PATH">${LOG_PATH}/archive</Property>
+    </Properties>
 
-<Configuration status="DEBUG">
-    
     <Appenders>
-        <!-- <File name="logToFile" filename="C:\Training\Debugs\mylog.log">
-            <PatternLayout>
-                <Pattern>%d %p %C-[%M:%L] [%t] %m%n</Pattern>
-            </PatternLayout>
-        </File>
-        
-        <Console name="ToConsole" target="SYSTEM_OUT">
-            <PatternLayout Pattern= "%d{HH:mm:ss.SSS} [%t] %-5level %logger{36} - %msg%n"/>
-        </Console> -->
-        <RollingFile name="logToRollingFile" filename="D:\Logs\mylog.log"
-                filePattern="D:\Logs\$${date:yyyy-MM}\app-%d{MM-dd-yyyy}-%i.log.gz">
-                <PatternLayout>
-                    <Pattern>%d %p %c:%m:%L %m%n</Pattern>
-                </PatternLayout>
-                
-                <Policies>
-                    <SizeBasedTriggeringPolicy size="1 KB"/>
-                </Policies>
-                
-                <DefaultRolloverStrategy max="10"/>
-                
+        <Console name="JsonConsole" target="SYSTEM_OUT">
+            <JsonTemplateLayout eventTemplateUri="classpath:EcsLayout.json">
+                <EventTemplateAdditionalField key="appName" value="ClientService"/>
+                <EventTemplateAdditionalField key="environment" value="PROD"/>
+            </JsonTemplateLayout>
+        </Console>
+
+        <RollingFile name="AuditFile" 
+                     fileName="${LOG_PATH}/audit.json"
+                     filePattern="${ARCHIVE_PATH}/audit-%d{yyyy-MM-dd}-%i.json.gz">
+            
+            <JsonTemplateLayout eventTemplateUri="classpath:EcsLayout.json"/>
+
+            <Policies>
+                <TimeBasedTriggeringPolicy interval="1" modulate="true"/>
+                <SizeBasedTriggeringPolicy size="250 MB"/>
+            </Policies>
+            
+            <DefaultRolloverStrategy max="100"/>
         </RollingFile>
-        
     </Appenders>
 
     <Loggers>
-        <!-- for which class, which level, where (destination) -->
-        <Logger name="com.ofss" level="debug" additivity="false">
-            <!-- <AppenderRef ref="ToConsole"/>
-            <AppenderRef ref="logToFile"/> -->
-            <AppenderRef ref="logToRollingFile"/>
+        <Logger name="com.org.clientService" level="INFO" additivity="false">
+            <AppenderRef ref="JsonConsole"/>
+            <AppenderRef ref="AuditFile"/>
         </Logger>
-        
+
+        <Root level="WARN">
+            <AppenderRef ref="JsonConsole"/>
+            <AppenderRef ref="AuditFile"/>
+        </Root>
     </Loggers>
-    
-    <Root level="error">
-        <!-- <AppenderRef ref="ToConsole"/>
-        <AppenderRef ref="logToFile"/> -->
-        <AppenderRef ref="logToRollingFile"/>
-    </Root>
-    
 </Configuration>
