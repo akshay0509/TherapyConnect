@@ -8,7 +8,7 @@
     <Appenders>
         <Console name="JsonConsole" target="SYSTEM_OUT">
             <JsonTemplateLayout eventTemplateUri="classpath:EcsLayout.json">
-                <EventTemplateAdditionalField key="appName" value="ClientService"/>
+                <EventTemplateAdditionalField key="appName" value="DiscoveryService"/>
                 <EventTemplateAdditionalField key="environment" value="PROD"/>
             </JsonTemplateLayout>
         </Console>
@@ -29,7 +29,7 @@
     </Appenders>
 
     <Loggers>
-        <Logger name="com.org.discoveryService" level="INFO" additivity="false">
+        <Logger name="com.org.clientService" level="INFO" additivity="false">
             <AppenderRef ref="JsonConsole"/>
             <AppenderRef ref="AuditFile"/>
         </Logger>

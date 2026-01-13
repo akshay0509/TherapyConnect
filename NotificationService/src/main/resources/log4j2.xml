@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Configuration status="WARN" monitorInterval="30">
     <Properties>
-        <Property name="LOG_PATH">./logs/discovery-service</Property>
+        <Property name="LOG_PATH">./logs/notification-service</Property>
         <Property name="ARCHIVE_PATH">${LOG_PATH}/archive</Property>
     </Properties>
 
     <Appenders>
         <Console name="JsonConsole" target="SYSTEM_OUT">
             <JsonTemplateLayout eventTemplateUri="classpath:EcsLayout.json">
-                <EventTemplateAdditionalField key="appName" value="ClientService"/>
+                <EventTemplateAdditionalField key="appName" value="NotificationService"/>
                 <EventTemplateAdditionalField key="environment" value="PROD"/>
             </JsonTemplateLayout>
         </Console>
@@ -29,7 +29,7 @@
     </Appenders>
 
     <Loggers>
-        <Logger name="com.org.discoveryService" level="INFO" additivity="false">
+        <Logger name="com.org.notificationService" level="INFO" additivity="false">
             <AppenderRef ref="JsonConsole"/>
             <AppenderRef ref="AuditFile"/>
         </Logger>

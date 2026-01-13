@@ -45,7 +45,7 @@
             <AppenderRef ref="AuditFile"/>
         </Logger>
 
-        <Root level="WARN">
+        <Root level="ERROR">
             <AppenderRef ref="JsonConsole"/>
             <AppenderRef ref="AuditFile"/>
         </Root>
