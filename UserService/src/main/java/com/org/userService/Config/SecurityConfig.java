@@ -1,6 +1,4 @@
-package com.org.therapistService.Config;
-
-import static org.springframework.security.config.Customizer.withDefaults;
+package com.org.userService.Config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -15,10 +13,7 @@ public class SecurityConfig {
 		http
 			.csrf(csrf -> csrf.disable())
 			.authorizeHttpRequests(authz -> authz
-				.anyRequest().authenticated()
-			)
-			.oauth2ResourceServer(oauth2 -> oauth2
-				.jwt(withDefaults())
+			.requestMatchers("/**/validate-user").permitAll()
 			);
 			
 		return http.build();

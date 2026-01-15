@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Configuration status="WARN" monitorInterval="30">
     <Properties>
-        <Property name="LOG_PATH">./logs/notification-service</Property>
+        <Property name="LOG_PATH">D:/Logs/notification-service</Property>
         <Property name="ARCHIVE_PATH">${LOG_PATH}/archive</Property>
     </Properties>
 

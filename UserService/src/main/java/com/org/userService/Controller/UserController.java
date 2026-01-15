@@ -26,11 +26,7 @@ public class UserController {
 	public ResponseEntity<AuthResponse> validate(@RequestBody AuthRequest authRequest){
 		AuthResponse authResponse = userService.validateUser(authRequest);
 		
-		if (!authResponse.isAuthenticated()) {
-            return ResponseEntity.status(401).body(authResponse);
-        }
-
-        return ResponseEntity.ok(authResponse);
+		return ResponseEntity.ok(authResponse);
 	}
 	
 }

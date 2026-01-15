@@ -15,28 +15,37 @@ public class LoginEventProducer {
 	@Autowired
 	private KafkaTemplate<String, String> kafkaTemplate;
 	
+	@Autowired
+	private ObjectMapper objectMapper;
+	
 	private static final String LOGIN_SUCCESS_TOPIC = "auth-login-success";
     private static final String LOGIN_FAILURE_TOPIC = "auth-login-failure";
 	
 	public void publishLoginSuccess(LoginSuccessEvent event) {
+		System.out.println("publishLoginSuccess..");
 		String jsonMessage;
 		try {
-			jsonMessage = new ObjectMapper().writeValueAsString(event);
+			jsonMessage =objectMapper.writeValueAsString(event);
+			System.out.println("success..");
 		} catch (JsonProcessingException e) {
 			e.printStackTrace();
 			jsonMessage = null;
 		}
         kafkaTemplate.send(LOGIN_SUCCESS_TOPIC, event.getUserId().toString(), jsonMessage);
+        System.out.println("exiting..");
     }
 
     public void publishLoginFailure(LoginFailureEvent event) {
+    	System.out.println("publishLoginFailure..");
     	String jsonMessage;
 		try {
-			jsonMessage = new ObjectMapper().writeValueAsString(event);
+			jsonMessage = objectMapper.writeValueAsString(event);
+			System.out.println("success..");
 		} catch (JsonProcessingException e) {
 			e.printStackTrace();
 			jsonMessage = null;
 		}
         kafkaTemplate.send(LOGIN_FAILURE_TOPIC, event.getUsername(), jsonMessage);
+        System.out.println("exiting..");
     }
 }

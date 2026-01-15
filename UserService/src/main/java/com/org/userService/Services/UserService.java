@@ -2,6 +2,8 @@ package com.org.userService.Services;
 
 import java.util.stream.Collectors;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -23,15 +25,19 @@ public class UserService {
 	@Autowired
 	PasswordEncoder passwordEncoder;
 	
+	private static final Logger logger = LoggerFactory.getLogger(UserService.class);
+	
 	private UserAssembler userAssembler = new UserAssembler();
 	
 	public void createUser(UserDto userDto) {
+		logger.debug("inside createUser.");
 		User user = userAssembler.assembleDtoToEntity(userDto);
 		
 		String passwordHash = passwordEncoder.encode(userDto.getPassword());
 		user.setPasswordHash(passwordHash);
 		
 		userRepository.save(user);
+		logger.debug("exiting createUser.");
 	}
 	
 	public AuthResponse validateUser(AuthRequest authRequest) {

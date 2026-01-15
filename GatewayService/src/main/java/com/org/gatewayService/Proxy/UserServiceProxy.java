@@ -12,13 +12,26 @@ public class UserServiceProxy {
 
 	@Autowired
 	private RestTemplate restTemplate;
-	
-private final String userServiceBaseUrl = "http://user-service";
-	
+
+	private final String userServiceBaseUrl = "http://user-service";
+
 	public AuthResponse validateUser(AuthRequest authRequest) {
+
 		String url = userServiceBaseUrl + "/validate-user";
+		
 		AuthResponse authResponse = restTemplate.postForObject(url, authRequest, AuthResponse.class);
 		return authResponse;
+		 
+		/*
+		HttpHeaders headers = new HttpHeaders();
+		headers.setContentType(MediaType.APPLICATION_JSON);
+
+		HttpEntity<AuthRequest> requestEntity = new HttpEntity<>(authRequest, headers);
+
+		ResponseEntity<AuthResponse> response = restTemplate.exchange(url, HttpMethod.POST, requestEntity, AuthResponse.class);
+
+		return response.getBody();
+		*/
 	}
 
 }

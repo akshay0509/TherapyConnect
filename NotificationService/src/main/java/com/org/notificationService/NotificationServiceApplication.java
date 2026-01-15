@@ -13,9 +13,4 @@ public class NotificationServiceApplication {
 		SpringApplication.run(NotificationServiceApplication.class, args);
 	}
 	
-	@Bean
-	NewTopic myTopic() {
-		return TopicBuilder.name("email-reminder-topic").partitions(3).replicas(1).build();
-	}
-
 }

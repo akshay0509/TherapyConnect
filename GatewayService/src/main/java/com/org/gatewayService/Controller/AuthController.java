@@ -37,7 +37,7 @@ public class AuthController {
 	public Map<String, String> login(@RequestBody AuthRequest authRequest, HttpServletRequest httpRequest){
 		
 		AuthResponse authResponse = userServiceProxy.validateUser(authRequest);
-		
+		System.out.println("authResponse= "+authResponse);
 		if(!authResponse.isAuthenticated()) {
 			
 			LoginFailureEvent loginFailureEvent = new LoginFailureEvent();
