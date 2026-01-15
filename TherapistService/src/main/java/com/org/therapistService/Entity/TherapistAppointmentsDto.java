@@ -17,6 +17,6 @@ public class TherapistAppointmentsDto {
 	private LocalDateTime startTime;
 	private LocalDateTime endTime;
 	private AppointmentStatus status;
-	private boolean reminderSent;
+	private Boolean reminderSent;
 	
 }

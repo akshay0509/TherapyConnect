@@ -5,14 +5,14 @@
 	<parent>
 		<groupId>org.springframework.boot</groupId>
 		<artifactId>spring-boot-starter-parent</artifactId>
-		<version>3.5.7</version>
+		<version>4.0.1</version>
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
 	<groupId>com.org</groupId>
-	<artifactId>ClientService</artifactId>
+	<artifactId>UserService</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
-	<name>ClientService</name>
-	<description>Client Service</description>
+	<name>UserService</name>
+	<description>User Service</description>
 	<url/>
 	<licenses>
 		<license/>
@@ -28,12 +28,12 @@
 	</scm>
 	<properties>
 		<java.version>25</java.version>
-		<spring-cloud.version>2025.0.0</spring-cloud.version>
+		<spring-cloud.version>2025.1.0</spring-cloud.version>
 	</properties>
 	<dependencies>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-web</artifactId>
+			<artifactId>spring-boot-starter-webmvc</artifactId>
 			<exclusions>
             	<exclusion>
                 	<groupId>org.springframework.boot</groupId>
@@ -42,22 +42,14 @@
         	</exclusions>
 		</dependency>
 		<dependency>
-        	<groupId>org.springframework.boot</groupId>
-        	<artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
-        	<exclusions>
+			<groupId>org.springframework.cloud</groupId>
+			<artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+			<exclusions>
             	<exclusion>
                 	<groupId>org.springframework.boot</groupId>
                 	<artifactId>spring-boot-starter-logging</artifactId>
             	</exclusion>
         	</exclusions>
-    	</dependency>
-		<dependency>
-        	<groupId>org.springframework.boot</groupId>
-        	<artifactId>spring-boot-starter-log4j2</artifactId>
-    	</dependency>
-		<dependency>
-			<groupId>org.springframework.cloud</groupId>
-			<artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
 		</dependency>
 
 		<dependency>
@@ -67,25 +59,9 @@
 			<optional>true</optional>
 		</dependency>
 		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-test</artifactId>
-			<scope>test</scope>
-			<exclusions>
-            <exclusion>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-starter-logging</artifactId>
-            </exclusion>
-        </exclusions>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter</artifactId>
-			<exclusions>
-            <exclusion>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-starter-logging</artifactId>
-            </exclusion>
-        </exclusions>
+			<groupId>org.postgresql</groupId>
+			<artifactId>postgresql</artifactId>
+			<scope>runtime</scope>
 		</dependency>
 		<dependency>
 			<groupId>org.projectlombok</groupId>
@@ -93,9 +69,20 @@
 			<optional>true</optional>
 		</dependency>
 		<dependency>
-    		<groupId>io.micrometer</groupId>
-    		<artifactId>micrometer-tracing-bridge-brave</artifactId>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-webmvc-test</artifactId>
+			<scope>test</scope>
+			<exclusions>
+            	<exclusion>
+                	<groupId>org.springframework.boot</groupId>
+                	<artifactId>spring-boot-starter-logging</artifactId>
+            	</exclusion>
+        	</exclusions>
 		</dependency>
+		<dependency>
+        	<groupId>org.springframework.boot</groupId>
+        	<artifactId>spring-boot-starter-log4j2</artifactId>
+    	</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-data-jpa</artifactId>
@@ -107,37 +94,21 @@
         	</exclusions>
 		</dependency>
 		<dependency>
-			<groupId>org.postgresql</groupId>
-			<artifactId>postgresql</artifactId>
-			<scope>runtime</scope>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-kafka</artifactId>
 		</dependency>
 		<dependency>
-    		<groupId>org.apache.logging.log4j</groupId>
-    		<artifactId>log4j-core</artifactId>
-    	</dependency>
-    	<dependency>
-        	<groupId>org.apache.logging.log4j</groupId>
-        	<artifactId>log4j-api</artifactId>
-    	</dependency>
-    	<dependency>
-        	<groupId>org.apache.logging.log4j</groupId>
-        	<artifactId>log4j-layout-template-json</artifactId>
-    	</dependency>
-    	<dependency>
-        	<groupId>org.apache.logging.log4j</groupId>
-        	<artifactId>log4j-slf4j2-impl</artifactId>
-    	</dependency>
-		<dependency>
-			<groupId>org.springframework.cloud</groupId>
-			<artifactId>spring-cloud-starter-loadbalancer</artifactId>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-kafka-test</artifactId>
+			<scope>test</scope>
 		</dependency>
 		<dependency>
-			<groupId>org.springframework.kafka</groupId>
-			<artifactId>spring-kafka</artifactId>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-security</artifactId>
 		</dependency>
 		<dependency>
-			<groupId>org.springframework.kafka</groupId>
-			<artifactId>spring-kafka-test</artifactId>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-security-test</artifactId>
 			<scope>test</scope>
 		</dependency>
 	</dependencies>
@@ -156,18 +127,6 @@
 	<build>
 		<plugins>
 			<plugin>
-				<groupId>org.springframework.boot</groupId>
-				<artifactId>spring-boot-maven-plugin</artifactId>
-				<configuration>
-					<excludes>
-						<exclude>
-							<groupId>org.projectlombok</groupId>
-							<artifactId>lombok</artifactId>
-						</exclude>
-					</excludes>
-				</configuration>
-			</plugin>
-			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-compiler-plugin</artifactId>
 				<configuration>
@@ -177,6 +136,18 @@
 							<artifactId>lombok</artifactId>
 						</path>
 					</annotationProcessorPaths>
+				</configuration>
+			</plugin>
+			<plugin>
+				<groupId>org.springframework.boot</groupId>
+				<artifactId>spring-boot-maven-plugin</artifactId>
+				<configuration>
+					<excludes>
+						<exclude>
+							<groupId>org.projectlombok</groupId>
+							<artifactId>lombok</artifactId>
+						</exclude>
+					</excludes>
 				</configuration>
 			</plugin>
 		</plugins>

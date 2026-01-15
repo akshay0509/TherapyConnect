@@ -6,16 +6,18 @@ import java.util.List;
 import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
 
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 
+@Component
 public class JwtUtil {
 	
 	@Value("${jwt.secret}")
 	private static String secretKey;
 
-	public static String generateToken(String username, List<String> scopes, List<String> authorities) {
+	public String generateToken(String username, List<String> scopes, List<String> authorities) {
 		Map<String, Object> claims = new HashMap<>();
 		claims.put("scope", scopes);
 		claims.put("authorities", authorities);
