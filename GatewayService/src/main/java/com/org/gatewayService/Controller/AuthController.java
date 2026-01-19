@@ -10,10 +10,10 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.org.events.login.LoginFailureEvent;
+import com.org.events.login.LoginSuccessEvent;
 import com.org.gatewayService.Dto.AuthRequest;
 import com.org.gatewayService.Dto.AuthResponse;
-import com.org.gatewayService.Dto.LoginFailureEvent;
-import com.org.gatewayService.Dto.LoginSuccessEvent;
 import com.org.gatewayService.Messaging.LoginEventProducer;
 import com.org.gatewayService.Proxy.UserServiceProxy;
 import com.org.gatewayService.Utility.JwtUtil;
@@ -35,7 +35,8 @@ public class AuthController {
 
 	@PostMapping("/login")
 	public Map<String, String> login(@RequestBody AuthRequest authRequest, HttpServletRequest httpRequest){
-		
+		System.out.println("Calling user service and validating user info..");
+		System.out.println("authRequest= "+authRequest);
 		AuthResponse authResponse = userServiceProxy.validateUser(authRequest);
 		System.out.println("authResponse= "+authResponse);
 		if(!authResponse.isAuthenticated()) {

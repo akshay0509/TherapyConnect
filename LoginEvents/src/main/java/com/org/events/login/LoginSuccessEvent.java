@@ -1,4 +1,4 @@
-package com.org.gatewayService.Dto;
+package com.org.events.login;
 
 import java.time.Instant;
 

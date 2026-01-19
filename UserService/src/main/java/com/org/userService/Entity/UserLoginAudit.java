@@ -1,8 +1,6 @@
 package com.org.userService.Entity;
 
 import java.time.Instant;
-import java.util.UUID;
-
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -27,7 +25,7 @@ public class UserLoginAudit {
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	private Long id;
 
-	private UUID userId;
+	private String userId;
 
 	private String username;
 
@@ -43,7 +41,7 @@ public class UserLoginAudit {
 
 	private String failureReason;
 
-	public static UserLoginAudit success(UUID userId, String username, String ip, String userAgent) {
+	public static UserLoginAudit success(String userId, String username, String ip, String userAgent) {
 		UserLoginAudit audit = new UserLoginAudit();
 		audit.userId = userId;
 		audit.username = username;

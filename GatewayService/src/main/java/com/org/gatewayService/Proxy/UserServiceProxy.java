@@ -18,8 +18,9 @@ public class UserServiceProxy {
 	public AuthResponse validateUser(AuthRequest authRequest) {
 
 		String url = userServiceBaseUrl + "/validate-user";
-		
+		System.out.println("POST REST call to user service= "+authRequest);
 		AuthResponse authResponse = restTemplate.postForObject(url, authRequest, AuthResponse.class);
+		System.out.println("response from POST REST CALL "+authResponse);
 		return authResponse;
 		 
 		/*

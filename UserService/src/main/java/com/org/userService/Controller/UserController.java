@@ -1,5 +1,7 @@
 package com.org.userService.Controller;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -16,6 +18,8 @@ public class UserController {
 	
 	@Autowired
 	UserService userService;
+	
+	private static final Logger logger = LoggerFactory.getLogger(UserController.class);
 
 	@PostMapping("/create-user")
 	public void createUser(@RequestBody UserDto userDto) {
@@ -24,8 +28,9 @@ public class UserController {
 	
 	@PostMapping("/validate-user")
 	public ResponseEntity<AuthResponse> validate(@RequestBody AuthRequest authRequest){
+		logger.debug("inside validate user "+authRequest);
 		AuthResponse authResponse = userService.validateUser(authRequest);
-		
+		logger.debug("exiting validate user "+authResponse);
 		return ResponseEntity.ok(authResponse);
 	}
 	
