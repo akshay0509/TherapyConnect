@@ -5,7 +5,7 @@ import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
 
-import com.org.notificationService.Dto.ClientReminderDto;
+import com.org.events.email.EmailReminderEvent;
 
 @Service
 public class EmailSenderService {
@@ -13,12 +13,12 @@ public class EmailSenderService {
 	@Autowired
 	private JavaMailSender javaMailSender;
 	
-	public void sendReminderEmail(ClientReminderDto clientReminderDto) {
+	public void sendReminderEmail(EmailReminderEvent emailReminderEvent) {
 		SimpleMailMessage mail = new SimpleMailMessage();
 		mail.setFrom("no-reply-therapywithsaipriya@gmail.com");
-		mail.setTo(clientReminderDto.getEmail());
-		mail.setSubject("Appointment Reminder | "+clientReminderDto.getAppointmentDate().toString());
-		mail.setText("Your appointment is scheduled for:\nDate: "+clientReminderDto.getAppointmentDate().toString() + "\nTime: "+clientReminderDto.getAppointmentTime().toString());
+		mail.setTo(emailReminderEvent.getEmail());
+		mail.setSubject("Appointment Reminder | "+emailReminderEvent.getAppointmentTime().toString());
+		mail.setText("Your appointment is scheduled for:\nDate: "+emailReminderEvent.getAppointmentTime().toString() + "\nTime: "+emailReminderEvent.getAppointmentTime().toString());
 		
 		javaMailSender.send(mail);
 	}

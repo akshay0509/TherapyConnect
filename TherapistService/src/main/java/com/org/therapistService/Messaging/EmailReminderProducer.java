@@ -6,7 +6,8 @@ import org.springframework.stereotype.Service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.org.therapistService.Entity.ClientReminderDto;
+import com.org.events.email.EmailReminderEvent;
+
 
 @Service
 public class EmailReminderProducer {
@@ -16,10 +17,10 @@ public class EmailReminderProducer {
 	
 	private static final String topic = "email-reminder-topic";
 	
-	public void sendMessage(String clientId, ClientReminderDto clientReminderDto) {
+	public void sendMessage(String clientId, EmailReminderEvent emailReminderEvent) {
 		String jsonMessage;
 		try {
-			jsonMessage = new ObjectMapper().writeValueAsString(clientReminderDto);
+			jsonMessage = new ObjectMapper().writeValueAsString(emailReminderEvent);
 		} catch (JsonProcessingException e) {
 			e.printStackTrace();
 			jsonMessage = null;

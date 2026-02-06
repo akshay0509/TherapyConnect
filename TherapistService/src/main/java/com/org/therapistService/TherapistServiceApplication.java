@@ -2,13 +2,11 @@ package com.org.therapistService;
 
 import java.util.Collections;
 
-import org.apache.kafka.clients.admin.NewTopic;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
 import org.springframework.cloud.client.loadbalancer.LoadBalanced;
 import org.springframework.context.annotation.Bean;
-import org.springframework.kafka.config.TopicBuilder;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.web.client.RestTemplate;
 
@@ -31,8 +29,4 @@ public class TherapistServiceApplication {
 		return restTemplate;
 	}
 	
-	@Bean
-	NewTopic myTopic() {
-		return TopicBuilder.name("email-reminder-topic").partitions(3).replicas(1).build();
-	}
 }

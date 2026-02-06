@@ -1,3 +1,0 @@
-com\org\events\login\FailureReason.class
-com\org\events\login\LoginFailureEvent.class
-com\org\events\login\LoginSuccessEvent.class
