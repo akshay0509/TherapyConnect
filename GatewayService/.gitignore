@@ -34,3 +34,7 @@ build/
 
 #environment variables
 .env
+
+#keys
+**/gateway-private.pem
+**/gateway-public.pem

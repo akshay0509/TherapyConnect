@@ -1,6 +1,6 @@
 package com.org.gatewayService.Config;
 
-import javax.crypto.spec.SecretKeySpec;
+import java.security.interfaces.RSAPublicKey;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -15,11 +15,8 @@ public class JwtDecoderConfig {
 	private String secretKey;
 	
 	@Bean
-	public JwtDecoder jwtDecoder() {
+	public JwtDecoder jwtDecoder(RSAPublicKey publicKey) {
 		
-		byte[] secretBytes = java.util.Base64.getDecoder().decode(secretKey);
-		return NimbusJwtDecoder.withSecretKey(
-				new SecretKeySpec(secretBytes, "HmacSHA256")
-		).build();
+		return NimbusJwtDecoder.withPublicKey(publicKey).build();
 	}
 }
