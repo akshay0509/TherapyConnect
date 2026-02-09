@@ -5,14 +5,14 @@
 	<parent>
 		<groupId>org.springframework.boot</groupId>
 		<artifactId>spring-boot-starter-parent</artifactId>
-		<version>3.5.7</version>
+		<version>3.5.10</version>
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
 	<groupId>com.org</groupId>
-	<artifactId>ClientService</artifactId>
+	<artifactId>TherapistService</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
-	<name>ClientService</name>
-	<description>Client Service</description>
+	<name>TherapistService</name>
+	<description>Therapist Service</description>
 	<url/>
 	<licenses>
 		<license/>

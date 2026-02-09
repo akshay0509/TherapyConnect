@@ -4,7 +4,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.org.events.login.LoginFailureEvent;
 import com.org.events.login.LoginSuccessEvent;
 
@@ -13,10 +12,12 @@ public class LoginEventProducer {
 
 	@Autowired
 	private KafkaTemplate<String, Object> kafkaTemplate;
-
+	
+	/*
 	@Autowired
 	private ObjectMapper objectMapper;
-
+	*/
+	
 	private static final String LOGIN_SUCCESS_TOPIC = "auth-login-success";
 	private static final String LOGIN_FAILURE_TOPIC = "auth-login-failure";
 
