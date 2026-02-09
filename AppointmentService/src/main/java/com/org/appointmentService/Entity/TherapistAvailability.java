@@ -1,0 +1,56 @@
+package com.org.appointmentService.Entity;
+
+import java.time.LocalDateTime;
+import java.util.UUID;
+
+import com.org.appointmentService.Enums.AvailabilityStatus;
+import com.org.appointmentService.Enums.SessionType;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.Table;
+import lombok.Data;
+
+@Entity
+@Data
+@Table(name = "THERAPIST_AVAILABILITY")
+public class TherapistAvailability {
+
+	@Id
+	private String slotId;
+	
+	@Column(nullable = false)
+	private String therapistId;
+
+	@Column(nullable = false)
+	private LocalDateTime startTime;
+
+	@Column(nullable = false)
+	private LocalDateTime endTime;
+
+	@Enumerated(EnumType.STRING)
+	private SessionType sessionType;
+	
+	@Column(nullable = true)
+	private String serviceId;
+	
+	@Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false)
+    private AvailabilityStatus status = AvailabilityStatus.AVAILABLE;
+	
+	@Column(nullable = true)
+	private String generationId;
+	
+	
+	@PrePersist
+    public void generateId() {
+        if (this.slotId == null) {
+            String uniquePart = UUID.randomUUID().toString().substring(0, 8);
+            this.slotId = "SLT" + uniquePart;
+        }
+    }
+}

@@ -2,3 +2,9 @@ D:\GIT\repository\Events\src\main\java\com\org\events\email\EmailReminderEvent.j
 D:\GIT\repository\Events\src\main\java\com\org\events\login\FailureReason.java
 D:\GIT\repository\Events\src\main\java\com\org\events\login\LoginFailureEvent.java
 D:\GIT\repository\Events\src\main\java\com\org\events\login\LoginSuccessEvent.java
+D:\GIT\repository\Events\src\main\java\com\org\events\TherapistAppointment\AppointmentCancelledEvent.java
+D:\GIT\repository\Events\src\main\java\com\org\events\TherapistAppointment\AppointmentCompletedEvent.java
+D:\GIT\repository\Events\src\main\java\com\org\events\TherapistAppointment\AppointmentCreatedEvent.java
+D:\GIT\repository\Events\src\main\java\com\org\events\TherapistAppointment\AppointmentNoShowEvent.java
+D:\GIT\repository\Events\src\main\java\com\org\events\TherapistAppointment\AppointmentRescheduledEvent.java
+D:\GIT\repository\Events\src\main\java\com\org\events\TherapistAvailability\AvailabilityEvent.java

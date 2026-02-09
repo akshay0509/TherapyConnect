@@ -31,3 +31,10 @@ build/
 
 ### VS Code ###
 .vscode/
+
+#environment variables
+.env
+
+#keys
+**/gateway-private.pem
+**/gateway-public.pem
