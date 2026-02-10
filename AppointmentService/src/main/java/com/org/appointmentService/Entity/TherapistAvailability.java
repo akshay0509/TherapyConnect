@@ -42,10 +42,6 @@ public class TherapistAvailability {
     @Column(name = "status", nullable = false)
     private AvailabilityStatus status = AvailabilityStatus.AVAILABLE;
 	
-	@Column(nullable = true)
-	private String generationId;
-	
-	
 	@PrePersist
     public void generateId() {
         if (this.slotId == null) {

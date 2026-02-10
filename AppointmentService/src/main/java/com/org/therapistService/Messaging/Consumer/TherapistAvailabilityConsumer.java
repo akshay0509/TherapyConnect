@@ -46,8 +46,7 @@ public class TherapistAvailabilityConsumer {
         slot.setStartTime(event.getStartTime());
         slot.setEndTime(event.getEndTime());
         slot.setStatus(AvailabilityStatus.AVAILABLE);
-        slot.setGenerationId(event.getGenerationId());
-
+        
         therapistAvailabilityRepository.save(slot);
     }
 	
