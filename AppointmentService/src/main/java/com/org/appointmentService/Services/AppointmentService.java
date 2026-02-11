@@ -33,6 +33,7 @@ public class AppointmentService {
 		String slotId = bookAppointmentRequest.getSlotId();
 
 		int updated = therapistAvailabilityRepository.markSlotAsBooked(slotId);
+		
 		if (updated == 0) {
 			throw new SlotAlreadyBookedException();
 		}

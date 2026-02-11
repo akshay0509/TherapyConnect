@@ -16,10 +16,13 @@ import com.org.therapistService.Entity.TherapistAvailabilityOverrides;
 import com.org.therapistService.Entity.TherapistAvailabilityRules;
 import com.org.therapistService.Entity.TherapistServices;
 import com.org.therapistService.Enums.SessionType;
+import com.org.therapistService.Messaging.TherapistAvailabilityProducer;
 import com.org.therapistService.Repository.TherapistAvailabilityOverridesRepository;
 import com.org.therapistService.Repository.TherapistAvailabilityRepository;
 import com.org.therapistService.Repository.TherapistAvailabilityRulesRepository;
 import com.org.therapistService.Repository.TherapistServicesRepository;
+
+import jakarta.transaction.Transactional;
 
 @Service
 public class AvailabilitySlotGeneratorService {
@@ -36,8 +39,12 @@ public class AvailabilitySlotGeneratorService {
 	@Autowired
 	private TherapistServicesRepository therapistServicesRepository;
 	
+	@Autowired
+	private TherapistAvailabilityProducer therapistAvailabilityProducer;
+	
 	private static final Logger logger = LoggerFactory.getLogger(AvailabilitySlotGeneratorService.class);
 
+	@Transactional
 	public List<TherapistAvailability> generateTherapistAvailabilitySlots(String therapistId, LocalDate startDate, LocalDate endDate) {
 		logger.info("inside generateTherapistAvailabilitySlots");
 
@@ -88,7 +95,9 @@ public class AvailabilitySlotGeneratorService {
 		// 8. Save all new slots in a single batch
 		if (!newSlotsToSave.isEmpty()) {
 			logger.info("exiting generateTherapistAvailabilitySlots");
-			return therapistAvailabilityRepository.saveAll(newSlotsToSave);
+			therapistAvailabilityRepository.saveAll(newSlotsToSave);
+			therapistAvailabilityProducer.sendMessage(therapistId, startDate, endDate, newSlotsToSave);
+			return newSlotsToSave;
 		}
 
 		logger.info("exiting generateTherapistAvailabilitySlots");
@@ -119,7 +128,7 @@ public class AvailabilitySlotGeneratorService {
                 if (slotEndTime.isAfter(LocalDateTime.of(date, endTime))) {
                     break;
                 }
-
+                
                 // CRITICAL CHECK: Prevent duplicates by checking therapist/time
                 // We don't check serviceId here because if one service books the time, 
                 // NO service can book that exact start time.
@@ -129,7 +138,7 @@ public class AvailabilitySlotGeneratorService {
                     slot.setTherapistId(therapistId);
                     slot.setStartTime(slotStartTime);
                     slot.setEndTime(slotEndTime);
-                    slot.setServiceId(serviceId); // <-- Now links to the specific service
+                    slot.setServiceId(serviceId);
                     slot.setSessionType(sessionType); 
 
                     newSlots.add(slot);

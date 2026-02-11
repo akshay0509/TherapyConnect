@@ -1,10 +1,8 @@
 com\org\events\login\FailureReason.class
-com\org\events\login\LoginFailureEvent.class
-com\org\events\TherapistAppointment\AppointmentNoShowEvent.class
-com\org\events\TherapistAppointment\AppointmentCompletedEvent.class
-com\org\events\login\LoginSuccessEvent.class
-com\org\events\TherapistAppointment\AppointmentCreatedEvent.class
 com\org\events\TherapistAvailability\AvailabilityEvent.class
-com\org\events\TherapistAppointment\AppointmentRescheduledEvent.class
+com\org\events\login\LoginFailureEvent.class
 com\org\events\email\EmailReminderEvent.class
-com\org\events\TherapistAppointment\AppointmentCancelledEvent.class
+com\org\events\TherapistAvailability\AvailabilitySlotsGeneratedEvent.class
+com\org\events\TherapistAvailability\Slot.class
+com\org\events\login\LoginSuccessEvent.class
+com\org\events\TherapistAppointment\AppointmentEvent.class
