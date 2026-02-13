@@ -11,12 +11,16 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.org.events.TherapistAvailability.AvailabilitySlotsGeneratedEvent;
+import com.org.events.TherapistAvailability.Slot;
+import com.org.therapistService.Entity.OutboxEvent;
 import com.org.therapistService.Entity.TherapistAvailability;
 import com.org.therapistService.Entity.TherapistAvailabilityOverrides;
 import com.org.therapistService.Entity.TherapistAvailabilityRules;
 import com.org.therapistService.Entity.TherapistServices;
 import com.org.therapistService.Enums.SessionType;
-import com.org.therapistService.Messaging.TherapistAvailabilityProducer;
+import com.org.therapistService.Repository.OutboxEventRepository;
 import com.org.therapistService.Repository.TherapistAvailabilityOverridesRepository;
 import com.org.therapistService.Repository.TherapistAvailabilityRepository;
 import com.org.therapistService.Repository.TherapistAvailabilityRulesRepository;
@@ -35,21 +39,26 @@ public class AvailabilitySlotGeneratorService {
 
 	@Autowired
 	private TherapistAvailabilityRepository therapistAvailabilityRepository;
-	
+
 	@Autowired
 	private TherapistServicesRepository therapistServicesRepository;
-	
+
 	@Autowired
-	private TherapistAvailabilityProducer therapistAvailabilityProducer;
-	
+	private ObjectMapper objectMapper;
+
+	@Autowired
+	private OutboxEventRepository outboxEventRepository;
+
 	private static final Logger logger = LoggerFactory.getLogger(AvailabilitySlotGeneratorService.class);
 
 	@Transactional
 	public List<TherapistAvailability> generateTherapistAvailabilitySlots(String therapistId, LocalDate startDate, LocalDate endDate) {
 		logger.info("inside generateTherapistAvailabilitySlots");
 
+		therapistAvailabilityRepository.deleteInRange(therapistId, startDate.atStartOfDay(), endDate.plusDays(1).atStartOfDay());
+
 		List<TherapistAvailability> newSlotsToSave = new ArrayList<>();
-		
+
 		List<TherapistServices> therapistServices = therapistServicesRepository.findByTherapistIdAndIsActiveTrue(therapistId);
 
 		// If the therapist has no active services, we can't generate anything
@@ -58,6 +67,7 @@ public class AvailabilitySlotGeneratorService {
 		}
 
 		List<TherapistAvailabilityOverrides> overrides = therapistAvailabilityOverridesRepository.findByTherapistIdAndStartTimeBetween(therapistId, startDate.atStartOfDay(), endDate.plusDays(1).atStartOfDay());
+		List<TherapistAvailabilityRules> therapistAvailabilityRulesList = therapistAvailabilityRulesRepository.findByTherapistIdAndIsActiveTrue(therapistId);
 
 		for(LocalDate date = startDate; !date.isAfter(endDate); date = date.plusDays(1)) {
 
@@ -69,9 +79,12 @@ public class AvailabilitySlotGeneratorService {
 				continue;
 			}
 			int dayOfWeek = date.getDayOfWeek().getValue();
-			List<TherapistAvailabilityRules> rulesForDay = therapistAvailabilityRulesRepository.findByTherapistIdAndDayOfWeekAndIsActiveTrue(therapistId, dayOfWeek);
+			//List<TherapistAvailabilityRules> rulesForDay = therapistAvailabilityRulesRepository.findByTherapistIdAndDayOfWeekAndIsActiveTrue(therapistId, dayOfWeek);
+			List<TherapistAvailabilityRules> applicableRules = therapistAvailabilityRulesList.stream()
+					.filter(rule -> rule.getDayOfWeek() == dayOfWeek)
+					.toList();
 
-			for (TherapistAvailabilityRules rule : rulesForDay) {
+			for (TherapistAvailabilityRules rule : applicableRules) {
 				newSlotsToSave.addAll(
 						chopTimeBlockIntoSlots(therapistId, finalDate, rule.getStartTime(), rule.getEndTime(), rule.getSessionType(), therapistServices)
 						);
@@ -96,7 +109,8 @@ public class AvailabilitySlotGeneratorService {
 		if (!newSlotsToSave.isEmpty()) {
 			logger.info("exiting generateTherapistAvailabilitySlots");
 			therapistAvailabilityRepository.saveAll(newSlotsToSave);
-			therapistAvailabilityProducer.sendMessage(therapistId, startDate, endDate, newSlotsToSave);
+			AvailabilitySlotsGeneratedEvent event = buildEvent(therapistId, startDate, endDate, newSlotsToSave);
+			persistOutboxEvent(event, therapistId);
 			return newSlotsToSave;
 		}
 
@@ -109,45 +123,81 @@ public class AvailabilitySlotGeneratorService {
 
 		List<TherapistAvailability> newSlots = new ArrayList<>();
 
-        // Iterate through ALL of the therapist's available services
-        for (TherapistServices service : therapistServices) {
-            
-            // The duration for this specific service
-            int slotDurationMinutes = service.getDuration();
-            String serviceId = service.getServiceId();
-            
-            LocalTime currentSlotTime = startTime;
+		// Iterate through ALL of the therapist's available services
+		for (TherapistServices service : therapistServices) {
 
-            // Start chopping the block using the service's duration
-            while (currentSlotTime.isBefore(endTime)) {
-                
-                LocalDateTime slotStartTime = LocalDateTime.of(date, currentSlotTime);
-                LocalDateTime slotEndTime = slotStartTime.plusMinutes(slotDurationMinutes);
+			// The duration for this specific service
+			int slotDurationMinutes = service.getDuration();
+			String serviceId = service.getServiceId();
 
-                // Stop if the slot extends past the end of the time block
-                if (slotEndTime.isAfter(LocalDateTime.of(date, endTime))) {
-                    break;
-                }
-                
-                // CRITICAL CHECK: Prevent duplicates by checking therapist/time
-                // We don't check serviceId here because if one service books the time, 
-                // NO service can book that exact start time.
-                if (!therapistAvailabilityRepository.existsByTherapistIdAndStartTime(therapistId, slotStartTime)) {
-                    
-                	TherapistAvailability slot = new TherapistAvailability();
-                    slot.setTherapistId(therapistId);
-                    slot.setStartTime(slotStartTime);
-                    slot.setEndTime(slotEndTime);
-                    slot.setServiceId(serviceId);
-                    slot.setSessionType(sessionType); 
+			LocalTime currentSlotTime = startTime;
 
-                    newSlots.add(slot);
-                }
+			// Start chopping the block using the service's duration
+			while (currentSlotTime.isBefore(endTime)) {
 
-                // Move to the next potential start time
-                currentSlotTime = currentSlotTime.plusMinutes(slotDurationMinutes);
-            }
-        }
-        return newSlots;
+				LocalDateTime slotStartTime = LocalDateTime.of(date, currentSlotTime);
+				LocalDateTime slotEndTime = slotStartTime.plusMinutes(slotDurationMinutes);
+
+				// Stop if the slot extends past the end of the time block
+				if (slotEndTime.isAfter(LocalDateTime.of(date, endTime))) {
+					break;
+				}
+
+				TherapistAvailability slot = new TherapistAvailability();
+				slot.setTherapistId(therapistId);
+				slot.setStartTime(slotStartTime);
+				slot.setEndTime(slotEndTime);
+				slot.setServiceId(serviceId);
+				slot.setSessionType(sessionType); 
+
+				newSlots.add(slot);
+
+
+				// Move to the next potential start time
+				currentSlotTime = currentSlotTime.plusMinutes(slotDurationMinutes);
+			}
+		}
+		return newSlots;
+	}
+
+	private AvailabilitySlotsGeneratedEvent buildEvent(String therapistId, LocalDate startDate, LocalDate endDate, List<TherapistAvailability> newSlots) {
+
+		AvailabilitySlotsGeneratedEvent event = new AvailabilitySlotsGeneratedEvent();
+
+		event.setTherapistId(therapistId);
+		event.setRangeStart(startDate);
+		event.setRangeEnd(endDate);
+
+		List<Slot> slotList = newSlots.stream()
+				.map(a -> {
+					Slot p = new Slot();
+					p.setSlotId(a.getSlotId());
+					p.setStartTime(a.getStartTime());
+					p.setEndTime(a.getEndTime());
+					return p;
+				})
+				.toList();
+
+		event.setSlotList(slotList);
+
+		return event;
+	}
+
+	private void persistOutboxEvent(AvailabilitySlotsGeneratedEvent event, String therapistId) {
+		try {
+			OutboxEvent outbox = new OutboxEvent();
+			outbox.setAggregateType("THERAPIST_AVAILABILITY");
+			outbox.setAggregateId(therapistId);
+			outbox.setEventType("AvailabilitySlotsGenerated");
+			outbox.setPayload(objectMapper.writeValueAsString(event));
+			outbox.setCreatedAt(LocalDateTime.now());
+			outbox.setPublished(false);
+
+			outboxEventRepository.save(outbox);
+
+		} catch (Exception e) {
+			throw new RuntimeException("Failed to serialize event", e);
+		}
 	}
 }
+

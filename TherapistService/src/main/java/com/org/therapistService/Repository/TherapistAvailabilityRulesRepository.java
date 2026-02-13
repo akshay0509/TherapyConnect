@@ -16,6 +16,10 @@ public interface TherapistAvailabilityRulesRepository extends JpaRepository<Ther
 			int dayOfWeek
 			);
 	
+	List<TherapistAvailabilityRules> findByTherapistIdAndIsActiveTrue(
+			String therapistId
+			);
+	
 	@Query("SELECT DISTINCT r.therapistId FROM TherapistAvailabilityRules r")
     List<String> findAllDistinctTherapistIds();
 }

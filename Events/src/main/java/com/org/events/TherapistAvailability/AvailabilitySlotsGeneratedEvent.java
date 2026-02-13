@@ -25,6 +25,7 @@ public class AvailabilitySlotsGeneratedEvent {
     public AvailabilitySlotsGeneratedEvent(){
 		String uniquePart = UUID.randomUUID().toString().substring(0, 8);
         this.eventId = "EVNT" + uniquePart;
+        this.generationId = "GEN" + uniquePart;
         this.occurredAt = LocalDateTime.now();
 	}
 }
