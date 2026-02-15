@@ -6,6 +6,7 @@ import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -13,6 +14,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.org.therapistService.Entity.ClientDto;
 import com.org.therapistService.Entity.TherapistAppointmentsDto;
 import com.org.therapistService.Entity.TherapistAvailabilityOverridesDto;
@@ -20,7 +22,7 @@ import com.org.therapistService.Entity.TherapistAvailabilityRulesDto;
 import com.org.therapistService.Entity.TherapistDto;
 import com.org.therapistService.Entity.TherapistServicesDto;
 import com.org.therapistService.Proxy.ClientServiceProxy;
-import com.org.therapistService.Services.AvailabilitySlotGeneratorService;
+import com.org.therapistService.Services.AvailabilitySlotService;
 import com.org.therapistService.Services.TherapistService;
 
 @RestController
@@ -33,7 +35,7 @@ public class TherapistController {
 	private TherapistService therapistService;
 
 	@Autowired
-	private AvailabilitySlotGeneratorService availabilitySlotGeneratorService;
+	private AvailabilitySlotService availabilitySlotService;
 
 	//get all therapists
 	@GetMapping("/therapists")
@@ -97,16 +99,39 @@ public class TherapistController {
 	}	
 
 	@PostMapping("{therapistId}/generate-slots")
-	public ResponseEntity<String> generateSlots(
-			@PathVariable String therapistId,
-			@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
-			@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
+	public ResponseEntity<String> generateSlots(@PathVariable String therapistId,
+												@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+												@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
 		
 		if (endDate.isBefore(startDate)) {
             return ResponseEntity.badRequest().body("End date cannot be before start date.");
         }
 
-		availabilitySlotGeneratorService.generateTherapistAvailabilitySlots(therapistId, startDate, endDate);
+		try {
+			availabilitySlotService.generateAvailabilitySlots(therapistId, startDate, endDate);
+		}
+		catch (JsonProcessingException e) {
+			return ResponseEntity.badRequest().body(e.getMessage());
+		}
 		return ResponseEntity.ok(String.format("Successfully generated slots"));
+	}
+	
+	@DeleteMapping("{therapistId}/delete-slots")
+	public ResponseEntity<String> deleteSlots(@PathVariable String therapistId,
+											  @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+											  @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate){
+		
+		if (endDate.isBefore(startDate)) {
+            return ResponseEntity.badRequest().body("End date cannot be before start date.");
+        }
+		
+		try {
+			availabilitySlotService.deleteAvailabilitySlots(therapistId, startDate, endDate);
+		}
+		catch (JsonProcessingException e) {
+			return ResponseEntity.badRequest().body(e.getMessage());
+		}
+		
+		return ResponseEntity.ok(String.format("Successfully deleted slots"));
 	}
 }

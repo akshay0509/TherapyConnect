@@ -6,3 +6,4 @@ com\org\events\TherapistAvailability\AvailabilitySlotsGeneratedEvent.class
 com\org\events\TherapistAvailability\Slot.class
 com\org\events\login\LoginSuccessEvent.class
 com\org\events\TherapistAppointment\AppointmentEvent.class
+com\org\events\TherapistAvailability\AvailabilitySlotsDeletedEvent.class

@@ -7,8 +7,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.org.therapistService.Repository.TherapistAvailabilityRulesRepository;
-import com.org.therapistService.Services.AvailabilitySlotGeneratorService;
+import com.org.therapistService.Services.AvailabilitySlotService;
 
 @Service
 public class TherapistAvailabilityGeneratorScheduler {
@@ -17,7 +18,7 @@ public class TherapistAvailabilityGeneratorScheduler {
     private TherapistAvailabilityRulesRepository therapistAvailabilityRulesRepository;
 
     @Autowired
-    private AvailabilitySlotGeneratorService availabilitySlotGeneratorService;
+    private AvailabilitySlotService availabilitySlotService;
 
 	@Scheduled(cron = "0 0 2 * * *")
 	public void generateTherapistAvailabilitySlots() {
@@ -27,7 +28,12 @@ public class TherapistAvailabilityGeneratorScheduler {
         LocalDate endDate = startDate.plusDays(6);
 		
 		for(String therapistId : therapistIds) {
-			availabilitySlotGeneratorService.generateTherapistAvailabilitySlots(therapistId, startDate, endDate);
+			try {
+				availabilitySlotService.generateAvailabilitySlots(therapistId, startDate, endDate);
+			} catch (JsonProcessingException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
 		}
 	}
 }

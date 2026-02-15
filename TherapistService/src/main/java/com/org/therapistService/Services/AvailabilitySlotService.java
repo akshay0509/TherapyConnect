@@ -11,16 +11,15 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.org.events.TherapistAvailability.AvailabilitySlotsDeletedEvent;
 import com.org.events.TherapistAvailability.AvailabilitySlotsGeneratedEvent;
 import com.org.events.TherapistAvailability.Slot;
-import com.org.therapistService.Entity.OutboxEvent;
 import com.org.therapistService.Entity.TherapistAvailability;
 import com.org.therapistService.Entity.TherapistAvailabilityOverrides;
 import com.org.therapistService.Entity.TherapistAvailabilityRules;
 import com.org.therapistService.Entity.TherapistServices;
 import com.org.therapistService.Enums.SessionType;
-import com.org.therapistService.Repository.OutboxEventRepository;
 import com.org.therapistService.Repository.TherapistAvailabilityOverridesRepository;
 import com.org.therapistService.Repository.TherapistAvailabilityRepository;
 import com.org.therapistService.Repository.TherapistAvailabilityRulesRepository;
@@ -29,7 +28,7 @@ import com.org.therapistService.Repository.TherapistServicesRepository;
 import jakarta.transaction.Transactional;
 
 @Service
-public class AvailabilitySlotGeneratorService {
+public class AvailabilitySlotService {
 
 	@Autowired
 	private TherapistAvailabilityRulesRepository therapistAvailabilityRulesRepository;
@@ -44,15 +43,12 @@ public class AvailabilitySlotGeneratorService {
 	private TherapistServicesRepository therapistServicesRepository;
 
 	@Autowired
-	private ObjectMapper objectMapper;
+	private OutboxService outboxService;
 
-	@Autowired
-	private OutboxEventRepository outboxEventRepository;
-
-	private static final Logger logger = LoggerFactory.getLogger(AvailabilitySlotGeneratorService.class);
+	private static final Logger logger = LoggerFactory.getLogger(AvailabilitySlotService.class);
 
 	@Transactional
-	public List<TherapistAvailability> generateTherapistAvailabilitySlots(String therapistId, LocalDate startDate, LocalDate endDate) {
+	public List<TherapistAvailability> generateAvailabilitySlots(String therapistId, LocalDate startDate, LocalDate endDate) throws JsonProcessingException {
 		logger.info("inside generateTherapistAvailabilitySlots");
 
 		therapistAvailabilityRepository.deleteInRange(therapistId, startDate.atStartOfDay(), endDate.plusDays(1).atStartOfDay());
@@ -108,9 +104,12 @@ public class AvailabilitySlotGeneratorService {
 		// 8. Save all new slots in a single batch
 		if (!newSlotsToSave.isEmpty()) {
 			logger.info("exiting generateTherapistAvailabilitySlots");
+
 			therapistAvailabilityRepository.saveAll(newSlotsToSave);
-			AvailabilitySlotsGeneratedEvent event = buildEvent(therapistId, startDate, endDate, newSlotsToSave);
-			persistOutboxEvent(event, therapistId);
+
+			AvailabilitySlotsGeneratedEvent availabilitySlotsGeneratedEvent = buildSlotsGeneratedEvent(therapistId, startDate, endDate, newSlotsToSave);
+			outboxService.saveOutboxEvent("THERAPIST_AVAILABILITY", therapistId, "AvailabilitySlotsGenerated", availabilitySlotsGeneratedEvent);
+
 			return newSlotsToSave;
 		}
 
@@ -160,7 +159,7 @@ public class AvailabilitySlotGeneratorService {
 		return newSlots;
 	}
 
-	private AvailabilitySlotsGeneratedEvent buildEvent(String therapistId, LocalDate startDate, LocalDate endDate, List<TherapistAvailability> newSlots) {
+	private AvailabilitySlotsGeneratedEvent buildSlotsGeneratedEvent(String therapistId, LocalDate startDate, LocalDate endDate, List<TherapistAvailability> newSlots) {
 
 		AvailabilitySlotsGeneratedEvent event = new AvailabilitySlotsGeneratedEvent();
 
@@ -183,21 +182,19 @@ public class AvailabilitySlotGeneratorService {
 		return event;
 	}
 
-	private void persistOutboxEvent(AvailabilitySlotsGeneratedEvent event, String therapistId) {
-		try {
-			OutboxEvent outbox = new OutboxEvent();
-			outbox.setAggregateType("THERAPIST_AVAILABILITY");
-			outbox.setAggregateId(therapistId);
-			outbox.setEventType("AvailabilitySlotsGenerated");
-			outbox.setPayload(objectMapper.writeValueAsString(event));
-			outbox.setCreatedAt(LocalDateTime.now());
-			outbox.setPublished(false);
+	@Transactional
+	public boolean deleteAvailabilitySlots(String therapistId, LocalDate startDate, LocalDate endDate) throws JsonProcessingException {
 
-			outboxEventRepository.save(outbox);
+		therapistAvailabilityRepository.deleteInRange(therapistId, startDate.atStartOfDay(), endDate.plusDays(1).atStartOfDay());
 
-		} catch (Exception e) {
-			throw new RuntimeException("Failed to serialize event", e);
-		}
+		AvailabilitySlotsDeletedEvent availabilitySlotsDeletedEvent = new AvailabilitySlotsDeletedEvent();
+		availabilitySlotsDeletedEvent.setOccurredAt(LocalDateTime.now());
+		availabilitySlotsDeletedEvent.setTherapistId(therapistId);
+		availabilitySlotsDeletedEvent.setRangeStart(startDate);
+		availabilitySlotsDeletedEvent.setRangeEnd(endDate);
+
+		outboxService.saveOutboxEvent("THERAPIST_AVAILABILITY", therapistId, "AvailabilitySlotsDeleted", availabilitySlotsDeletedEvent);
+		return true;
 	}
 }
 

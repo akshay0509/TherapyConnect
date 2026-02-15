@@ -3,6 +3,11 @@ package com.org.therapistService.Entity;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+import org.hibernate.annotations.Type;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.vladmihalcea.hibernate.type.json.JsonBinaryType;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -22,8 +27,9 @@ public class OutboxEvent {
     private String aggregateId;
     private String eventType;
 
+    @Type(JsonBinaryType.class)
     @Column(columnDefinition = "jsonb")
-    private String payload;
+    private JsonNode payload;
 
     private LocalDateTime createdAt;
     private boolean published;

@@ -1,27 +1,29 @@
-package com.org.therapistService.Messaging;
+package com.org.therapistService.Scheduler;
 
 import java.util.List;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import com.org.therapistService.Entity.OutboxEvent;
+import com.org.therapistService.Messaging.OutboxEventProducer;
 import com.org.therapistService.Repository.OutboxEventRepository;
 
 import jakarta.transaction.Transactional;
 
 @Service
-public class TherapistAvailabilityProducer {
-
-	@Autowired
-	private KafkaTemplate<String, Object> kafkaTemplate;
-
+public class OutboxEventScheduler {
+	
 	@Autowired
 	private OutboxEventRepository outboxEventRepository;
-
-	private static final String topic = "therapist-availability-events";
+	
+	@Autowired
+	private OutboxEventProducer outboxEventProducer;
+	
+	private static final Logger logger = LoggerFactory.getLogger(OutboxEventScheduler.class);
 
 	@Scheduled(fixedDelay = 2000)
 	@Transactional
@@ -32,12 +34,12 @@ public class TherapistAvailabilityProducer {
 		for(OutboxEvent outboxEvent : outboxEventList) {
 
 			try {
-				kafkaTemplate.send(topic, outboxEvent.getAggregateId(), outboxEvent.getPayload()).get(); // block for ACK
-
+				logger.info("Inside loop.." + outboxEventList.size());
+				outboxEventProducer.sendMessage(outboxEvent.getAggregateId(), outboxEvent.getPayload());
 				outboxEvent.setPublished(true);
-
 			}
 			catch (Exception ex) {
+				logger.info("failed during publishing.." + ex.getMessage());
 				break;
 			}
 		}

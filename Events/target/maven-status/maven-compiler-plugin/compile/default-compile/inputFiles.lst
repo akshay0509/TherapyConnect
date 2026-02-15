@@ -4,5 +4,6 @@ D:\GIT\repository\Events\src\main\java\com\org\events\login\LoginFailureEvent.ja
 D:\GIT\repository\Events\src\main\java\com\org\events\login\LoginSuccessEvent.java
 D:\GIT\repository\Events\src\main\java\com\org\events\TherapistAppointment\AppointmentEvent.java
 D:\GIT\repository\Events\src\main\java\com\org\events\TherapistAvailability\AvailabilityEvent.java
+D:\GIT\repository\Events\src\main\java\com\org\events\TherapistAvailability\AvailabilitySlotsDeletedEvent.java
 D:\GIT\repository\Events\src\main\java\com\org\events\TherapistAvailability\AvailabilitySlotsGeneratedEvent.java
 D:\GIT\repository\Events\src\main\java\com\org\events\TherapistAvailability\Slot.java
