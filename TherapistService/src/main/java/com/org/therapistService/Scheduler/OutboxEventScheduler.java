@@ -32,14 +32,16 @@ public class OutboxEventScheduler {
 		List<OutboxEvent> outboxEventList = outboxEventRepository.findTop100ByPublishedFalseOrderByCreatedAtAsc();
 
 		for(OutboxEvent outboxEvent : outboxEventList) {
-
+			logger.info("Inside loop.." + outboxEventList.size());
 			try {
-				logger.info("Inside loop.." + outboxEventList.size());
 				outboxEventProducer.sendMessage(outboxEvent.getAggregateId(), outboxEvent.getPayload());
 				outboxEvent.setPublished(true);
+				outboxEventRepository.save(outboxEvent);
 			}
 			catch (Exception ex) {
-				logger.info("failed during publishing.." + ex.getMessage());
+				logger.error("Failed to publish outbox event {}",
+					    outboxEvent.getOutboxEventId(),
+					    ex);
 				break;
 			}
 		}
