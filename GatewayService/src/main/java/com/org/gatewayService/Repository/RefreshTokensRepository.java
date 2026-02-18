@@ -8,7 +8,7 @@ import org.springframework.stereotype.Repository;
 import com.org.gatewayService.Entity.RefreshTokens;
 
 @Repository
-public interface RefreshTokensRepository extends JpaRepository<String, RefreshTokens>{
+public interface RefreshTokensRepository extends JpaRepository<RefreshTokens, String>{
 
 	Optional<RefreshTokens> findByToken(String token);
 

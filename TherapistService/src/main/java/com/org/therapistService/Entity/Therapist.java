@@ -4,6 +4,7 @@ package com.org.therapistService.Entity;
 import java.sql.Date;
 import java.util.UUID;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
@@ -25,6 +26,9 @@ public class Therapist {
 	private String email;
 	private String gender;
 	private int yearsOfExperience;
+	
+	@Column(nullable = false, unique = true)
+    private String userId;
 	
 	@PrePersist
     public void generateId() {

@@ -4,8 +4,12 @@ import java.time.Instant;
 import java.util.Set;
 import java.util.UUID;
 
+import com.org.userService.Enum.UserRole;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
@@ -53,6 +57,9 @@ public class User {
 
 	@Column(nullable = false)
 	private Instant updatedAt = Instant.now();
+	
+	@Enumerated(EnumType.STRING)
+	private UserRole userRole;
 
 	@PreUpdate
 	public void preUpdate() {

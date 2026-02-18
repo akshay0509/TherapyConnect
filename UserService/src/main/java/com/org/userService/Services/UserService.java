@@ -1,6 +1,6 @@
 package com.org.userService.Services;
 
-import java.util.stream.Collectors;
+import java.util.Set;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -62,10 +62,7 @@ public class UserService {
         return AuthResponse.success(
                 user.getUserId(),
                 user.getUsername(),
-                user.getRoles()
-                    .stream()
-                    .map(role -> role.getName())
-                    .collect(Collectors.toSet()),
+                Set.of(user.getUserRole().toString()),
                 user.isEnabled(),
                 user.isAccountLocked()
         );

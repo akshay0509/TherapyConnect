@@ -64,7 +64,8 @@ public class AuthController {
 		
 		String token = jwtUtil.generateToken(authRequest.getUsername(),
 											List.of("read", "write"),
-											List.of("THERAPIST", "ADMIN")); 
+											authResponse.getRoles(),
+											authResponse.getUserId()); 
 		return Map.of("token", token);
 	}
 }

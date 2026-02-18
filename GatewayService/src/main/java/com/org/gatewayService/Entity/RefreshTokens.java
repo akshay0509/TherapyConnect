@@ -14,7 +14,7 @@ import lombok.Data;
 public class RefreshTokens {
 
 	@Id
-    private Long id;
+    private String id;
 
     @Column(nullable = false, unique = true, length = 500)
     private String token;
