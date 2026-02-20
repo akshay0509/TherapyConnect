@@ -15,6 +15,7 @@ public class ClientDto {
 	private String email;
 	private String pronouns;
 	private String gender;
-	private String modeOfSession;
-	private int preferredDay;
+	private String therapistId;
+	//private String qualification;
+	//private String currentOccupation;
 }

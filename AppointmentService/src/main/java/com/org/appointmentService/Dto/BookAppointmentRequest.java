@@ -1,5 +1,7 @@
 package com.org.appointmentService.Dto;
 
+import com.org.appointmentService.Enums.SessionType;
+
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
@@ -14,4 +16,7 @@ public class BookAppointmentRequest {
 	
 	@NotNull
 	private String clientId;
+	
+	private String clientName;
+	private SessionType sessionType;
 }

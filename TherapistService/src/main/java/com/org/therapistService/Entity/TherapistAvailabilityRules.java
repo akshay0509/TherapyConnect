@@ -37,9 +37,10 @@ public class TherapistAvailabilityRules {
 	@Column(nullable = false)
 	private LocalTime endTime;
 	
+	/*
 	@Enumerated(EnumType.STRING)
 	private SessionType sessionType;
-
+	*/
 	private boolean isActive;
 	
 	@PrePersist

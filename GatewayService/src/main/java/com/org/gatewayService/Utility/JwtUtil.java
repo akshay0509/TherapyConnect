@@ -20,7 +20,7 @@ public class JwtUtil {
 		this.privateKey = privateKey;
 	}
 
-	public String generateToken(String username, List<String> scopes, Set<String> authorities, String userId) {
+	public String generateToken(String username, List<String> scopes, Set<String> authorities, String userId, String therapistId) {
 		return Jwts.builder()
 				.setIssuer("gateway-auth")
 				.setSubject(username)
@@ -28,6 +28,7 @@ public class JwtUtil {
 				.claim("scope", scopes)
 				.claim("authorities", authorities)
 				.claim("userId", userId)
+				.claim("therapistId", therapistId)
 				.setIssuedAt(new Date())
 				.setExpiration(new Date(System.currentTimeMillis() + 15 * 60 * 1000))
 				.signWith(privateKey, SignatureAlgorithm.RS256)

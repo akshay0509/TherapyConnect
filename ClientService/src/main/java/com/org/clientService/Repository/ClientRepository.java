@@ -8,4 +8,5 @@ import com.org.clientService.Entity.Client;
 @Repository
 public interface ClientRepository  extends JpaRepository<Client, String>{
 
+	Client findByTherapistIdAndClientId(String therapistId, String clientId);
 }

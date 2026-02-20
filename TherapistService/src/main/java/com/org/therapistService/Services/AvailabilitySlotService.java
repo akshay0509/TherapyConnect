@@ -82,7 +82,7 @@ public class AvailabilitySlotService {
 
 			for (TherapistAvailabilityRules rule : applicableRules) {
 				newSlotsToSave.addAll(
-						chopTimeBlockIntoSlots(therapistId, finalDate, rule.getStartTime(), rule.getEndTime(), rule.getSessionType(), therapistServices)
+						chopTimeBlockIntoSlots(therapistId, finalDate, rule.getStartTime(), rule.getEndTime(), /*rule.getSessionType()*/ null, therapistServices)
 						);
 			}
 
@@ -96,7 +96,7 @@ public class AvailabilitySlotService {
 							finalDate, 
 							override.getStartTime().toLocalTime(), 
 							override.getEndTime().toLocalTime(),
-							override.getSessionType(),
+							/*override.getSessionType()*/ null,
 							therapistServices
 							)
 					));
@@ -153,7 +153,7 @@ public class AvailabilitySlotService {
 
 
 				// Move to the next potential start time
-				currentSlotTime = currentSlotTime.plusMinutes(slotDurationMinutes);
+				currentSlotTime = currentSlotTime.plusMinutes(30);
 			}
 		}
 		return newSlots;

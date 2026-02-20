@@ -15,6 +15,7 @@ import com.org.events.login.LoginSuccessEvent;
 import com.org.gatewayService.Dto.AuthRequest;
 import com.org.gatewayService.Dto.AuthResponse;
 import com.org.gatewayService.Messaging.LoginEventProducer;
+import com.org.gatewayService.Proxy.TherapistServiceProxy;
 import com.org.gatewayService.Proxy.UserServiceProxy;
 import com.org.gatewayService.Utility.JwtUtil;
 
@@ -26,6 +27,9 @@ public class AuthController {
 	
 	@Autowired
 	private UserServiceProxy userServiceProxy;
+	
+	@Autowired
+	private TherapistServiceProxy therapistServiceProxy;
 	
 	@Autowired
     private JwtUtil jwtUtil;
@@ -62,10 +66,13 @@ public class AuthController {
 
         loginEventProducer.publishLoginSuccess(loginSuccessEvent);
 		
+        String therapistId = therapistServiceProxy.getTherapistId(authResponse.getUserId());
+        
 		String token = jwtUtil.generateToken(authRequest.getUsername(),
 											List.of("read", "write"),
 											authResponse.getRoles(),
-											authResponse.getUserId()); 
+											authResponse.getUserId(),
+											therapistId); 
 		return Map.of("token", token);
 	}
 }

@@ -15,10 +15,9 @@ public class ClientAssembler {
 		client.setFirstName(clientDto.getFirstName());
 		client.setLastName(clientDto.getLastName());
 		client.setGender(clientDto.getGender());
-		client.setModeOfSession(clientDto.getModeOfSession());
 		client.setPhoneNumber(clientDto.getPhoneNumber());
-		client.setPreferredDay(clientDto.getPreferredDay());
 		client.setPronouns(clientDto.getPronouns());
+		client.setTherapistId(clientDto.getTherapistId());
 		//client.setQualification(clientDto.getQualification());
 		
 		return client;
@@ -33,9 +32,7 @@ public class ClientAssembler {
 		clientDto.setFirstName(client.getFirstName());
 		clientDto.setLastName(client.getLastName());
 		clientDto.setGender(client.getGender());
-		clientDto.setModeOfSession(client.getModeOfSession());
 		clientDto.setPhoneNumber(client.getPhoneNumber());
-		clientDto.setPreferredDay(client.getPreferredDay());
 		clientDto.setPronouns(client.getPronouns());
 		//clientDto.setQualification(client.getQualification());
 		

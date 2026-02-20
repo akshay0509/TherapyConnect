@@ -15,7 +15,7 @@ public class ClientServiceProxy {
 	private final String clientServiceBaseUrl = "http://client-service";
 	
 	public String createClient(ClientDto clientDto) {
-		String url = clientServiceBaseUrl + "/client";
+		String url = clientServiceBaseUrl + "/create-client";
 		String response = restTemplate.postForObject(url, clientDto, String.class);
 		return response;
 	}

@@ -1,4 +1,4 @@
-package com.org.therapistService.Messaging.Producer;
+package com.org.appointmentService.Messaging.Producer;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -10,7 +10,7 @@ import com.org.events.TherapistAppointment.AppointmentEvent;
 public class AppointmentEventProducer {
 
 	@Autowired
-	private KafkaTemplate<String, Object> kafkaTemplate;
+	private KafkaTemplate<String, AppointmentEvent> kafkaTemplate;
 
 	private static final String APPOINTMENT_EVENT_TOPIC = "therapist-appointment-events";
 

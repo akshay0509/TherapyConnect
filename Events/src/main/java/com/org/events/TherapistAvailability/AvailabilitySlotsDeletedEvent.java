@@ -11,6 +11,7 @@ public class AvailabilitySlotsDeletedEvent {
 
 	private String eventId;
 	private LocalDateTime occurredAt;
+	private String eventType = "AvailabilitySlotsDeleted";
 	private String therapistId;
 	private LocalDate rangeStart;
     private LocalDate rangeEnd;

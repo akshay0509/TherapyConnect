@@ -19,11 +19,13 @@ import com.org.therapistService.Entity.ClientDto;
 import com.org.therapistService.Entity.TherapistAppointmentsDto;
 import com.org.therapistService.Entity.TherapistAvailabilityOverridesDto;
 import com.org.therapistService.Entity.TherapistAvailabilityRulesDto;
+import com.org.therapistService.Entity.TherapistClientsDto;
 import com.org.therapistService.Entity.TherapistDto;
 import com.org.therapistService.Entity.TherapistServicesDto;
 import com.org.therapistService.Proxy.ClientServiceProxy;
 import com.org.therapistService.Services.AvailabilitySlotService;
 import com.org.therapistService.Services.TherapistService;
+import com.org.therapistService.Utility.SecurityUtils;
 
 @RestController
 public class TherapistController {
@@ -42,11 +44,18 @@ public class TherapistController {
 	public List<TherapistDto> getAllTherapists(){
 		return therapistService.getAllTherapists();
 	}
+	
+	@GetMapping("/therapistProfile")
+	public TherapistDto getTherapistProfile(){
+		String therapistId = SecurityUtils.getTherapistId();
+		return therapistService.getTherapist(therapistId);
+	}
 
 	//get all therapist services
 	@GetMapping("/therapist-services")
 	public List<TherapistServicesDto> getAllTherapistServices(){
-		return therapistService.getAllTherapistServices();
+		String therapistId = SecurityUtils.getTherapistId();
+		return therapistService.getTherapistServices(therapistId);
 	}
 
 	//get all services for a therapist
@@ -68,18 +77,29 @@ public class TherapistController {
 	}
 
 	//create a client for a therapist
-	@PostMapping("/{therapistId}/create-client")
-	public ResponseEntity<String> createClient(
-			@PathVariable String therapistId,
-			@RequestBody ClientDto clientDto){
-		
+	@PostMapping("/create-client")
+	public ResponseEntity<String> createClient(@RequestBody ClientDto clientDto){
+		String therapistId = SecurityUtils.getTherapistId();
+		clientDto.setTherapistId(therapistId);
 		String clientId = clientServiceProxy.createClient(clientDto);
+		System.out.println("printing the client ID: "+clientId);
+		String clientName = clientDto.getFirstName() + " " + clientDto.getLastName();
+		therapistService.addClient(therapistId, clientId, clientName);
 		return ResponseEntity.ok(clientId);
+	}
+	
+	@GetMapping("/clients")
+	public ResponseEntity<List<TherapistClientsDto>> getClients() {
+		String therapistId = SecurityUtils.getTherapistId();
+		List<TherapistClientsDto> therapistClientsDtoList = therapistService.getClientsForTherapist(therapistId);
+		return ResponseEntity.ok(therapistClientsDtoList);
 	}
 
 	//create a therapist service
 	@PostMapping("/create-service")
 	public void createTherapistService(@RequestBody TherapistServicesDto therapistServicesDto) {
+		String therapistId = SecurityUtils.getTherapistId();
+		therapistServicesDto.setTherapistId(therapistId);
 		therapistService.createTherapistServices(therapistServicesDto);
 	}
 
@@ -87,10 +107,20 @@ public class TherapistController {
 	public void createTherapistAppointment(@RequestBody TherapistAppointmentsDto therapistAppointmentsDto) {
 		therapistService.createTherapistAppointments(therapistAppointmentsDto);
 	}
+	
+	@GetMapping("/availability-rules")
+	public List<TherapistAvailabilityRulesDto> getTherapistAvailabilityRules() {
+		String therapistId = SecurityUtils.getTherapistId();
+		return therapistService.getAllTherapistAvailabilityRules(therapistId);
+	}
 
 	@PostMapping("/create-availability-rules")
-	public void createTherapistAvailabilityRules(@RequestBody TherapistAvailabilityRulesDto therapistAvailabilityRulesDto) {
-		therapistService.createTherapistAvailabilityRules(therapistAvailabilityRulesDto);
+	public void createTherapistAvailabilityRules(@RequestBody List<TherapistAvailabilityRulesDto> therapistAvailabilityRulesDtoList) {
+		String therapistId = SecurityUtils.getTherapistId();
+		for (TherapistAvailabilityRulesDto therapistAvailabilityRulesDto : therapistAvailabilityRulesDtoList) {
+			therapistAvailabilityRulesDto.setTherapistId(therapistId);
+	    }
+		therapistService.createTherapistAvailabilityRules(therapistAvailabilityRulesDtoList);
 	}
 
 	@PostMapping("/create-availability-overrides")

@@ -14,6 +14,7 @@ public class AppointmentEvent {
 	private String slotId;
 	private String therapistId;
 	private String clientId;
+	private String sessionType;
 	private LocalDateTime startTime;
 	private LocalDateTime endTime;
 	private String bookingSource;

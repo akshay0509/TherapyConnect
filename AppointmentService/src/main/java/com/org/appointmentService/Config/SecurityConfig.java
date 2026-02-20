@@ -1,4 +1,4 @@
-package com.org.therapistService.Config;
+package com.org.appointmentService.Config;
 
 import static org.springframework.security.config.Customizer.withDefaults;
 
@@ -15,7 +15,6 @@ public class SecurityConfig {
 		http
 			.csrf(csrf -> csrf.disable())
 			.authorizeHttpRequests(authz -> authz
-				.requestMatchers("/internal/**").permitAll()
 				.anyRequest().authenticated()
 			)
 			.oauth2ResourceServer(oauth2 -> oauth2

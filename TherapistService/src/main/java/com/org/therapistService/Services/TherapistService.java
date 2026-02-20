@@ -16,6 +16,8 @@ import com.org.therapistService.Entity.TherapistAvailabilityOverrides;
 import com.org.therapistService.Entity.TherapistAvailabilityOverridesDto;
 import com.org.therapistService.Entity.TherapistAvailabilityRules;
 import com.org.therapistService.Entity.TherapistAvailabilityRulesDto;
+import com.org.therapistService.Entity.TherapistClients;
+import com.org.therapistService.Entity.TherapistClientsDto;
 import com.org.therapistService.Entity.TherapistDto;
 import com.org.therapistService.Entity.TherapistServices;
 import com.org.therapistService.Entity.TherapistServicesDto;
@@ -23,6 +25,7 @@ import com.org.therapistService.Repository.TherapistAppointmentsRepository;
 import com.org.therapistService.Repository.TherapistAvailabilityOverridesRepository;
 import com.org.therapistService.Repository.TherapistAvailabilityRepository;
 import com.org.therapistService.Repository.TherapistAvailabilityRulesRepository;
+import com.org.therapistService.Repository.TherapistClientsRepository;
 import com.org.therapistService.Repository.TherapistRepository;
 import com.org.therapistService.Repository.TherapistServicesRepository;
 
@@ -47,6 +50,9 @@ public class TherapistService {
 	@Autowired
 	private TherapistAvailabilityRepository therapistAvailabilityRepository;
 	
+	@Autowired
+	private TherapistClientsRepository therapistClientsRepository;
+	
 	private TherapistAssembler therapistAssembler = new TherapistAssembler();
 	
 	public void createTherapist(TherapistDto therapistDto) {
@@ -63,6 +69,12 @@ public class TherapistService {
 			dtoList.add(dto);
 		}
 		return dtoList;
+	}
+	
+	public TherapistDto getTherapist(String therapistId){
+		Therapist therapist = therapistRepository.findByTherapistId(therapistId);
+		TherapistDto dto = therapistAssembler.assembleEntityToDto(therapist);
+		return dto;
 	}
 	
 	public void createTherapistServices(TherapistServicesDto therapistServicesDto) {
@@ -114,13 +126,19 @@ public class TherapistService {
 		return dtoList;
 	}
 	
-	public void createTherapistAvailabilityRules(TherapistAvailabilityRulesDto therapistAvailabilityRulesDto) {
-		TherapistAvailabilityRules therapistAvailabilityRules = therapistAssembler.assembleDtoToEntity(therapistAvailabilityRulesDto);
-		therapistAvailabilityRulesRepository.save(therapistAvailabilityRules);
+	public void createTherapistAvailabilityRules(List<TherapistAvailabilityRulesDto> therapistAvailabilityRulesDtoList) {
+		if(!therapistAvailabilityRulesDtoList.isEmpty()) {
+			List<TherapistAvailabilityRules> therapistAvailabilityRulesList = new ArrayList<TherapistAvailabilityRules>();
+			for(TherapistAvailabilityRulesDto therapistAvailabilityRulesDto : therapistAvailabilityRulesDtoList) {
+				TherapistAvailabilityRules therapistAvailabilityRules = therapistAssembler.assembleDtoToEntity(therapistAvailabilityRulesDto);
+				therapistAvailabilityRulesList.add(therapistAvailabilityRules);
+			}
+			therapistAvailabilityRulesRepository.saveAll(therapistAvailabilityRulesList);
+		}
 	}
 	
-	public List<TherapistAvailabilityRulesDto> getAllTherapistAvailabilityRules(){
-		List<TherapistAvailabilityRules> list = therapistAvailabilityRulesRepository.findAll();
+	public List<TherapistAvailabilityRulesDto> getAllTherapistAvailabilityRules(String therapistId){
+		List<TherapistAvailabilityRules> list = therapistAvailabilityRulesRepository.findByTherapistId(therapistId);
 		List<TherapistAvailabilityRulesDto> dtoList = new ArrayList<TherapistAvailabilityRulesDto>();
 		TherapistAvailabilityRulesDto dto;
 		for(TherapistAvailabilityRules rec : list) {
@@ -160,6 +178,31 @@ public class TherapistService {
 			dtoList.add(dto);
 		}
 		return dtoList;
+	}
+	
+	public String getTherapistIdByUserId(String userId) {
+		Therapist therapist = therapistRepository.findByUserId(userId);
+        return therapist.getTherapistId();
+    }
+	
+	public List<TherapistClientsDto> getClientsForTherapist(String therapistId){
+		List<TherapistClients> list = therapistClientsRepository.findByTherapistId(therapistId);
+		List<TherapistClientsDto> dtoList = new ArrayList<TherapistClientsDto>();
+		TherapistClientsDto dto;
+		for(TherapistClients rec : list) {
+			dto = therapistAssembler.assembleEntityToDto(rec);
+			dtoList.add(dto);
+		}
+		return dtoList;
+	}
+	
+	public void addClient(String therapistId, String clientId, String clientName) {
+		TherapistClients therapistClient = new TherapistClients();
+		therapistClient.setClientId(clientId);
+		therapistClient.setClientName(clientName);
+		therapistClient.setTherapistId(therapistId);
+		
+		therapistClientsRepository.save(therapistClient);
 	}
 	
 }

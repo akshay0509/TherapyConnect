@@ -1,5 +1,6 @@
 package com.org.therapistService.Entity;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -31,9 +32,11 @@ public class TherapistAvailabilityOverrides {
 	@Column(nullable = false)
 	private LocalDateTime endTime;
 	
+	/*
 	@Enumerated(EnumType.STRING)
 	private SessionType sessionType;
-
+	*/
+	
 	private boolean isAvailable;
 	
 	@PrePersist

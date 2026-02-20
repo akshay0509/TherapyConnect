@@ -10,7 +10,7 @@ import lombok.Data;
 @Data
 public class AvailabilitySlotsGeneratedEvent {
 
-	private String eventType;
+	private String eventType = "AvailabilitySlotsGenerated";
     private String eventId;
     private LocalDateTime occurredAt;
 

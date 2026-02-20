@@ -1,6 +1,7 @@
 package com.org.clientService.Entity;
 
 import java.sql.Date;
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 import jakarta.persistence.Entity;
@@ -27,9 +28,8 @@ public class Client {
 	private String email;
 	private String pronouns;
 	private String gender;
-	private String modeOfSession;
-	private int preferredDay;
-
+	private LocalDateTime createdAt = LocalDateTime.now();
+	
 	@PrePersist
 	public void generateId() {
 		if (this.clientId == null) {
@@ -37,5 +37,4 @@ public class Client {
 			this.clientId = "CLT" + uniquePart;
 		}
 	}
-
 }

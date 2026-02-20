@@ -1,4 +1,4 @@
-package com.org.therapistService.Messaging.Producer;
+package com.org.appointmentService.Messaging.Producer;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.core.KafkaTemplate;

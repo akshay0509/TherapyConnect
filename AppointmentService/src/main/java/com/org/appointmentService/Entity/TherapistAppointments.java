@@ -5,6 +5,7 @@ import java.util.UUID;
 
 import com.org.appointmentService.Enums.AppointmentStatus;
 import com.org.appointmentService.Enums.Creator;
+import com.org.appointmentService.Enums.SessionType;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -36,10 +37,19 @@ public class TherapistAppointments {
 	private String clientId;
 	
 	@Column(nullable = false)
+	private String clientName;
+	
+	/*
+	@Column(nullable = false)
 	private String serviceId;
+	*/
+	
 	
 	@Column(nullable = false, unique = true)
 	private String slotId;
+	
+	@Enumerated(EnumType.STRING)
+	private SessionType sessionType;
 
 	@Column(nullable = false)
 	private LocalDateTime startTime;

@@ -26,7 +26,7 @@
             	<EventTemplateAdditionalField key="therapistId" format="JSON" value='{"$resolver": "mdc", "key": "therapistId"}'/>
             	<EventTemplateAdditionalField key="path" format="JSON" value='{"$resolver": "mdc", "key": "path"}'/>
 				            
-                <EventTemplateAdditionalField key="appName" value="TherapistService"/>
+                <EventTemplateAdditionalField key="appName" value="AppointmentService"/>
                 <EventTemplateAdditionalField key="environment" value="PROD"/>
             </JsonTemplateLayout>
 

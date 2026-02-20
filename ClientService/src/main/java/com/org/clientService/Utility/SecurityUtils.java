@@ -1,0 +1,49 @@
+package com.org.clientService.Utility;
+
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.jwt.Jwt;
+
+public class SecurityUtils {
+
+	public static String getUserId() {
+
+        Jwt jwt = (Jwt) SecurityContextHolder
+                .getContext()
+                .getAuthentication()
+                .getPrincipal();
+
+        String userId = jwt.getClaim("userId");
+
+        if (userId == null) {
+            throw new RuntimeException("userId not found in JWT");
+        }
+
+        return userId;
+    }
+	
+	public static String getTherapistId() {
+
+        Jwt jwt = (Jwt) SecurityContextHolder
+                .getContext()
+                .getAuthentication()
+                .getPrincipal();
+
+        String therapistId = jwt.getClaim("therapistId");
+
+        if (therapistId == null) {
+            throw new RuntimeException("therapistId not found in JWT");
+        }
+
+        return therapistId;
+    }
+	
+	public static String getJwtToken() {
+
+        Jwt jwt = (Jwt) SecurityContextHolder
+                .getContext()
+                .getAuthentication()
+                .getPrincipal();
+
+        return jwt.getTokenValue();
+    }
+}

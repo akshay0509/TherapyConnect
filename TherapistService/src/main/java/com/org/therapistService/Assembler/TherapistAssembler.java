@@ -9,6 +9,8 @@ import com.org.therapistService.Entity.TherapistAvailabilityOverrides;
 import com.org.therapistService.Entity.TherapistAvailabilityOverridesDto;
 import com.org.therapistService.Entity.TherapistAvailabilityRules;
 import com.org.therapistService.Entity.TherapistAvailabilityRulesDto;
+import com.org.therapistService.Entity.TherapistClients;
+import com.org.therapistService.Entity.TherapistClientsDto;
 import com.org.therapistService.Entity.TherapistDto;
 import com.org.therapistService.Entity.TherapistServices;
 import com.org.therapistService.Entity.TherapistServicesDto;
@@ -69,7 +71,7 @@ public class TherapistAssembler {
 		TherapistAvailabilityRules therapistAvailabilityRules = new TherapistAvailabilityRules();
 		therapistAvailabilityRules.setTherapistId(therapistAvailabilityRulesDto.getTherapistId());
 		therapistAvailabilityRules.setActive(therapistAvailabilityRulesDto.getIsActive());
-		therapistAvailabilityRules.setSessionType(therapistAvailabilityRulesDto.getSessionType());
+		//therapistAvailabilityRules.setSessionType(therapistAvailabilityRulesDto.getSessionType());
 		therapistAvailabilityRules.setDayOfWeek(therapistAvailabilityRulesDto.getDayOfWeek());
 		therapistAvailabilityRules.setStartTime(therapistAvailabilityRulesDto.getStartTime());
 		therapistAvailabilityRules.setEndTime(therapistAvailabilityRulesDto.getEndTime());
@@ -82,7 +84,7 @@ public class TherapistAssembler {
 		therapistAvailabilityRulesDto.setRuleId(therapistAvailabilityRules.getRuleId());
 		therapistAvailabilityRulesDto.setTherapistId(therapistAvailabilityRules.getTherapistId());
 		therapistAvailabilityRulesDto.setIsActive(therapistAvailabilityRules.isActive());
-		therapistAvailabilityRulesDto.setSessionType(therapistAvailabilityRules.getSessionType());
+		//therapistAvailabilityRulesDto.setSessionType(therapistAvailabilityRules.getSessionType());
 		therapistAvailabilityRulesDto.setDayOfWeek(therapistAvailabilityRules.getDayOfWeek());
 		therapistAvailabilityRulesDto.setStartTime(therapistAvailabilityRules.getStartTime());
 		therapistAvailabilityRulesDto.setEndTime(therapistAvailabilityRules.getEndTime());
@@ -159,6 +161,15 @@ public class TherapistAssembler {
 		therapistAppointmentsDto.setReminderSent(therapistAppointments.isReminderSent());
 		
 		return therapistAppointmentsDto;
+	}
+	
+	public TherapistClientsDto assembleEntityToDto(TherapistClients therapistClients) {
+		TherapistClientsDto therapistClientsDto = new TherapistClientsDto();
+		therapistClientsDto.setTherapistId(therapistClients.getTherapistId());
+		therapistClientsDto.setClientId(therapistClients.getClientId());
+		therapistClientsDto.setClientName(therapistClients.getClientName());
+		
+		return therapistClientsDto;
 	}
 	
 }

@@ -20,6 +20,10 @@ public interface TherapistAvailabilityRulesRepository extends JpaRepository<Ther
 			String therapistId
 			);
 	
+	List<TherapistAvailabilityRules> findByTherapistId(
+			String therapistId
+			);
+	
 	@Query("SELECT DISTINCT r.therapistId FROM TherapistAvailabilityRules r")
     List<String> findAllDistinctTherapistIds();
 }

@@ -16,6 +16,7 @@ public class ClientService {
 
 	@Autowired
 	private ClientRepository clientRepository;
+	
 	private ClientAssembler clientAssembler = new ClientAssembler();
 	
 	public List<ClientDto> getAllClients(){
@@ -29,8 +30,17 @@ public class ClientService {
 		return clientDtoList;
 	}
 	
-	public void createClient(ClientDto clientDto) {
+	public ClientDto getClient(String therapistId, String clientId) {
+		Client client = clientRepository.findByTherapistIdAndClientId(therapistId, clientId);
+		ClientDto clientDto = clientAssembler.assembleEntityToDto(client);
+		
+		return clientDto;
+	}
+	
+	public String createClient(ClientDto clientDto) {
 		Client client = clientAssembler.assembleDtoToEntity(clientDto);
 		clientRepository.save(client);
+		
+		return client.getClientId();
 	}
 }

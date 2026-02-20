@@ -31,9 +31,11 @@ public class TherapistAvailability {
 
 	@Column(nullable = false)
 	private LocalDateTime endTime;
-
+	
+	/*
 	@Enumerated(EnumType.STRING)
 	private SessionType sessionType;
+	*/
 	
 	@Column(nullable = true)
 	private String serviceId;
@@ -42,11 +44,4 @@ public class TherapistAvailability {
     @Column(name = "status", nullable = false)
     private AvailabilityStatus status = AvailabilityStatus.AVAILABLE;
 	
-	@PrePersist
-    public void generateId() {
-        if (this.slotId == null) {
-            String uniquePart = UUID.randomUUID().toString().substring(0, 8);
-            this.slotId = "SLT" + uniquePart;
-        }
-    }
 }

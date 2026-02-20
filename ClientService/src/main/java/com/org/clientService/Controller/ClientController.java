@@ -1,15 +1,16 @@
 package com.org.clientService.Controller;
 
-import java.util.List;
-
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.org.clientService.Entity.ClientDto;
 import com.org.clientService.Services.ClientService;
+import com.org.clientService.Utility.SecurityUtils;
 
 @RestController
 public class ClientController {
@@ -17,13 +18,15 @@ public class ClientController {
 	@Autowired
 	private ClientService clientService;
 	
-	@GetMapping("/clients")
-	public List<ClientDto> getAllClients(){
-		return clientService.getAllClients();
+	@GetMapping("/get/{clientId}")
+	public ClientDto getClients(@PathVariable String clientId){
+		String therapistId = SecurityUtils.getTherapistId();
+		return clientService.getClient(therapistId, clientId);
 	}
 	
-	@PostMapping("/client")
-	public void createClient(@RequestBody ClientDto clientDto) {
-		clientService.createClient(clientDto);
+	@PostMapping("/create-client")
+	public ResponseEntity<String> createClient(@RequestBody ClientDto clientDto) {
+		String clientId = clientService.createClient(clientDto);
+		return ResponseEntity.ok(clientId);
 	}
 }
