@@ -1,4 +1,4 @@
-package com.org.therapistService.Enums;
+package com.org.events.TherapistAppointment;
 
 public enum AppointmentStatus {
     SCHEDULED,

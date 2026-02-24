@@ -1,4 +1,4 @@
-package com.org.therapistService.Entity;
+package com.org.therapistService.Dto;
 
 import lombok.Data;
 
@@ -9,5 +9,5 @@ public class SessionNotesDto {
 	private String therapistId;
 	private String appointmentId;
 	private String clientId;
-	private String noteContent;
+	private String sessionNotes;
 }

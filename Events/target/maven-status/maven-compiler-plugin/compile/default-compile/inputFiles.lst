@@ -1,8 +1,10 @@
+D:\GIT\repository\Events\src\main\java\com\org\events\Client\ClientEvent.java
 D:\GIT\repository\Events\src\main\java\com\org\events\email\EmailReminderEvent.java
 D:\GIT\repository\Events\src\main\java\com\org\events\login\FailureReason.java
 D:\GIT\repository\Events\src\main\java\com\org\events\login\LoginFailureEvent.java
 D:\GIT\repository\Events\src\main\java\com\org\events\login\LoginSuccessEvent.java
 D:\GIT\repository\Events\src\main\java\com\org\events\TherapistAppointment\AppointmentEvent.java
+D:\GIT\repository\Events\src\main\java\com\org\events\TherapistAppointment\AppointmentStatus.java
 D:\GIT\repository\Events\src\main\java\com\org\events\TherapistAvailability\AvailabilityEvent.java
 D:\GIT\repository\Events\src\main\java\com\org\events\TherapistAvailability\AvailabilitySlotsDeletedEvent.java
 D:\GIT\repository\Events\src\main\java\com\org\events\TherapistAvailability\AvailabilitySlotsGeneratedEvent.java

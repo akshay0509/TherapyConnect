@@ -1,8 +1,12 @@
 package com.org.therapistService.Entity;
 
+import java.time.LocalDateTime;
 import java.util.UUID;
 
+import com.org.therapistService.Utility.SessionNotesEncryptor;
+
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Lob;
@@ -26,9 +30,12 @@ public class SessionNotes {
 	
 	@Column(nullable = false)
 	private String clientId;
+	
+	private LocalDateTime createdAt = LocalDateTime.now();
+	private LocalDateTime updatedAt;
 
-	@Lob
-	@Column(nullable = false)
+	@Convert(converter = SessionNotesEncryptor.class)
+	@Column(nullable = false, columnDefinition = "TEXT")
     private String noteContent;
 	
 	@PrePersist

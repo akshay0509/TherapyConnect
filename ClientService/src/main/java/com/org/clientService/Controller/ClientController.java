@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.org.clientService.Entity.ClientDto;
 import com.org.clientService.Services.ClientService;
 import com.org.clientService.Utility.SecurityUtils;
@@ -26,7 +27,12 @@ public class ClientController {
 	
 	@PostMapping("/create-client")
 	public ResponseEntity<String> createClient(@RequestBody ClientDto clientDto) {
-		String clientId = clientService.createClient(clientDto);
+		String clientId;
+		try {
+			clientId = clientService.createClient(clientDto);
+		} catch (JsonProcessingException e) {
+			return ResponseEntity.ok("failed");
+		}
 		return ResponseEntity.ok(clientId);
 	}
 }

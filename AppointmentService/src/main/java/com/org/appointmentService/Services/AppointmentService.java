@@ -7,13 +7,13 @@ import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.org.appointmentService.Dto.AvailabilityResponseDto;
 import com.org.appointmentService.Dto.BookAppointmentRequest;
 import com.org.appointmentService.Entity.TherapistAppointments;
 import com.org.appointmentService.Entity.TherapistAvailability;
 import com.org.appointmentService.Enums.AppointmentStatus;
 import com.org.appointmentService.Exception.SlotAlreadyBookedException;
-import com.org.appointmentService.Messaging.Producer.AppointmentEventProducer;
 import com.org.appointmentService.Repository.TherapistAppointmentsRepository;
 import com.org.appointmentService.Repository.TherapistAvailabilityRepository;
 import com.org.events.TherapistAppointment.AppointmentEvent;
@@ -30,10 +30,10 @@ public class AppointmentService {
 	private TherapistAppointmentsRepository therapistAppointmentsRepository;
 
 	@Autowired
-	private AppointmentEventProducer appointmentEventProducer;
+	private OutboxService outboxService;
 
 	@Transactional
-	public String bookAppointment(BookAppointmentRequest bookAppointmentRequest) {
+	public String bookAppointment(BookAppointmentRequest bookAppointmentRequest) throws JsonProcessingException {
 
 		String slotId = bookAppointmentRequest.getSlotId();
 
@@ -69,7 +69,7 @@ public class AppointmentService {
 		appointmentEvent.setEndTime(therapistAppointment.getEndTime());
 		appointmentEvent.setBookingSource("THERAPIST");
 
-		appointmentEventProducer.publishAppointment(appointmentEvent);
+		outboxService.saveOutboxEvent("THERAPIST_APPOINTMENT", therapistAppointment.getTherapistId(), "AppointmentCreated", appointmentEvent);
 
 		return therapistAppointment.getAppointmentId();
 

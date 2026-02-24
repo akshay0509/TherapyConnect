@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.org.appointmentService.Dto.AvailabilityResponseDto;
 import com.org.appointmentService.Dto.BookAppointmentRequest;
 import com.org.appointmentService.Entity.TherapistAppointments;
@@ -26,7 +27,12 @@ public class AppointmentController {
 	@PostMapping("/create-appointment")
     public ResponseEntity<String> bookAppointment(@RequestBody @Valid BookAppointmentRequest bookAppointmentRequest) {
 
-        String appointmentId = appointmentService.bookAppointment(bookAppointmentRequest);
+        String appointmentId;
+		try {
+			appointmentId = appointmentService.bookAppointment(bookAppointmentRequest);
+		} catch (JsonProcessingException e) {			
+			return ResponseEntity.ok("failed");
+		}
         return ResponseEntity.ok(appointmentId);
     }
 	

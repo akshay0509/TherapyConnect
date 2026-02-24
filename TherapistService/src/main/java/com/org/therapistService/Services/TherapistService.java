@@ -1,27 +1,33 @@
 package com.org.therapistService.Services;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import com.org.therapistService.Assembler.TherapistAssembler;
+import com.org.therapistService.Dto.SessionDetailsDto;
+import com.org.therapistService.Dto.SessionNotesDto;
+import com.org.therapistService.Dto.TherapistAvailabilityDto;
+import com.org.therapistService.Dto.TherapistAvailabilityOverridesDto;
+import com.org.therapistService.Dto.TherapistAvailabilityRulesDto;
+import com.org.therapistService.Dto.TherapistClientsDto;
+import com.org.therapistService.Dto.TherapistDto;
+import com.org.therapistService.Dto.TherapistServicesDto;
+import com.org.therapistService.Entity.AppointmentProjection;
+import com.org.therapistService.Entity.SessionNotes;
 import com.org.therapistService.Entity.Therapist;
-import com.org.therapistService.Entity.TherapistAppointments;
-import com.org.therapistService.Entity.TherapistAppointmentsDto;
 import com.org.therapistService.Entity.TherapistAvailability;
-import com.org.therapistService.Entity.TherapistAvailabilityDto;
 import com.org.therapistService.Entity.TherapistAvailabilityOverrides;
-import com.org.therapistService.Entity.TherapistAvailabilityOverridesDto;
 import com.org.therapistService.Entity.TherapistAvailabilityRules;
-import com.org.therapistService.Entity.TherapistAvailabilityRulesDto;
 import com.org.therapistService.Entity.TherapistClients;
-import com.org.therapistService.Entity.TherapistClientsDto;
-import com.org.therapistService.Entity.TherapistDto;
 import com.org.therapistService.Entity.TherapistServices;
-import com.org.therapistService.Entity.TherapistServicesDto;
-import com.org.therapistService.Repository.TherapistAppointmentsRepository;
+import com.org.therapistService.Repository.AppointmentProjectionRepository;
+import com.org.therapistService.Repository.SessionNotesRepository;
 import com.org.therapistService.Repository.TherapistAvailabilityOverridesRepository;
 import com.org.therapistService.Repository.TherapistAvailabilityRepository;
 import com.org.therapistService.Repository.TherapistAvailabilityRulesRepository;
@@ -39,9 +45,6 @@ public class TherapistService {
 	private TherapistServicesRepository therapistServicesRepository;
 	
 	@Autowired
-	private TherapistAppointmentsRepository therapistAppointmentsRepository;
-	
-	@Autowired
 	private TherapistAvailabilityOverridesRepository therapistAvailabilityOverridesRepository;
 	
 	@Autowired
@@ -52,6 +55,14 @@ public class TherapistService {
 	
 	@Autowired
 	private TherapistClientsRepository therapistClientsRepository;
+	
+	@Autowired
+	private SessionNotesRepository sessionNotesRepository;
+	
+	@Autowired
+	private AppointmentProjectionRepository appointmentProjectionRepository;
+	
+	private static final Logger logger = LoggerFactory.getLogger(TherapistService.class);
 	
 	private TherapistAssembler therapistAssembler = new TherapistAssembler();
 	
@@ -164,22 +175,6 @@ public class TherapistService {
 		return dtoList;
 	}
 	
-	public void createTherapistAppointments(TherapistAppointmentsDto therapistAppointmentsDto) {
-		TherapistAppointments therapistAppointments = therapistAssembler.assembleDtoToEntity(therapistAppointmentsDto);
-		therapistAppointmentsRepository.save(therapistAppointments);
-	}
-	
-	public List<TherapistAppointmentsDto> getAllTherapistAppointments(){
-		List<TherapistAppointments> list = therapistAppointmentsRepository.findAll();
-		List<TherapistAppointmentsDto> dtoList = new ArrayList<TherapistAppointmentsDto>();
-		TherapistAppointmentsDto dto;
-		for(TherapistAppointments rec : list) {
-			dto = therapistAssembler.assembleEntityToDto(rec);
-			dtoList.add(dto);
-		}
-		return dtoList;
-	}
-	
 	public String getTherapistIdByUserId(String userId) {
 		Therapist therapist = therapistRepository.findByUserId(userId);
         return therapist.getTherapistId();
@@ -203,6 +198,34 @@ public class TherapistService {
 		therapistClient.setTherapistId(therapistId);
 		
 		therapistClientsRepository.save(therapistClient);
+	}
+	
+	public List<SessionDetailsDto> getClientAppointmentHistory(String therapistId, String clientId) {
+		return sessionNotesRepository.findAppointmentsWithNotes(therapistId, clientId);
+	}
+	
+	public void createNotes(SessionNotesDto sessionNotesDto) {
+		logger.info("inside createNotes..");
+		SessionNotes sessionNotes = therapistAssembler.assembleDtoToEntity(sessionNotesDto);
+		logger.info("therapist id :"+sessionNotes.getTherapistId());
+		logger.info("appointment id :"+sessionNotes.getAppointmentId());
+		AppointmentProjection appointmentProjection = appointmentProjectionRepository.findByAppointmentIdAndTherapistId(sessionNotes.getAppointmentId(), sessionNotes.getTherapistId());
+		logger.info("clientId id :"+appointmentProjection.getClientId());
+		logger.info("notes :"+sessionNotes.getNoteContent());
+		sessionNotes.setClientId(appointmentProjection.getClientId());
+		sessionNotesRepository.save(sessionNotes);
+		logger.info("exiting createNotes..");
+	}
+	
+	public void updateNotes(SessionNotesDto sessionNotesDto) {
+		
+		String appointmentId = sessionNotesDto.getAppointmentId();
+		SessionNotes sessionNotes = sessionNotesRepository.findByAppointmentId(appointmentId);
+		sessionNotes.setNoteContent(sessionNotesDto.getSessionNotes());
+		sessionNotes.setUpdatedAt(LocalDateTime.now());
+		
+		sessionNotesRepository.save(sessionNotes);
+		
 	}
 	
 }

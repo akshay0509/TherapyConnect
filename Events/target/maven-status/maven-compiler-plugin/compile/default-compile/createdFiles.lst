@@ -1,9 +1,11 @@
 com\org\events\login\FailureReason.class
-com\org\events\TherapistAvailability\AvailabilityEvent.class
 com\org\events\login\LoginFailureEvent.class
-com\org\events\email\EmailReminderEvent.class
+com\org\events\TherapistAppointment\AppointmentStatus.class
+com\org\events\Client\ClientEvent.class
 com\org\events\TherapistAvailability\AvailabilitySlotsGeneratedEvent.class
 com\org\events\TherapistAvailability\Slot.class
 com\org\events\login\LoginSuccessEvent.class
 com\org\events\TherapistAppointment\AppointmentEvent.class
 com\org\events\TherapistAvailability\AvailabilitySlotsDeletedEvent.class
+com\org\events\TherapistAvailability\AvailabilityEvent.class
+com\org\events\email\EmailReminderEvent.class

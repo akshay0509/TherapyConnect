@@ -1,4 +1,4 @@
-package com.org.therapistService.Entity;
+package com.org.therapistService.Dto;
 
 import java.sql.Date;
 

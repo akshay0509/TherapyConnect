@@ -4,7 +4,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
-import com.org.therapistService.Entity.ClientDto;
+import com.org.therapistService.Dto.ClientDto;
 
 @Service
 public class ClientServiceProxy {

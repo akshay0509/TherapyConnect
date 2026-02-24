@@ -1,19 +1,21 @@
 package com.org.therapistService.Assembler;
 
+import java.time.LocalDateTime;
+
+import com.org.therapistService.Dto.SessionNotesDto;
+import com.org.therapistService.Dto.TherapistAvailabilityDto;
+import com.org.therapistService.Dto.TherapistAvailabilityOverridesDto;
+import com.org.therapistService.Dto.TherapistAvailabilityRulesDto;
+import com.org.therapistService.Dto.TherapistClientsDto;
+import com.org.therapistService.Dto.TherapistDto;
+import com.org.therapistService.Dto.TherapistServicesDto;
+import com.org.therapistService.Entity.SessionNotes;
 import com.org.therapistService.Entity.Therapist;
-import com.org.therapistService.Entity.TherapistAppointments;
-import com.org.therapistService.Entity.TherapistAppointmentsDto;
 import com.org.therapistService.Entity.TherapistAvailability;
-import com.org.therapistService.Entity.TherapistAvailabilityDto;
 import com.org.therapistService.Entity.TherapistAvailabilityOverrides;
-import com.org.therapistService.Entity.TherapistAvailabilityOverridesDto;
 import com.org.therapistService.Entity.TherapistAvailabilityRules;
-import com.org.therapistService.Entity.TherapistAvailabilityRulesDto;
 import com.org.therapistService.Entity.TherapistClients;
-import com.org.therapistService.Entity.TherapistClientsDto;
-import com.org.therapistService.Entity.TherapistDto;
 import com.org.therapistService.Entity.TherapistServices;
-import com.org.therapistService.Entity.TherapistServicesDto;
 
 public class TherapistAssembler {
 
@@ -136,33 +138,6 @@ public class TherapistAssembler {
 		return therapistAvailabilityDto;
 	}
 	
-	public TherapistAppointments assembleDtoToEntity(TherapistAppointmentsDto therapistAppointmentsDto) {
-		TherapistAppointments therapistAppointments = new TherapistAppointments();
-		therapistAppointments.setTherapistId(therapistAppointmentsDto.getTherapistId());
-		therapistAppointments.setClientId(therapistAppointmentsDto.getClientId());
-		therapistAppointments.setSlotId(therapistAppointmentsDto.getSlotId());
-		therapistAppointments.setServiceId(therapistAppointmentsDto.getServiceId());
-		therapistAppointments.setStartTime(therapistAppointmentsDto.getStartTime());
-		therapistAppointments.setEndTime(therapistAppointmentsDto.getEndTime());
-		
-		return therapistAppointments;
-	}
-	
-	public TherapistAppointmentsDto assembleEntityToDto(TherapistAppointments therapistAppointments) {
-		TherapistAppointmentsDto therapistAppointmentsDto = new TherapistAppointmentsDto();
-		therapistAppointmentsDto.setAppointmentId(therapistAppointments.getAppointmentId());
-		therapistAppointmentsDto.setTherapistId(therapistAppointments.getTherapistId());
-		therapistAppointmentsDto.setClientId(therapistAppointments.getClientId());
-		therapistAppointmentsDto.setSlotId(therapistAppointments.getSlotId());
-		therapistAppointmentsDto.setServiceId(therapistAppointments.getServiceId());
-		therapistAppointmentsDto.setStartTime(therapistAppointments.getStartTime());
-		therapistAppointmentsDto.setEndTime(therapistAppointments.getEndTime());
-		therapistAppointmentsDto.setStatus(therapistAppointments.getStatus());
-		therapistAppointmentsDto.setReminderSent(therapistAppointments.isReminderSent());
-		
-		return therapistAppointmentsDto;
-	}
-	
 	public TherapistClientsDto assembleEntityToDto(TherapistClients therapistClients) {
 		TherapistClientsDto therapistClientsDto = new TherapistClientsDto();
 		therapistClientsDto.setTherapistId(therapistClients.getTherapistId());
@@ -170,6 +145,17 @@ public class TherapistAssembler {
 		therapistClientsDto.setClientName(therapistClients.getClientName());
 		
 		return therapistClientsDto;
+	}
+	
+	public SessionNotes assembleDtoToEntity(SessionNotesDto sessionNotesDto) {
+		SessionNotes sessionNotes = new SessionNotes();
+		sessionNotes.setAppointmentId(sessionNotesDto.getAppointmentId());
+		sessionNotes.setTherapistId(sessionNotesDto.getTherapistId());
+		sessionNotes.setCreatedAt(LocalDateTime.now());
+		sessionNotes.setClientId(null);
+		sessionNotes.setNoteContent(sessionNotesDto.getSessionNotes());
+		
+		return sessionNotes;
 	}
 	
 }

@@ -34,3 +34,7 @@ build/
 
 #environment variables
 .env
+
+#googleCalenderAPI
+/src/main/resources/config/credentials.json
+/src/main/resources/config/tokens/

@@ -20,7 +20,7 @@ public class TopicsConfig {
 	
 	@Bean
 	NewTopic emailReminderTopic() {
-		return TopicBuilder.name("email-reminder-topic").partitions(3).replicas(1).build();
+		return TopicBuilder.name("email-reminder-events").partitions(3).replicas(1).build();
 	}
 	
 	@Bean
@@ -32,4 +32,10 @@ public class TopicsConfig {
 	NewTopic appointmentTopic() {
 		return TopicBuilder.name("therapist-appointment-events").partitions(3).replicas(1).build();
 	}
+	
+	@Bean
+	NewTopic clientTopic() {
+		return TopicBuilder.name("client-events").partitions(3).replicas(1).build();
+	}
+	
 }

@@ -13,7 +13,7 @@ public class EmailReminderProducer {
 	@Autowired
 	private KafkaTemplate<String, Object> kafkaTemplate;
 	
-	private static final String topic = "email-reminder-topic";
+	private static final String topic = "email-reminder-events";
 	
 	public void sendMessage(String clientId, EmailReminderEvent emailReminderEvent) {
 		

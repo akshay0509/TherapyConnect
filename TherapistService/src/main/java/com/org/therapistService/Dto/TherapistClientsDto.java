@@ -1,4 +1,4 @@
-package com.org.therapistService.Entity;
+package com.org.therapistService.Dto;
 
 import lombok.Data;
 
