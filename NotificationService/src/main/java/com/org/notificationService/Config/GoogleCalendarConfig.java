@@ -1,12 +1,15 @@
 package com.org.notificationService.Config;
 
 import java.io.File;
-import java.io.FileReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.ResourceLoader;
 
 import com.google.api.client.auth.oauth2.Credential;
 import com.google.api.client.extensions.java6.auth.oauth2.AuthorizationCodeInstalledApp;
@@ -24,67 +27,70 @@ import com.google.api.services.calendar.CalendarScopes;
 public class GoogleCalendarConfig {
 
 	private static final GsonFactory JSON_FACTORY =
-            GsonFactory.getDefaultInstance();
+			GsonFactory.getDefaultInstance();
 
-    @Value("${google.calendar.credentials-path}")
-    private String credentialsPath;
+	@Value("${google.calendar.credentials-path}")
+	private String credentialsPath;
 
-    @Value("${google.calendar.tokens-directory}")
-    private String tokensDirectory;
+	@Value("${google.calendar.tokens-directory}")
+	private String tokensDirectory;
 
-    @Value("${google.calendar.application-name}")
-    private String applicationName;
+	@Value("${google.calendar.application-name}")
+	private String applicationName;
 
-    @Bean
-    public Calendar googleCalendar() throws Exception {
+	@Bean
+	public Calendar googleCalendar(ResourceLoader resourceLoader) throws Exception {
 
-        // Transport (thread-safe)
-        final NetHttpTransport httpTransport =
-                GoogleNetHttpTransport.newTrustedTransport();
+		Resource resource = resourceLoader.getResource(credentialsPath);
+		InputStream in = resource.getInputStream();
 
-        // Load client secrets using GsonFactory (NOT JacksonFactory)
-        GoogleClientSecrets clientSecrets =
-                GoogleClientSecrets.load(
-                        JSON_FACTORY,
-                        new FileReader(credentialsPath)
-                );
+		// Transport (thread-safe)
+		final NetHttpTransport httpTransport =
+				GoogleNetHttpTransport.newTrustedTransport();
 
-        // Build authorization flow
-        GoogleAuthorizationCodeFlow flow =
-                new GoogleAuthorizationCodeFlow.Builder(
-                        httpTransport,
-                        JSON_FACTORY,
-                        clientSecrets,
-                        List.of(CalendarScopes.CALENDAR)
-                )
-                .setDataStoreFactory(
-                        new FileDataStoreFactory(
-                                new File(tokensDirectory)
-                        )
-                )
-                .setAccessType("offline")
-                .setApprovalPrompt("force") // ensures refresh token
-                .build();
+		// Load client secrets using GsonFactory (NOT JacksonFactory)
+		GoogleClientSecrets clientSecrets =
+				GoogleClientSecrets.load(
+						JSON_FACTORY,
+						new InputStreamReader(in)
+						);
 
-        // Local receiver for OAuth callback
-        LocalServerReceiver receiver =
-                new LocalServerReceiver.Builder()
-                        .setHost("localhost")
-                        .setPort(8888)
-                        .build();
+		// Build authorization flow
+		GoogleAuthorizationCodeFlow flow =
+				new GoogleAuthorizationCodeFlow.Builder(
+						httpTransport,
+						JSON_FACTORY,
+						clientSecrets,
+						List.of(CalendarScopes.CALENDAR)
+						)
+				.setDataStoreFactory(
+						new FileDataStoreFactory(
+								new File(tokensDirectory)
+								)
+						)
+				.setAccessType("offline")
+				.setApprovalPrompt("force") // ensures refresh token
+				.build();
 
-        // Authorize
-        Credential credential =
-                new AuthorizationCodeInstalledApp(flow, receiver)
-                        .authorize("platform-user");
+		// Local receiver for OAuth callback
+		LocalServerReceiver receiver =
+				new LocalServerReceiver.Builder()
+				.setHost("localhost")
+				.setPort(0)
+				.build();
 
-        // Build Calendar client
-        return new Calendar.Builder(
-                httpTransport,
-                JSON_FACTORY,
-                credential
-        )
-        .setApplicationName(applicationName)
-        .build();
-    }
+		// Authorize
+		Credential credential =
+				new AuthorizationCodeInstalledApp(flow, receiver)
+				.authorize("platform-user");
+
+		// Build Calendar client
+		return new Calendar.Builder(
+				httpTransport,
+				JSON_FACTORY,
+				credential
+				)
+				.setApplicationName(applicationName)
+				.build();
+	}
 }

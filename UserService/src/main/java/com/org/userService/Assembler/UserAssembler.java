@@ -10,7 +10,7 @@ public class UserAssembler {
 		User user = new User();
 		user.setUsername(userDto.getUsername());
 		user.setEmail(userDto.getEmail());
-		user.setUserRole(UserRole.CLIENT);
+		user.setUserRole(UserRole.THERAPIST);
 		return user;
 	}
 }

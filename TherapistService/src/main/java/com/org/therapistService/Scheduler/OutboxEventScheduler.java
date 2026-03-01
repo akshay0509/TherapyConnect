@@ -25,7 +25,7 @@ public class OutboxEventScheduler {
 	
 	private static final Logger logger = LoggerFactory.getLogger(OutboxEventScheduler.class);
 
-	//@Scheduled(fixedDelay = 2000)
+	@Scheduled(fixedDelay = 2000)
 	@Transactional
 	public void publishPendingEvents() {
 
