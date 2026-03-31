@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.org.therapistService.Dto.ClientDto;
+import com.org.therapistService.Dto.DashboardStatsDto;
 import com.org.therapistService.Dto.SessionDetailsDto;
 import com.org.therapistService.Dto.SessionNotesDto;
 import com.org.therapistService.Dto.TherapistAvailabilityOverridesDto;
@@ -46,11 +47,17 @@ public class TherapistController {
 	public List<TherapistDto> getAllTherapists(){
 		return therapistService.getAllTherapists();
 	}
-	
+
 	@GetMapping("/therapistProfile")
 	public TherapistDto getTherapistProfile(){
 		String therapistId = SecurityUtils.getTherapistId();
 		return therapistService.getTherapist(therapistId);
+	}
+
+	@GetMapping("/dashboard/stats")
+	public ResponseEntity<DashboardStatsDto> getDashboardStats() {
+		String therapistId = SecurityUtils.getTherapistId();
+		return ResponseEntity.ok(therapistService.getDashboardStats(therapistId));
 	}
 
 	//get all therapist services
@@ -75,7 +82,8 @@ public class TherapistController {
 	//create a therapist
 	@PostMapping("/create-therapist")
 	public void createTherapist(@RequestBody TherapistDto therapistDto) {
-		therapistService.createTherapist(therapistDto);
+		String userId = SecurityUtils.getUserId();
+		therapistService.createTherapist(therapistDto, userId);
 	}
 
 	//create a client for a therapist
@@ -89,7 +97,7 @@ public class TherapistController {
 		therapistService.addClient(therapistId, clientId, clientName);
 		return ResponseEntity.ok(clientId);
 	}
-	
+
 	@GetMapping("/clients")
 	public ResponseEntity<List<TherapistClientsDto>> getClients() {
 		String therapistId = SecurityUtils.getTherapistId();
@@ -116,28 +124,41 @@ public class TherapistController {
 		String therapistId = SecurityUtils.getTherapistId();
 		for (TherapistAvailabilityRulesDto therapistAvailabilityRulesDto : therapistAvailabilityRulesDtoList) {
 			therapistAvailabilityRulesDto.setTherapistId(therapistId);
-	    }
+		}
 		therapistService.createTherapistAvailabilityRules(therapistAvailabilityRulesDtoList);
 	}
 
 	@PostMapping("/create-availability-overrides")
-	public void createTherapistAvailabilityOverrides(@RequestBody List<TherapistAvailabilityOverridesDto> therapistAvailabilityOverridesDtoList) {
+	public void createTherapistAvailabilityOverrides(@RequestBody List<TherapistAvailabilityOverridesDto> therapistAvailabilityOverridesDtoList) throws JsonProcessingException {
 		String therapistId = SecurityUtils.getTherapistId();
 		for (TherapistAvailabilityOverridesDto therapistAvailabilityOverridesDto : therapistAvailabilityOverridesDtoList) {
 			therapistAvailabilityOverridesDto.setTherapistId(therapistId);
-	    }
-		//code to be added
-		//therapistService.createTherapistAvailabilityOverrides(therapistAvailabilityOverridesDto);
-	}	
+		}
+		therapistService.createTherapistAvailabilityOverrides(therapistAvailabilityOverridesDtoList);
+	}
 
-	@PostMapping("/{therapistId}/generate-slots")
-	public ResponseEntity<String> generateSlots(@PathVariable String therapistId,
-												@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
-												@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
-		
+	@GetMapping("/availability-overrides")
+	public ResponseEntity<List<TherapistAvailabilityOverridesDto>> getAvailabilityOverrides() {
+		String therapistId = SecurityUtils.getTherapistId();
+		return ResponseEntity.ok(therapistService.getAllTherapistAvailabilityOverrides(therapistId));
+	}
+
+	@DeleteMapping("/availability-overrides/{overrideId}")
+	public ResponseEntity<String> deleteAvailabilityOverride(@PathVariable String overrideId) throws JsonProcessingException {
+		String therapistId = SecurityUtils.getTherapistId();
+		therapistService.deleteTherapistAvailabilityOverride(therapistId, overrideId);
+		return ResponseEntity.ok("Availability override deleted successfully.");
+	}
+
+	@PostMapping("/generate-slots")
+	public ResponseEntity<String> generateSlots(@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+			@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
+
 		if (endDate.isBefore(startDate)) {
-            return ResponseEntity.badRequest().body("End date cannot be before start date.");
-        }
+			return ResponseEntity.badRequest().body("End date cannot be before start date.");
+		}
+
+		String therapistId = SecurityUtils.getTherapistId();
 
 		try {
 			availabilitySlotService.generateAvailabilitySlots(therapistId, startDate, endDate);
@@ -147,47 +168,48 @@ public class TherapistController {
 		}
 		return ResponseEntity.ok(String.format("Successfully generated slots"));
 	}
-	
-	@DeleteMapping("/{therapistId}/delete-slots")
-	public ResponseEntity<String> deleteSlots(@PathVariable String therapistId,
-											  @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
-											  @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate){
-		
+
+	@DeleteMapping("/delete-slots")
+	public ResponseEntity<String> deleteSlots(@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+			@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate){
+
 		if (endDate.isBefore(startDate)) {
-            return ResponseEntity.badRequest().body("End date cannot be before start date.");
-        }
-		
+			return ResponseEntity.badRequest().body("End date cannot be before start date.");
+		}
+
+		String therapistId = SecurityUtils.getTherapistId();
+
 		try {
 			availabilitySlotService.deleteAvailabilitySlots(therapistId, startDate, endDate);
 		}
 		catch (JsonProcessingException e) {
 			return ResponseEntity.badRequest().body(e.getMessage());
 		}
-		
+
 		return ResponseEntity.ok(String.format("Successfully deleted slots"));
 	}
-	
+
 	@PostMapping("/{clientId}/create-notes")
 	public void createNotes(@PathVariable String clientId, @RequestBody SessionNotesDto sessionNotesDto) {
-		
+
 		String therapistId = SecurityUtils.getTherapistId();
 		sessionNotesDto.setTherapistId(therapistId);
 		therapistService.createNotes(sessionNotesDto);
 	}
-	
+
 	@PutMapping("/{clientId}/update-notes")
 	public void updateNotes(@PathVariable String clientId, @RequestBody SessionNotesDto sessionNotesDto) {
-		
+
 		String therapistId = SecurityUtils.getTherapistId();
 		sessionNotesDto.setTherapistId(therapistId);
 		therapistService.updateNotes(sessionNotesDto);
 	}
-	
+
 	@GetMapping("/{clientId}/session-details")
 	public ResponseEntity<List<SessionDetailsDto>> getClientAppointmentHistory(@PathVariable String clientId){
-		
+
 		String therapistId = SecurityUtils.getTherapistId();
 		return ResponseEntity.ok(therapistService.getClientAppointmentHistory(therapistId, clientId));
 	}
-	
+
 }

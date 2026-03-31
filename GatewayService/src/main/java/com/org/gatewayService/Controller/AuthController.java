@@ -66,7 +66,14 @@ public class AuthController {
 
         loginEventProducer.publishLoginSuccess(loginSuccessEvent);
 		
-        String therapistId = therapistServiceProxy.getTherapistId(authResponse.getUserId());
+        String therapistId = null;
+        
+        try {
+        	therapistId = therapistServiceProxy.getTherapistId(authResponse.getUserId());
+        }
+        catch (Exception e) {
+        	System.out.println("No therapist profile found yet for userId=" + authResponse.getUserId());
+        }
         
 		String token = jwtUtil.generateToken(authRequest.getUsername(),
 											List.of("read", "write"),

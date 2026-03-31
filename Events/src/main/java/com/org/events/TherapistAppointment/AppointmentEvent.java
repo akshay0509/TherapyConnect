@@ -24,6 +24,8 @@ public class AppointmentEvent {
 	private LocalDateTime oldStartTime;
 	private LocalDateTime oldEndTime;
 	
+	private LocalDateTime updatedAt;
+	
 	private String cancelledBy;
 	private String reason;
 	

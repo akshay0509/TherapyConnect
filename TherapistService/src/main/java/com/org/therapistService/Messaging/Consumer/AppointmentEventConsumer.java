@@ -44,6 +44,17 @@ public class AppointmentEventConsumer {
 			AppointmentEvent appointmentEvent = objectMapper.convertValue(payload, AppointmentEvent.class);
 			createAppointment(appointmentEvent);
 		}
+
+		case "AppointmentConfirmed", "AppointmentCompleted", "AppointmentCancelled", "AppointmentAbandoned" -> {
+			AppointmentEvent appointmentEvent = objectMapper.convertValue(payload, AppointmentEvent.class);
+			updateStatus(appointmentEvent);
+		}
+
+		case "AppointmentRescheduled" -> {
+			AppointmentEvent appointmentEvent = objectMapper.convertValue(payload, AppointmentEvent.class);
+			rescheduleAppointment(appointmentEvent);
+		}
+
 		}
 	}
 
@@ -61,5 +72,50 @@ public class AppointmentEventConsumer {
 		appointmentProjection.setUpdatedAt(LocalDateTime.now());
 
 		appointmentProjectionRepository.save(appointmentProjection);
+		logger.info("Projection created. appointmentId={}", event.getAppointmentId());
+	}
+
+	private void updateStatus(AppointmentEvent event) {
+
+		AppointmentProjection appointmentProjection = appointmentProjectionRepository.findById(event.getAppointmentId()).orElse(null);
+		if (appointmentProjection == null) {
+			logger.warn("Projection missing for status update. appointmentId={}", event.getAppointmentId());
+			return;
+		}
+
+		appointmentProjection.setStatus(mapStatusFromEventType(event.getEventType()));
+		appointmentProjection.setUpdatedAt(resolveUpdatedAt(event));
+
+		appointmentProjectionRepository.save(appointmentProjection);
+	}
+
+	private void rescheduleAppointment(AppointmentEvent event) {
+
+		AppointmentProjection appointmentProjection = appointmentProjectionRepository.findById(event.getAppointmentId()).orElse(null);
+		if (appointmentProjection == null) {
+			logger.warn("Projection missing for reschedule. appointmentId={}", event.getAppointmentId());
+			return;
+		}
+
+		appointmentProjection.setStartTime(event.getStartTime());
+		appointmentProjection.setEndTime(event.getEndTime());
+		appointmentProjection.setStatus(AppointmentStatus.RESCHEDULED);
+		appointmentProjection.setUpdatedAt(resolveUpdatedAt(event));
+
+		appointmentProjectionRepository.save(appointmentProjection);
+	}
+
+	private LocalDateTime resolveUpdatedAt(AppointmentEvent event) {
+		return event.getUpdatedAt() != null ? event.getUpdatedAt() : LocalDateTime.now();
+	}
+
+	private AppointmentStatus mapStatusFromEventType(String eventType) {
+		return switch (eventType) {
+		case "AppointmentConfirmed" -> AppointmentStatus.CONFIRMED;
+		case "AppointmentCompleted" -> AppointmentStatus.COMPLETED;
+		case "AppointmentCancelled" -> AppointmentStatus.CANCELLED;
+		case "AppointmentAbandoned" -> AppointmentStatus.ABANDONED;
+		default -> AppointmentStatus.SCHEDULED;
+		};
 	}
 }

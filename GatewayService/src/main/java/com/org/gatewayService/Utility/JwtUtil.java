@@ -21,16 +21,21 @@ public class JwtUtil {
 	}
 
 	public String generateToken(String username, List<String> scopes, Set<String> authorities, String userId, String therapistId) {
-		return Jwts.builder()
+		var builder = Jwts.builder()
 				.setIssuer("gateway-auth")
 				.setSubject(username)
 				.setAudience("therapist-service")
 				.claim("scope", scopes)
 				.claim("authorities", authorities)
 				.claim("userId", userId)
-				.claim("therapistId", therapistId)
 				.setIssuedAt(new Date())
-				.setExpiration(new Date(System.currentTimeMillis() + 15 * 60 * 1000))
+				.setExpiration(new Date(System.currentTimeMillis() + 15 * 60 * 1000));
+
+		if (therapistId != null && !therapistId.isBlank()) {
+			builder.claim("therapistId", therapistId);
+		}
+
+		return builder
 				.signWith(privateKey, SignatureAlgorithm.RS256)
 				.compact();
 	}

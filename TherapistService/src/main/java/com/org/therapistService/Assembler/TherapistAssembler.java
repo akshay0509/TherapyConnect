@@ -100,6 +100,8 @@ public class TherapistAssembler {
 		therapistAvailabilityOverrides.setStartTime(therapistAvailabilityOverridesDto.getStartTime());
 		therapistAvailabilityOverrides.setEndTime(therapistAvailabilityOverridesDto.getEndTime());
 		therapistAvailabilityOverrides.setAvailable(therapistAvailabilityOverridesDto.getIsAvailable());
+		therapistAvailabilityOverrides.setReason(therapistAvailabilityOverridesDto.getReason());
+        therapistAvailabilityOverrides.setSyncToGoogleCalendar(Boolean.TRUE.equals(therapistAvailabilityOverridesDto.getSyncToGoogleCalendar()));
 		
 		return therapistAvailabilityOverrides;
 	}
@@ -111,6 +113,8 @@ public class TherapistAssembler {
 		therapistAvailabilityOverridesDto.setStartTime(therapistAvailabilityOverrides.getStartTime());
 		therapistAvailabilityOverridesDto.setEndTime(therapistAvailabilityOverrides.getEndTime());
 		therapistAvailabilityOverridesDto.setIsAvailable(therapistAvailabilityOverrides.isAvailable());
+		therapistAvailabilityOverridesDto.setReason(therapistAvailabilityOverrides.getReason());
+        therapistAvailabilityOverridesDto.setSyncToGoogleCalendar(therapistAvailabilityOverrides.getSyncToGoogleCalendar());
 		
 		return therapistAvailabilityOverridesDto;
 	}

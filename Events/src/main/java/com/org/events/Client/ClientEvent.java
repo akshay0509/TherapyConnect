@@ -15,6 +15,7 @@ public class ClientEvent {
     private String email;
     private String firstName;
     private String lastName;
+    private ClientStatus status;
     
     public ClientEvent(){
 		String uniquePart = UUID.randomUUID().toString().substring(0, 8);

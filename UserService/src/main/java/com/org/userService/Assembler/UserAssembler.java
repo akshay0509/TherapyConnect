@@ -2,7 +2,6 @@ package com.org.userService.Assembler;
 
 import com.org.userService.Dto.UserDto;
 import com.org.userService.Entity.User;
-import com.org.userService.Enum.UserRole;
 
 public class UserAssembler {
 
@@ -10,7 +9,7 @@ public class UserAssembler {
 		User user = new User();
 		user.setUsername(userDto.getUsername());
 		user.setEmail(userDto.getEmail());
-		user.setUserRole(UserRole.THERAPIST);
+		user.setUserRole(userDto.getUserRole());
 		return user;
 	}
 }

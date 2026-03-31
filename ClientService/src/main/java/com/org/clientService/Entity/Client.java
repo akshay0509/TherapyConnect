@@ -4,6 +4,8 @@ import java.sql.Date;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+import com.org.events.Client.ClientStatus;
+
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
@@ -29,6 +31,7 @@ public class Client {
 	private String pronouns;
 	private String gender;
 	private LocalDateTime createdAt = LocalDateTime.now();
+	private ClientStatus status = ClientStatus.ACTIVE;
 	
 	@PrePersist
 	public void generateId() {

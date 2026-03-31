@@ -3,9 +3,9 @@ package com.org.appointmentService.Entity;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-import com.org.appointmentService.Enums.AppointmentStatus;
 import com.org.appointmentService.Enums.Creator;
 import com.org.appointmentService.Enums.SessionType;
+import com.org.events.TherapistAppointment.AppointmentStatus;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -14,17 +14,11 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
-import jakarta.persistence.UniqueConstraint;
 import lombok.Data;
 
 @Entity
 @Data
-@Table(name = "THERAPIST_APPOINTMENTS", uniqueConstraints = {
-	    // CRITICAL: Prevents double-booking by ensuring only one appointment 
-	    // can exist for a specific time slot (slot_id) where the appointment 
-	    // status is NOT 'CANCELLED'.
-	    @UniqueConstraint(columnNames = {"slotId"}) 
-	})
+@Table(name = "THERAPIST_APPOINTMENTS")
 public class TherapistAppointments {
 
 	@Id
@@ -45,7 +39,7 @@ public class TherapistAppointments {
 	*/
 	
 	
-	@Column(nullable = false, unique = true)
+	@Column(nullable = false)
 	private String slotId;
 	
 	@Enumerated(EnumType.STRING)
@@ -59,7 +53,7 @@ public class TherapistAppointments {
 	
 	@Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
-    private AppointmentStatus status = AppointmentStatus.CONFIRMED;
+    private AppointmentStatus status = AppointmentStatus.SCHEDULED;
 	
 	@Enumerated(EnumType.STRING)
     @Column(name = "createdBy", nullable = false)

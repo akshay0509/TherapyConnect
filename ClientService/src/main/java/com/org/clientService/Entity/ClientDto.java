@@ -2,6 +2,8 @@ package com.org.clientService.Entity;
 
 import java.sql.Date;
 
+import com.org.events.Client.ClientStatus;
+
 import lombok.Data;
 
 @Data
@@ -16,6 +18,7 @@ public class ClientDto {
 	private String pronouns;
 	private String gender;
 	private String therapistId;
+	private ClientStatus status;
 	//private String qualification;
 	//private String currentOccupation;
 }

@@ -14,6 +14,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.org.appointmentService.Entity.TherapistAvailability;
 import com.org.appointmentService.Enums.AvailabilityStatus;
+import com.org.appointmentService.Exception.SlotNotAvailableException;
 import com.org.appointmentService.Repository.TherapistAvailabilityRepository;
 import com.org.events.TherapistAvailability.AvailabilityEvent;
 import com.org.events.TherapistAvailability.AvailabilitySlotsDeletedEvent;
@@ -48,7 +49,7 @@ public class TherapistAvailabilityConsumer {
 			AvailabilitySlotsGeneratedEvent batchEvent = objectMapper.convertValue(payload, AvailabilitySlotsGeneratedEvent.class);
 			processBatchGeneration(batchEvent);
 		}
-		
+
 		case "AvailabilitySlotsDeleted" -> {
 			AvailabilitySlotsDeletedEvent batchEvent = objectMapper.convertValue(payload, AvailabilitySlotsDeletedEvent.class);
 			processBatchDeletion(batchEvent);
@@ -94,7 +95,8 @@ public class TherapistAvailabilityConsumer {
 
 	private void processSlotRemoved(AvailabilityEvent event) {
 
-		TherapistAvailability therapistAvailability = therapistAvailabilityRepository.findBySlotId(event.getSlotId());
+		TherapistAvailability therapistAvailability = therapistAvailabilityRepository.findBySlotIdAndTherapistId(event.getSlotId(), event.getTherapistId())
+				.orElseThrow(() -> new SlotNotAvailableException(event.getSlotId()));
 
 		if (therapistAvailability == null) {
 			return;
@@ -110,10 +112,9 @@ public class TherapistAvailabilityConsumer {
 	private void processBatchGeneration(AvailabilitySlotsGeneratedEvent event) {
 
 		logger.debug("inside processBatchGeneration..");
-		
+
 		LocalDateTime start = event.getRangeStart().atStartOfDay();
 		LocalDateTime end = event.getRangeEnd().plusDays(1).atStartOfDay();
-
 
 		therapistAvailabilityRepository.deleteAvailableSlotsInRange(event.getTherapistId(), start, end);
 
@@ -141,14 +142,14 @@ public class TherapistAvailabilityConsumer {
 		}
 		logger.debug("exiting processBatchGeneration..");
 	}
-	
+
 	public void processBatchDeletion(AvailabilitySlotsDeletedEvent event) {
-		
+
 		logger.debug("inside processBatchDeletion..");
-		
+
 		LocalDateTime start = event.getRangeStart().atStartOfDay();
 		LocalDateTime end = event.getRangeEnd().plusDays(1).atStartOfDay();
-		
+
 		therapistAvailabilityRepository.deleteAvailableSlotsInRange(event.getTherapistId(), start, end);
 	}
 }

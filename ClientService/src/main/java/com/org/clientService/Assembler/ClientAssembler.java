@@ -34,7 +34,7 @@ public class ClientAssembler {
 		clientDto.setGender(client.getGender());
 		clientDto.setPhoneNumber(client.getPhoneNumber());
 		clientDto.setPronouns(client.getPronouns());
-		//clientDto.setQualification(client.getQualification());
+		clientDto.setStatus(client.getStatus());
 		
 		return clientDto;
 	}

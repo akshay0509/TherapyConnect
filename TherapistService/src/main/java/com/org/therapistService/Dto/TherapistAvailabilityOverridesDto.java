@@ -1,6 +1,5 @@
 package com.org.therapistService.Dto;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 import lombok.Data;
@@ -13,5 +12,7 @@ public class TherapistAvailabilityOverridesDto {
 	private LocalDateTime startTime;
 	private LocalDateTime endTime;
 	private Boolean isAvailable;
+	private String reason;
+    private Boolean syncToGoogleCalendar;
 	
 }

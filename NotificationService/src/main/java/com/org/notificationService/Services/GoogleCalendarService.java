@@ -5,6 +5,8 @@ import java.time.ZoneId;
 import java.util.List;
 import java.util.UUID;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import com.google.api.services.calendar.Calendar;
@@ -18,75 +20,133 @@ import com.google.api.services.calendar.model.EventDateTime;
 @Service
 public class GoogleCalendarService {
 
+	private static final Logger logger = LoggerFactory.getLogger(GoogleCalendarService.class);
+
 	private final Calendar calendar;
 
-    public GoogleCalendarService(Calendar calendar) {
-        this.calendar = calendar;
-    }
+	public GoogleCalendarService(Calendar calendar) {
+		this.calendar = calendar;
+	}
 
-    public String createAppointmentEvent(
-            String clientEmail,
-            String therapistEmail,
-            String summary,
-            String description,
-            LocalDateTime startTime,
-            LocalDateTime endTime) throws Exception {
+	public String createAppointmentEvent(
+			String clientEmail,
+			String therapistEmail,
+			String summary,
+			String description,
+			LocalDateTime startTime,
+			LocalDateTime endTime) throws Exception {
 
-        Event event = new Event();
+		logger.info("inside createAppointmentEvent..");
 
-        event.setSummary(summary);
-        event.setDescription(description);
+		Event event = new Event();
 
-        EventDateTime start = new EventDateTime()
-                .setDateTime(convertToDateTime(startTime))
-                .setTimeZone(ZoneId.systemDefault().toString());
+		event.setSummary(summary);
+		event.setDescription(description);
 
-        EventDateTime end = new EventDateTime()
-                .setDateTime(convertToDateTime(endTime))
-                .setTimeZone(ZoneId.systemDefault().toString());
+		event.setStart(buildEventDateTime(startTime));
+		event.setEnd(buildEventDateTime(endTime));
+		event.setAttendees(buildAttendees(clientEmail, therapistEmail));
+		event.setConferenceData(buildConferenceData());
 
-        event.setStart(start);
-        event.setEnd(end);
+		Event createdEvent =
+				calendar.events()
+				.insert("primary", event)
+				.setConferenceDataVersion(1)
+				.setSendUpdates("all")
+				.execute();
 
-        // Add attendees
-        EventAttendee client =
-                new EventAttendee().setEmail(clientEmail);
+		logger.info("exiting 1..");
+		logger.info("calendar event created. eventId={}", createdEvent.getId());
+		return createdEvent.getId();
+	}
 
-        EventAttendee therapist =
-                new EventAttendee().setEmail(therapistEmail);
+	public void updateAppointmentEvent(
+			String googleCalendarEventId,
+			String clientEmail,
+			String therapistEmail,
+			String summary,
+			String description,
+			LocalDateTime startTime,
+			LocalDateTime endTime) throws Exception {
 
-        event.setAttendees(List.of(client, therapist));
+		Event existingEvent = calendar.events().get("primary", googleCalendarEventId).execute();
+		existingEvent.setSummary(summary);
+		existingEvent.setDescription(description);
+		existingEvent.setStart(buildEventDateTime(startTime));
+		existingEvent.setEnd(buildEventDateTime(endTime));
+		existingEvent.setAttendees(buildAttendees(clientEmail, therapistEmail));
 
-        // Generate Google Meet link automatically
-        ConferenceData conferenceData =
-                new ConferenceData()
-                        .setCreateRequest(
-                                new CreateConferenceRequest()
-                                        .setRequestId(UUID.randomUUID().toString())
-                                        .setConferenceSolutionKey(
-                                                new ConferenceSolutionKey()
-                                                        .setType("hangoutsMeet")
-                                        )
-                        );
+		calendar.events()
+		.update("primary", googleCalendarEventId, existingEvent)
+		.setSendUpdates("all")
+		.execute();
 
-        event.setConferenceData(conferenceData);
+		logger.info("calendar event updated. eventId={}", googleCalendarEventId);
+	}
 
-        Event createdEvent =
-                calendar.events()
-                        .insert("primary", event)
-                        .setConferenceDataVersion(1)
-                        .setSendUpdates("all")
-                        .execute();
+	public void cancelAppointmentEvent(String googleCalendarEventId) throws Exception {
+		deleteCalendarEvent(googleCalendarEventId, true);
+	}
 
-        return createdEvent.getHangoutLink();
-    }
+	public String createAvailabilityBlockEvent(
+			String summary,
+			String description,
+			LocalDateTime startTime,
+			LocalDateTime endTime) throws Exception {
 
-    private com.google.api.client.util.DateTime convertToDateTime(LocalDateTime time) {
+		Event event = new Event();
+		event.setSummary(summary);
+		event.setDescription(description);
+		event.setStart(buildEventDateTime(startTime));
+		event.setEnd(buildEventDateTime(endTime));
 
-        return new com.google.api.client.util.DateTime(
-                time.atZone(ZoneId.systemDefault())
-                        .toInstant()
-                        .toEpochMilli()
-        );
-    }
+		Event createdEvent = calendar.events()
+				.insert("primary", event)
+				.setSendUpdates("none")
+				.execute();
+
+		logger.info("availability block event created. eventId={}", createdEvent.getId());
+		return createdEvent.getId();
+	}
+
+	public void deleteCalendarEvent(String googleCalendarEventId, boolean sendUpdates) throws Exception {
+		calendar.events()
+		.delete("primary", googleCalendarEventId)
+		.setSendUpdates(sendUpdates ? "all" : "none")
+		.execute();
+
+		logger.info("calendar event deleted. eventId={}", googleCalendarEventId);
+	}
+
+	private List<EventAttendee> buildAttendees(String clientEmail, String therapistEmail) {
+		EventAttendee client = new EventAttendee().setEmail(clientEmail);
+		EventAttendee therapist = new EventAttendee().setEmail(therapistEmail);
+		return List.of(client, therapist);
+	}
+
+	private ConferenceData buildConferenceData() {
+		return new ConferenceData()
+				.setCreateRequest(
+						new CreateConferenceRequest()
+						.setRequestId(UUID.randomUUID().toString())
+						.setConferenceSolutionKey(
+								new ConferenceSolutionKey().setType("hangoutsMeet")
+								)
+						);
+	}
+
+	private EventDateTime buildEventDateTime(LocalDateTime time) {
+		return new EventDateTime()
+				.setDateTime(convertToDateTime(time))
+				.setTimeZone(ZoneId.systemDefault().toString());
+	}
+
+	private com.google.api.client.util.DateTime convertToDateTime(LocalDateTime time) {
+
+		return new com.google.api.client.util.DateTime(
+				time.atZone(ZoneId.systemDefault())
+				.toInstant()
+				.toEpochMilli()
+				);
+	}
 }
