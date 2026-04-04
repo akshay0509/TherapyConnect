@@ -9,17 +9,22 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.org.appointmentService.Dto.AppointmentScheduleAppointmentDto;
+import com.org.appointmentService.Dto.AppointmentScheduleOverrideDto;
+import com.org.appointmentService.Dto.AppointmentScheduleViewDto;
 import com.org.appointmentService.Dto.AvailabilityResponseDto;
 import com.org.appointmentService.Dto.BookAppointmentRequest;
 import com.org.appointmentService.Dto.RescheduleAppointmentRequest;
 import com.org.appointmentService.Dto.UpdateAppointmentStatusRequest;
 import com.org.appointmentService.Entity.TherapistAppointments;
 import com.org.appointmentService.Entity.TherapistAvailability;
+import com.org.appointmentService.Entity.TherapistAvailabilityOverride;
 import com.org.appointmentService.Exception.AppointmentNotFoundException;
 import com.org.appointmentService.Exception.InvalidAppointmentStatusTransitionException;
 import com.org.appointmentService.Exception.SlotAlreadyBookedException;
 import com.org.appointmentService.Exception.SlotNotAvailableException;
 import com.org.appointmentService.Repository.TherapistAppointmentsRepository;
+import com.org.appointmentService.Repository.TherapistAvailabilityOverrideRepository;
 import com.org.appointmentService.Repository.TherapistAvailabilityRepository;
 import com.org.events.TherapistAppointment.AppointmentEvent;
 import com.org.events.TherapistAppointment.AppointmentStatus;
@@ -34,6 +39,9 @@ public class AppointmentService {
 
 	@Autowired
 	private TherapistAppointmentsRepository therapistAppointmentsRepository;
+	
+	@Autowired
+	private TherapistAvailabilityOverrideRepository therapistAvailabilityOverrideRepository;
 
 	@Autowired
 	private OutboxService outboxService;
@@ -55,6 +63,13 @@ public class AppointmentService {
 	public String bookAppointment(BookAppointmentRequest bookAppointmentRequest) throws JsonProcessingException {
 
 		String slotId = bookAppointmentRequest.getSlotId();
+		
+		TherapistAvailability therapistAvailability = therapistAvailabilityRepository.findBySlotIdAndTherapistId(slotId, bookAppointmentRequest.getTherapistId())
+				.orElseThrow(() -> new SlotNotAvailableException(slotId));
+
+		if (isBlockedByUnavailableOverride(bookAppointmentRequest.getTherapistId(), therapistAvailability.getStartTime(), therapistAvailability.getEndTime())) {
+			throw new SlotNotAvailableException(slotId);
+		}
 
 		int updated = therapistAvailabilityRepository.markSlotAsBooked(slotId);
 
@@ -62,9 +77,6 @@ public class AppointmentService {
 			throw new SlotAlreadyBookedException();
 		}
 
-		TherapistAvailability therapistAvailability = therapistAvailabilityRepository.findBySlotIdAndTherapistId(slotId, bookAppointmentRequest.getTherapistId())
-				.orElseThrow(() -> new SlotNotAvailableException(slotId));
-		
 		TherapistAppointments therapistAppointment = new TherapistAppointments();
 
 		therapistAppointment.setSlotId(slotId);
@@ -155,6 +167,10 @@ public class AppointmentService {
 
 		TherapistAvailability newSlot = therapistAvailabilityRepository.findBySlotIdAndTherapistId(newSlotId, therapistId)
 				.orElseThrow(() -> new SlotNotAvailableException(newSlotId));
+		
+		if (isBlockedByUnavailableOverride(therapistId, newSlot.getStartTime(), newSlot.getEndTime())) {
+			throw new SlotNotAvailableException(newSlotId);
+		}
 
 		int booked = therapistAvailabilityRepository.markSlotAsBooked(newSlotId);
 		if (booked == 0) {
@@ -203,8 +219,55 @@ public class AppointmentService {
 	}
 
 	public List<AvailabilityResponseDto> getTherapistAvailabilityWithAppointments(String therapistId){
+		return therapistAvailabilityRepository.findEffectiveSlotsWithAppointment(therapistId);
+	}
+	
+	public AppointmentScheduleViewDto getAppointmentEditorView(String therapistId, LocalDate fromDate, LocalDate toDate) { // CODEX-OVERRIDE-PROJECTION-HYBRID
+		LocalDateTime from = fromDate.atStartOfDay();
+		LocalDateTime to = toDate.plusDays(1).atStartOfDay();
 
-		return therapistAvailabilityRepository.findSlotsWithAppointment(therapistId);
+		List<AvailabilityResponseDto> slots = therapistAvailabilityRepository.findEffectiveSlotsWithAppointmentInRange(therapistId, from, to);
+
+		List<AppointmentScheduleAppointmentDto> appointments = therapistAppointmentsRepository
+				.findByTherapistIdAndStartTimeLessThanAndEndTimeGreaterThanOrderByStartTimeAsc(therapistId, to, from).stream()
+				.map(this::toAppointmentScheduleAppointmentDto)
+				.toList();
+
+		List<AppointmentScheduleOverrideDto> overrides = therapistAvailabilityOverrideRepository
+				.findByTherapistIdAndStartTimeLessThanAndEndTimeGreaterThanOrderByStartTimeAsc(therapistId, to, from).stream()
+				.map(this::toAppointmentScheduleOverrideDto)
+				.toList();
+
+		return new AppointmentScheduleViewDto(slots, appointments, overrides);
+	}
+
+	private AppointmentScheduleAppointmentDto toAppointmentScheduleAppointmentDto(TherapistAppointments appointment) {
+		AppointmentScheduleAppointmentDto dto = new AppointmentScheduleAppointmentDto();
+		dto.setAppointmentId(appointment.getAppointmentId());
+		dto.setClientId(appointment.getClientId());
+		dto.setClientName(appointment.getClientName());
+		dto.setStartTime(appointment.getStartTime());
+		dto.setEndTime(appointment.getEndTime());
+		dto.setStatus(appointment.getStatus());
+		dto.setSessionType(appointment.getSessionType());
+		return dto;
+	}
+
+	private AppointmentScheduleOverrideDto toAppointmentScheduleOverrideDto(TherapistAvailabilityOverride override) {
+		AppointmentScheduleOverrideDto dto = new AppointmentScheduleOverrideDto();
+		dto.setOverrideId(override.getOverrideId());
+		dto.setTherapistId(override.getTherapistId());
+		dto.setStartTime(override.getStartTime());
+		dto.setEndTime(override.getEndTime());
+		dto.setAvailable(override.isAvailable());
+		dto.setReason(override.getReason());
+		return dto;
+	}
+
+	private boolean isBlockedByUnavailableOverride(String therapistId, LocalDateTime slotStart, LocalDateTime slotEnd) {
+		return !therapistAvailabilityOverrideRepository
+				.findByTherapistIdAndAvailableFalseAndStartTimeLessThanAndEndTimeGreaterThan(therapistId, slotEnd, slotStart)
+				.isEmpty();
 	}
 
 	private void validateStatusTransition(AppointmentStatus currentStatus, AppointmentStatus targetStatus) {

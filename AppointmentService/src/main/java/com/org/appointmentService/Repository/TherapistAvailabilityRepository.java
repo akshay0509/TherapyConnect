@@ -11,6 +11,7 @@ import org.springframework.stereotype.Repository;
 
 import com.org.appointmentService.Dto.AvailabilityResponseDto;
 import com.org.appointmentService.Entity.TherapistAvailability;
+import com.org.appointmentService.Enums.AvailabilityStatus;
 
 @Repository
 public interface TherapistAvailabilityRepository extends JpaRepository<TherapistAvailability, String>{
@@ -20,6 +21,20 @@ public interface TherapistAvailabilityRepository extends JpaRepository<Therapist
 	boolean existsBySlotId(String slotId);
 
 	Optional<TherapistAvailability> findBySlotIdAndTherapistId(String slotId, String therapistId);
+	
+	boolean existsByTherapistIdAndStatusAndStartTimeLessThanAndEndTimeGreaterThan(
+            String therapistId,
+            AvailabilityStatus status,
+            LocalDateTime endTime,
+            LocalDateTime startTime
+    );
+
+    List<TherapistAvailability> findTop10ByTherapistIdAndStatusAndStartTimeLessThanAndEndTimeGreaterThanOrderByStartTimeAsc(
+            String therapistId,
+            AvailabilityStatus status,
+            LocalDateTime endTime,
+            LocalDateTime startTime
+    );
 
 	@Modifying
 	@Query("""
@@ -78,8 +93,59 @@ public interface TherapistAvailabilityRepository extends JpaRepository<Therapist
 			com.org.events.TherapistAppointment.AppointmentStatus.ABANDONED
 			)
 			WHERE s.therapistId = :therapistId
-			ORDER BY s.startTime
-			""")
-	List<AvailabilityResponseDto> findSlotsWithAppointment(String therapistId);
+            AND NOT EXISTS (
+                SELECT 1
+                FROM TherapistAvailabilityOverride o
+                WHERE o.therapistId = s.therapistId
+                AND o.available = false
+                AND o.startTime < s.endTime
+                AND o.endTime > s.startTime
+            )
+            ORDER BY s.startTime
+            """)
+    List<AvailabilityResponseDto> findEffectiveSlotsWithAppointment(String therapistId);
+	
+	@Query("""
+            SELECT new com.org.appointmentService.Dto.AvailabilityResponseDto(
+            s.slotId,
+            s.therapistId,
+            s.serviceId,
+            s.startTime,
+            s.endTime,
+            a.sessionType,
+            s.status,
+            a.status,
+            a.appointmentId,
+            a.clientId,
+            a.clientName
+            )
+            FROM TherapistAvailability s
+            LEFT JOIN TherapistAppointments a
+            ON s.slotId = a.slotId
+            AND a.status IN (
+            com.org.events.TherapistAppointment.AppointmentStatus.SCHEDULED,
+            com.org.events.TherapistAppointment.AppointmentStatus.CONFIRMED,
+            com.org.events.TherapistAppointment.AppointmentStatus.RESCHEDULED,
+            com.org.events.TherapistAppointment.AppointmentStatus.COMPLETED,
+            com.org.events.TherapistAppointment.AppointmentStatus.ABANDONED
+            )
+            WHERE s.therapistId = :therapistId
+            AND s.startTime >= :rangeStart
+            AND s.startTime < :rangeEnd
+            AND NOT EXISTS (
+                SELECT 1
+                FROM TherapistAvailabilityOverride o
+                WHERE o.therapistId = s.therapistId
+                AND o.available = false
+                AND o.startTime < s.endTime
+                AND o.endTime > s.startTime
+            )
+            ORDER BY s.startTime
+            """)
+    List<AvailabilityResponseDto> findEffectiveSlotsWithAppointmentInRange(
+            String therapistId,
+            LocalDateTime rangeStart,
+            LocalDateTime rangeEnd
+    );
 
 }

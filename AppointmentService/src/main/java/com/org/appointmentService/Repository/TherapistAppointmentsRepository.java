@@ -22,4 +22,11 @@ public interface TherapistAppointmentsRepository extends JpaRepository<Therapist
 			);
 	
 	Optional<TherapistAppointments> findByAppointmentIdAndTherapistId(String appointmentId, String therapistId);
+	
+	List<TherapistAppointments> findByTherapistIdAndStartTimeLessThanAndEndTimeGreaterThanOrderByStartTimeAsc(
+			String therapistId,
+			LocalDateTime endTime,
+			LocalDateTime startTime
+			);
+	
 }

@@ -2,6 +2,7 @@ package com.org.therapistService.Services;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -13,6 +14,7 @@ import org.springframework.stereotype.Service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.org.events.Client.ClientStatus;
 import com.org.events.TherapistAppointment.AppointmentStatus;
+import com.org.events.TherapistAvailability.AvailabilityOverrideEvent;
 import com.org.events.TherapistAvailability.CalendarBlockEvent;
 import com.org.therapistService.Assembler.TherapistAssembler;
 import com.org.therapistService.Dto.DashboardStatsDto;
@@ -175,33 +177,39 @@ public class TherapistService {
 	}
 
 	@Transactional
-	public void createTherapistAvailabilityOverrides(List<TherapistAvailabilityOverridesDto> therapistAvailabilityOverridesDtoList) throws JsonProcessingException {
+	public void createTherapistAvailabilityOverrides(TherapistAvailabilityOverridesDto therapistAvailabilityOverridesDto) throws JsonProcessingException {
 
-		if (therapistAvailabilityOverridesDtoList == null || therapistAvailabilityOverridesDtoList.isEmpty()) {
-			return;
+		validateAvailabilityOverride(therapistAvailabilityOverridesDto);
+
+		TherapistAvailabilityOverrides therapistAvailabilityOverrides = therapistAssembler.assembleDtoToEntity(therapistAvailabilityOverridesDto);
+		TherapistAvailabilityOverrides saved = therapistAvailabilityOverridesRepository.save(therapistAvailabilityOverrides);
+
+		AvailabilityOverrideEvent overrideEvent = new AvailabilityOverrideEvent();
+		overrideEvent.setEventType("AvailabilityOverrideCreated");
+		overrideEvent.setOverrideId(saved.getOverrideId());
+		overrideEvent.setTherapistId(saved.getTherapistId());
+		overrideEvent.setStartTime(saved.getStartTime());
+		overrideEvent.setEndTime(saved.getEndTime());
+		overrideEvent.setAvailable(saved.isAvailable());
+		overrideEvent.setReason(saved.getReason());
+
+		outboxService.saveOutboxEvent("THERAPIST_AVAILABILITY", saved.getTherapistId(), "AvailabilityOverrideCreated", overrideEvent);
+		
+		if (saved.isAvailable()) {
+			availabilitySlotService.applyCreatedOverride(saved.getTherapistId(), saved);
 		}
 
-		for (TherapistAvailabilityOverridesDto dto : therapistAvailabilityOverridesDtoList) {
-			
-			validateAvailabilityOverride(dto);
+		if (!saved.isAvailable() && Boolean.TRUE.equals(saved.getSyncToGoogleCalendar())) {
+			CalendarBlockEvent calendarBlockEvent = new CalendarBlockEvent();
+			calendarBlockEvent.setEventType("CalendarBlockCreated");
+			calendarBlockEvent.setBlockId(saved.getOverrideId());
+			calendarBlockEvent.setTherapistId(saved.getTherapistId());
+			calendarBlockEvent.setStartTime(saved.getStartTime());
+			calendarBlockEvent.setEndTime(saved.getEndTime());
+			calendarBlockEvent.setReason(saved.getReason());
+			calendarBlockEvent.setSyncToGoogleCalendar(true);
 
-			TherapistAvailabilityOverrides therapistAvailabilityOverrides = therapistAssembler.assembleDtoToEntity(dto);
-			therapistAvailabilityOverridesRepository.save(therapistAvailabilityOverrides);
-			
-			availabilitySlotService.applyCreatedOverride(therapistAvailabilityOverrides.getTherapistId(), therapistAvailabilityOverrides);
-
-			if (!therapistAvailabilityOverrides.isAvailable() && Boolean.TRUE.equals(therapistAvailabilityOverrides.getSyncToGoogleCalendar())) {
-				CalendarBlockEvent calendarBlockEvent = new CalendarBlockEvent();
-				calendarBlockEvent.setEventType("CalendarBlockCreated");
-				calendarBlockEvent.setBlockId(therapistAvailabilityOverrides.getOverrideId());
-				calendarBlockEvent.setTherapistId(therapistAvailabilityOverrides.getTherapistId());
-				calendarBlockEvent.setStartTime(therapistAvailabilityOverrides.getStartTime());
-				calendarBlockEvent.setEndTime(therapistAvailabilityOverrides.getEndTime());
-				calendarBlockEvent.setReason(therapistAvailabilityOverrides.getReason());
-				calendarBlockEvent.setSyncToGoogleCalendar(true);
-
-				outboxService.saveOutboxEvent("THERAPIST_AVAILABILITY", therapistAvailabilityOverrides.getTherapistId(), "CalendarBlockCreated", calendarBlockEvent);
-			}
+			outboxService.saveOutboxEvent("THERAPIST_AVAILABILITY", saved.getTherapistId(), "CalendarBlockCreated", calendarBlockEvent);
 		}
 	}
 
@@ -225,6 +233,20 @@ public class TherapistService {
 		if (!override.getTherapistId().equals(therapistId)) {
 			throw new IllegalArgumentException("Availability override does not belong to therapist.");
 		}
+		
+		if (override.isAvailable()) {
+			availabilitySlotService.applyDeletedOverride(therapistId, override);
+		}
+		
+		AvailabilityOverrideEvent overrideEvent = new AvailabilityOverrideEvent();
+		overrideEvent.setEventType("AvailabilityOverrideDeleted");
+		overrideEvent.setOverrideId(override.getOverrideId());
+		overrideEvent.setTherapistId(override.getTherapistId());
+		overrideEvent.setStartTime(override.getStartTime());
+		overrideEvent.setEndTime(override.getEndTime());
+		overrideEvent.setAvailable(override.isAvailable());
+		overrideEvent.setReason(override.getReason());
+		outboxService.saveOutboxEvent("THERAPIST_AVAILABILITY", override.getTherapistId(), "AvailabilityOverrideDeleted", overrideEvent);
 
 		if (!override.isAvailable() && Boolean.TRUE.equals(override.getSyncToGoogleCalendar())) {
 			CalendarBlockEvent calendarBlockEvent = new CalendarBlockEvent();
@@ -238,7 +260,6 @@ public class TherapistService {
 
 		therapistAvailabilityOverridesRepository.delete(override);
 		
-		availabilitySlotService.applyDeletedOverride(therapistId, override);
 	}
 
 	public String getTherapistIdByUserId(String userId) {
@@ -344,6 +365,26 @@ public class TherapistService {
             throw new IllegalArgumentException("Availability overrides currently support same-day windows only.");
         }
 		
+		if (Boolean.TRUE.equals(dto.getIsAvailable()) && overlapsBaseAvailability(dto)) {
+			throw new IllegalArgumentException(
+					"Available overrides must be outside the therapist's normal availability window.");
+		}
+	}
+	
+	private boolean overlapsBaseAvailability(TherapistAvailabilityOverridesDto dto) {
+		int dayOfWeek = dto.getStartTime().getDayOfWeek().getValue();
+
+		return therapistAvailabilityRulesRepository.findByTherapistIdAndIsActiveTrue(dto.getTherapistId()).stream()
+				.filter(rule -> rule.getDayOfWeek() == dayOfWeek)
+				.anyMatch(rule -> overlaps(
+						dto.getStartTime().toLocalTime(),
+						dto.getEndTime().toLocalTime(),
+						rule.getStartTime(),
+						rule.getEndTime()));
+	}
+
+	private boolean overlaps(LocalTime firstStart, LocalTime firstEnd, LocalTime secondStart, LocalTime secondEnd) {
+		return firstStart.isBefore(secondEnd) && firstEnd.isAfter(secondStart);
 	}
 
 }

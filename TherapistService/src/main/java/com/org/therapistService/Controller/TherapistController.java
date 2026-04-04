@@ -129,12 +129,11 @@ public class TherapistController {
 	}
 
 	@PostMapping("/create-availability-overrides")
-	public void createTherapistAvailabilityOverrides(@RequestBody List<TherapistAvailabilityOverridesDto> therapistAvailabilityOverridesDtoList) throws JsonProcessingException {
+	public void createTherapistAvailabilityOverrides(@RequestBody TherapistAvailabilityOverridesDto therapistAvailabilityOverridesDto) throws JsonProcessingException {
 		String therapistId = SecurityUtils.getTherapistId();
-		for (TherapistAvailabilityOverridesDto therapistAvailabilityOverridesDto : therapistAvailabilityOverridesDtoList) {
-			therapistAvailabilityOverridesDto.setTherapistId(therapistId);
-		}
-		therapistService.createTherapistAvailabilityOverrides(therapistAvailabilityOverridesDtoList);
+		therapistAvailabilityOverridesDto.setTherapistId(therapistId);
+		
+		therapistService.createTherapistAvailabilityOverrides(therapistAvailabilityOverridesDto);
 	}
 
 	@GetMapping("/availability-overrides")

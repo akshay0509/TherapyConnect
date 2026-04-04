@@ -14,7 +14,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.org.appointmentService.Entity.TherapistAvailability;
 import com.org.appointmentService.Enums.AvailabilityStatus;
-import com.org.appointmentService.Exception.SlotNotAvailableException;
+import com.org.appointmentService.Exception.AvailabilityProjectionConflictException;
 import com.org.appointmentService.Repository.TherapistAvailabilityRepository;
 import com.org.events.TherapistAvailability.AvailabilityEvent;
 import com.org.events.TherapistAvailability.AvailabilitySlotsDeletedEvent;
@@ -36,7 +36,7 @@ public class TherapistAvailabilityConsumer {
 
 	private static final Logger logger = LoggerFactory.getLogger(TherapistAvailabilityConsumer.class);
 
-	@KafkaListener(topics = topic, groupId = "${spring.kafka.consumer.group-id}")
+	@KafkaListener(topics = topic, groupId = "appointment-availability-slot-projection-group")
 	@Transactional
 	public void process(JsonNode payload) {
 		logger.debug("inside process of therapist-availability-events..");
@@ -96,7 +96,7 @@ public class TherapistAvailabilityConsumer {
 	private void processSlotRemoved(AvailabilityEvent event) {
 
 		TherapistAvailability therapistAvailability = therapistAvailabilityRepository.findBySlotIdAndTherapistId(event.getSlotId(), event.getTherapistId())
-				.orElseThrow(() -> new SlotNotAvailableException(event.getSlotId()));
+				.orElse(null);
 
 		if (therapistAvailability == null) {
 			return;
@@ -116,30 +116,32 @@ public class TherapistAvailabilityConsumer {
 		LocalDateTime start = event.getRangeStart().atStartOfDay();
 		LocalDateTime end = event.getRangeEnd().plusDays(1).atStartOfDay();
 
+		rejectIfBookedSlotsExist(event.getTherapistId(), start, end, "AvailabilitySlotsGenerated");
 		therapistAvailabilityRepository.deleteAvailableSlotsInRange(event.getTherapistId(), start, end);
 
-		if(event.getSlotList().size() != 0) {
+		List<TherapistAvailability> therapistAvailabilityList = new ArrayList<>();
 
-			List<TherapistAvailability> therapistAvailabilityList = new ArrayList<>();
+		for (Slot slot : event.getSlotList()) {
 
-			for (Slot slot : event.getSlotList()) {
-
-				if (therapistAvailabilityRepository.existsBySlotId(slot.getSlotId())) {
-					continue;
-				}
-
-				TherapistAvailability therapistAvailability = new TherapistAvailability();
-				therapistAvailability.setSlotId(slot.getSlotId());
-				therapistAvailability.setTherapistId(event.getTherapistId());
-				therapistAvailability.setStartTime(slot.getStartTime());
-				therapistAvailability.setEndTime(slot.getEndTime());
-				therapistAvailability.setStatus(AvailabilityStatus.AVAILABLE);
-
-				therapistAvailabilityList.add(therapistAvailability);
-
+			if (therapistAvailabilityRepository.existsBySlotId(slot.getSlotId())) {
+				continue;
 			}
+
+			TherapistAvailability therapistAvailability = new TherapistAvailability();
+			therapistAvailability.setSlotId(slot.getSlotId());
+			therapistAvailability.setTherapistId(event.getTherapistId());
+			therapistAvailability.setStartTime(slot.getStartTime());
+			therapistAvailability.setEndTime(slot.getEndTime());
+			therapistAvailability.setStatus(AvailabilityStatus.AVAILABLE);
+
+			therapistAvailabilityList.add(therapistAvailability);
+
+		}
+		
+		if (!therapistAvailabilityList.isEmpty()) {
 			therapistAvailabilityRepository.saveAll(therapistAvailabilityList);
 		}
+
 		logger.debug("exiting processBatchGeneration..");
 	}
 
@@ -150,6 +152,38 @@ public class TherapistAvailabilityConsumer {
 		LocalDateTime start = event.getRangeStart().atStartOfDay();
 		LocalDateTime end = event.getRangeEnd().plusDays(1).atStartOfDay();
 
+		rejectIfBookedSlotsExist(event.getTherapistId(), start, end, "AvailabilitySlotsDeleted");
 		therapistAvailabilityRepository.deleteAvailableSlotsInRange(event.getTherapistId(), start, end);
+	}
+
+	private void rejectIfBookedSlotsExist(String therapistId, LocalDateTime start, LocalDateTime end, String eventType) {
+		boolean hasBookedSlots = therapistAvailabilityRepository.existsByTherapistIdAndStatusAndStartTimeLessThanAndEndTimeGreaterThan(
+				therapistId,
+				AvailabilityStatus.BOOKED,
+				end,
+				start);
+
+		if (!hasBookedSlots) {
+			return;
+		}
+
+		List<TherapistAvailability> conflictingSlots = therapistAvailabilityRepository
+				.findTop10ByTherapistIdAndStatusAndStartTimeLessThanAndEndTimeGreaterThanOrderByStartTimeAsc(
+						therapistId,
+						AvailabilityStatus.BOOKED,
+						end,
+						start);
+
+		logger.error(
+				"Rejecting {} for therapistId={} because booked slots exist in range {} to {}. Conflicts={}",
+				eventType,
+				therapistId,
+				start,
+				end,
+				conflictingSlots.stream().map(TherapistAvailability::getSlotId).toList());
+
+		throw new AvailabilityProjectionConflictException(
+				"Booked slots exist in range. Refusing to apply destructive availability sync for therapistId="
+						+ therapistId + ", eventType=" + eventType);
 	}
 }

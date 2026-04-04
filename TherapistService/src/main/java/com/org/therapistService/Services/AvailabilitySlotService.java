@@ -5,9 +5,6 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -68,20 +65,17 @@ public class AvailabilitySlotService {
 			therapistAvailabilityRepository.saveAll(baseSlots);
 		}
 
-		applyOverridesForRange(therapistId, startDate, endDate);
+		applyAvailableOverridesForRange(therapistId, startDate, endDate);
 
 		List<TherapistAvailability> finalSlots = therapistAvailabilityRepository.findByTherapistIdAndStartTimeGreaterThanEqualAndStartTimeLessThan(
 				therapistId,
 				startDate.atStartOfDay(),
 				endDate.plusDays(1).atStartOfDay());
 
-		if (!finalSlots.isEmpty()) {
-			AvailabilitySlotsGeneratedEvent availabilitySlotsGeneratedEvent = buildSlotsGeneratedEvent(therapistId, startDate, endDate, finalSlots);
-			outboxService.saveOutboxEvent("THERAPIST_AVAILABILITY", therapistId, "AvailabilitySlotsGenerated", availabilitySlotsGeneratedEvent);
-			return finalSlots;
-		}
+		AvailabilitySlotsGeneratedEvent availabilitySlotsGeneratedEvent = buildSlotsGeneratedEvent(therapistId, startDate, endDate, finalSlots);
+		outboxService.saveOutboxEvent("THERAPIST_AVAILABILITY", therapistId, "AvailabilitySlotsGenerated", availabilitySlotsGeneratedEvent);
 
-		return new ArrayList<>();
+		return finalSlots;
 	}
 
 	private List<TherapistAvailability> generateBaseSlotsFromRules(String therapistId, LocalDate startDate, LocalDate endDate) {
@@ -115,159 +109,48 @@ public class AvailabilitySlotService {
 	}
 
 	@Transactional
-	public void applyOverridesForRange(String therapistId, LocalDate startDate, LocalDate endDate) throws JsonProcessingException {
+	public void applyAvailableOverridesForRange(String therapistId, LocalDate startDate, LocalDate endDate) throws JsonProcessingException {
 		List<TherapistAvailabilityOverrides> overrides = therapistAvailabilityOverridesRepository.findByTherapistIdAndStartTimeBetweenOrderByStartTimeAsc(
 				therapistId,
 				startDate.atStartOfDay(),
 				endDate.plusDays(1).atStartOfDay());
 
 		for (TherapistAvailabilityOverrides override : overrides) {
-			applySingleOverride(therapistId, override, false);
+			if (!override.isAvailable()) {
+				continue;
+			}
+			addAvailableOverrideSlots(therapistId, override.getStartTime(), override.getEndTime());
 		}
 	}
 
 	@Transactional
 	public void applyCreatedOverride(String therapistId, TherapistAvailabilityOverrides override) throws JsonProcessingException {
-		applySingleOverride(therapistId, override, true);
-	}
-
-	@Transactional
-	public void applyDeletedOverride(String therapistId, TherapistAvailabilityOverrides deletedOverride) throws JsonProcessingException {
-		validateSingleDayWindow(deletedOverride.getStartTime(), deletedOverride.getEndTime());
-		rebuildWindow(therapistId, deletedOverride.getStartTime(), deletedOverride.getEndTime(), true);
-	}
-
-	private void applySingleOverride(String therapistId, TherapistAvailabilityOverrides override, boolean publishEvents) throws JsonProcessingException {
 		validateSingleDayWindow(override.getStartTime(), override.getEndTime());
 		rejectIfActiveAppointmentsOverlap(therapistId, override.getStartTime(), override.getEndTime());
 
 		if (!override.isAvailable()) {
-			List<TherapistAvailability> removedSlots = therapistAvailabilityRepository
-					.findByTherapistIdAndStartTimeLessThanAndEndTimeGreaterThan(
-							therapistId,
-							override.getEndTime(),
-							override.getStartTime());
-
-			therapistAvailabilityRepository.deleteOverlappingSlots(therapistId, override.getStartTime(), override.getEndTime());
-			if (publishEvents) {
-				publishSlotRemovedEvents(removedSlots);
-			}
 			return;
 		}
 
 		List<TherapistAvailability> createdSlots = addAvailableOverrideSlots(therapistId, override.getStartTime(), override.getEndTime());
-		if (publishEvents) {
-			publishSlotCreatedEvents(createdSlots);
-		}
-	}
-
-	private void rebuildWindow(String therapistId, LocalDateTime windowStart, LocalDateTime windowEnd, boolean publishEvents) throws JsonProcessingException {
-		rejectIfActiveAppointmentsOverlap(therapistId, windowStart, windowEnd);
-
-		List<TherapistAvailability> beforeSlots = therapistAvailabilityRepository
-				.findByTherapistIdAndStartTimeLessThanAndEndTimeGreaterThan(
-						therapistId,
-						windowEnd,
-						windowStart);
-
-		therapistAvailabilityRepository.deleteOverlappingSlots(therapistId, windowStart, windowEnd);
-		rebuildBaseSlotsForWindow(therapistId, windowStart, windowEnd);
-		reapplyRemainingOverridesForWindow(therapistId, windowStart, windowEnd);
-
-		if (!publishEvents) {
-			return;
-		}
-
-		List<TherapistAvailability> afterSlots = therapistAvailabilityRepository
-				.findByTherapistIdAndStartTimeLessThanAndEndTimeGreaterThan(
-						therapistId,
-						windowEnd,
-						windowStart);
-
-		Map<String, TherapistAvailability> beforeBySlotId = beforeSlots.stream()
-				.collect(Collectors.toMap(TherapistAvailability::getSlotId, Function.identity()));
-		Map<String, TherapistAvailability> afterBySlotId = afterSlots.stream()
-				.collect(Collectors.toMap(TherapistAvailability::getSlotId, Function.identity()));
-
-		List<TherapistAvailability> removedSlots = beforeSlots.stream()
-				.filter(slot -> !afterBySlotId.containsKey(slot.getSlotId()))
-				.toList();
-		List<TherapistAvailability> createdSlots = afterSlots.stream()
-				.filter(slot -> !beforeBySlotId.containsKey(slot.getSlotId()))
-				.toList();
-
-		publishSlotRemovedEvents(removedSlots);
 		publishSlotCreatedEvents(createdSlots);
 	}
 
-	private void rebuildBaseSlotsForWindow(String therapistId, LocalDateTime windowStart, LocalDateTime windowEnd) {
-		validateSingleDayWindow(windowStart, windowEnd);
+	@Transactional
+	public void applyDeletedOverride(String therapistId, TherapistAvailabilityOverrides override) throws JsonProcessingException {
+		validateSingleDayWindow(override.getStartTime(), override.getEndTime());
+		rejectIfActiveAppointmentsOverlap(therapistId, override.getStartTime(), override.getEndTime());
 
-		LocalDate date = windowStart.toLocalDate();
-		int dayOfWeek = date.getDayOfWeek().getValue();
-		List<TherapistServices> therapistServices = therapistServicesRepository.findByTherapistIdAndIsActiveTrue(therapistId);
-		List<TherapistAvailabilityRules> applicableRules = therapistAvailabilityRulesRepository.findByTherapistIdAndIsActiveTrue(therapistId)
-				.stream()
-				.filter(rule -> rule.getDayOfWeek() == dayOfWeek)
-				.toList();
-
-		List<TherapistAvailability> slotsToSave = new ArrayList<>();
-		for (TherapistAvailabilityRules rule : applicableRules) {
-			TimeBlock intersection = intersect(
-					new TimeBlock(rule.getStartTime(), rule.getEndTime()),
-					windowStart.toLocalTime(),
-					windowEnd.toLocalTime());
-			if (intersection == null) {
-				continue;
-			}
-
-			for (TherapistAvailability slot : chopTimeBlockIntoSlots(therapistId, date, intersection.start(), intersection.end(), null, therapistServices)) {
-				if (!therapistAvailabilityRepository.existsByTherapistIdAndServiceIdAndStartTimeAndEndTime(
-						therapistId,
-						slot.getServiceId(),
-						slot.getStartTime(),
-						slot.getEndTime())) {
-					slotsToSave.add(slot);
-				}
-			}
+		if (!override.isAvailable()) {
+			return;
 		}
 
-		if (!slotsToSave.isEmpty()) {
-			therapistAvailabilityRepository.saveAll(slotsToSave);
-		}
-	}
-
-	private void reapplyRemainingOverridesForWindow(String therapistId, LocalDateTime windowStart, LocalDateTime windowEnd) {
-		LocalDate date = windowStart.toLocalDate();
-		List<TherapistAvailabilityOverrides> overrides = therapistAvailabilityOverridesRepository.findByTherapistIdAndStartTimeBetweenOrderByStartTimeAsc(
+		List<TherapistAvailability> removedSlots = therapistAvailabilityRepository.findByTherapistIdAndStartTimeLessThanAndEndTimeGreaterThan(
 				therapistId,
-				date.atStartOfDay(),
-				date.plusDays(1).atStartOfDay());
-
-		for (TherapistAvailabilityOverrides override : overrides) {
-			TimeBlock overlap = intersect(
-					new TimeBlock(override.getStartTime().toLocalTime(), override.getEndTime().toLocalTime()),
-					windowStart.toLocalTime(),
-					windowEnd.toLocalTime());
-			if (overlap == null) {
-				continue;
-			}
-
-			TherapistAvailabilityOverrides clipped = new TherapistAvailabilityOverrides();
-			clipped.setTherapistId(override.getTherapistId());
-			clipped.setAvailable(override.isAvailable());
-			clipped.setStartTime(LocalDateTime.of(date, overlap.start()));
-			clipped.setEndTime(LocalDateTime.of(date, overlap.end()));
-			applySingleOverrideSilently(therapistId, clipped);
-		}
-	}
-
-	private void applySingleOverrideSilently(String therapistId, TherapistAvailabilityOverrides override) {
-		try {
-			applySingleOverride(therapistId, override, false);
-		} catch (JsonProcessingException e) {
-			throw new RuntimeException("Failed to apply override silently.", e);
-		}
+				override.getEndTime(),
+				override.getStartTime());
+		therapistAvailabilityRepository.deleteOverlappingSlots(therapistId, override.getStartTime(), override.getEndTime());
+		publishSlotRemovedEvents(removedSlots);
 	}
 
 	private List<TherapistAvailability> addAvailableOverrideSlots(String therapistId, LocalDateTime windowStart, LocalDateTime windowEnd) {
@@ -374,20 +257,6 @@ public class AvailabilitySlotService {
 		return newSlots;
 	}
 
-	private TimeBlock intersect(TimeBlock base, LocalTime windowStart, LocalTime windowEnd) {
-		LocalTime start = max(base.start(), windowStart);
-		LocalTime end = min(base.end(), windowEnd);
-		return start.isBefore(end) ? new TimeBlock(start, end) : null;
-	}
-
-	private LocalTime min(LocalTime first, LocalTime second) {
-		return first.isBefore(second) ? first : second;
-	}
-
-	private LocalTime max(LocalTime first, LocalTime second) {
-		return first.isAfter(second) ? first : second;
-	}
-
 	private AvailabilitySlotsGeneratedEvent buildSlotsGeneratedEvent(String therapistId, LocalDate startDate, LocalDate endDate, List<TherapistAvailability> newSlots) {
 		AvailabilitySlotsGeneratedEvent event = new AvailabilitySlotsGeneratedEvent();
 		event.setTherapistId(therapistId);
@@ -423,6 +292,4 @@ public class AvailabilitySlotService {
 		return true;
 	}
 
-	private record TimeBlock(LocalTime start, LocalTime end) {
-	}
 }
