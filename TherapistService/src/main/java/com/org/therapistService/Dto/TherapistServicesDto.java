@@ -1,5 +1,7 @@
 package com.org.therapistService.Dto;
 
+import java.math.BigDecimal;
+
 import com.org.therapistService.Enums.ServiceType;
 
 import lombok.Data;
@@ -11,6 +13,6 @@ public class TherapistServicesDto {
 	private String therapistId;
 	private ServiceType serviceType;
 	private int duration;
-	private float price;
+	private BigDecimal price;
 	private Boolean isActive;
 }

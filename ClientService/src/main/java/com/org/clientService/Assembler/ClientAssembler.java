@@ -18,6 +18,7 @@ public class ClientAssembler {
 		client.setPhoneNumber(clientDto.getPhoneNumber());
 		client.setPronouns(clientDto.getPronouns());
 		client.setTherapistId(clientDto.getTherapistId());
+		client.setDsf(Boolean.TRUE.equals(clientDto.getDsf()));
 		//client.setQualification(clientDto.getQualification());
 		
 		return client;
@@ -35,6 +36,7 @@ public class ClientAssembler {
 		clientDto.setPhoneNumber(client.getPhoneNumber());
 		clientDto.setPronouns(client.getPronouns());
 		clientDto.setStatus(client.getStatus());
+		clientDto.setDsf(client.isDsf());
 		
 		return clientDto;
 	}

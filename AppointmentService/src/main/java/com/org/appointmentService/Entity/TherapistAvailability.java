@@ -1,5 +1,6 @@
 package com.org.appointmentService.Entity;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 import com.org.appointmentService.Enums.AvailabilityStatus;
@@ -36,6 +37,9 @@ public class TherapistAvailability {
 	
 	@Column(nullable = true)
 	private String serviceId;
+	
+	@Column(nullable = true)
+	private BigDecimal sessionFee;
 	
 	@Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)

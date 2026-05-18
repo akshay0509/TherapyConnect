@@ -64,6 +64,7 @@ public class AppointmentEventConsumer {
 		appointmentProjection.setAppointmentId(event.getAppointmentId());
 		appointmentProjection.setTherapistId(event.getTherapistId());
 		appointmentProjection.setClientId(event.getClientId());
+		appointmentProjection.setSessionFee(event.getSessionFee());
 		appointmentProjection.setStartTime(event.getStartTime());
 		appointmentProjection.setEndTime(event.getEndTime());
 		if("AppointmentCreated".equals(event.getEventType()))
@@ -97,6 +98,7 @@ public class AppointmentEventConsumer {
 			return;
 		}
 
+		appointmentProjection.setSessionFee(event.getSessionFee());
 		appointmentProjection.setStartTime(event.getStartTime());
 		appointmentProjection.setEndTime(event.getEndTime());
 		appointmentProjection.setStatus(AppointmentStatus.RESCHEDULED);

@@ -83,6 +83,7 @@ public class AppointmentService {
 		therapistAppointment.setTherapistId(bookAppointmentRequest.getTherapistId());
 		therapistAppointment.setClientId(bookAppointmentRequest.getClientId());
 		therapistAppointment.setClientName(bookAppointmentRequest.getClientName());
+		therapistAppointment.setSessionFee(therapistAvailability.getSessionFee());
 		therapistAppointment.setSessionType(bookAppointmentRequest.getSessionType());
 		therapistAppointment.setStartTime(therapistAvailability.getStartTime());
 		therapistAppointment.setEndTime(therapistAvailability.getEndTime());
@@ -93,6 +94,7 @@ public class AppointmentService {
 		appointmentEvent.setEventType("AppointmentCreated");
 		appointmentEvent.setAppointmentId(therapistAppointment.getAppointmentId());
 		appointmentEvent.setSlotId(slotId);
+		appointmentEvent.setSessionFee(therapistAppointment.getSessionFee());
 		appointmentEvent.setTherapistId(therapistAppointment.getTherapistId());
 		appointmentEvent.setClientId(therapistAppointment.getClientId());
 		appointmentEvent.setSessionType(therapistAppointment.getSessionType().toString());
@@ -183,6 +185,7 @@ public class AppointmentService {
 		releaseSlotOrThrow(oldSlotId, "Previous slot must be released after reschedule.");
 
 		therapistAppointment.setSlotId(newSlot.getSlotId());
+		therapistAppointment.setSessionFee(newSlot.getSessionFee());
 		therapistAppointment.setStartTime(newSlot.getStartTime());
 		therapistAppointment.setEndTime(newSlot.getEndTime());
 		therapistAppointment.setStatus(AppointmentStatus.RESCHEDULED);
@@ -310,6 +313,7 @@ public class AppointmentService {
 		event.setSlotId(appointment.getSlotId());
 		event.setTherapistId(appointment.getTherapistId());
 		event.setClientId(appointment.getClientId());
+		event.setSessionFee(appointment.getSessionFee());
 		if (appointment.getSessionType() != null) {
 			event.setSessionType(appointment.getSessionType().toString());
 		}

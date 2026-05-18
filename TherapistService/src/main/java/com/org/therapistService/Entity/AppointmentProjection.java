@@ -1,5 +1,6 @@
 package com.org.therapistService.Entity;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 import com.org.events.TherapistAppointment.AppointmentStatus;
@@ -24,6 +25,8 @@ public class AppointmentProjection {
     private LocalDateTime startTime;
 
     private LocalDateTime endTime;
+    
+    private BigDecimal sessionFee;
 
     private AppointmentStatus status;
 

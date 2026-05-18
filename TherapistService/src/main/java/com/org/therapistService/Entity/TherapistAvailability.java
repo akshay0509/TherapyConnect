@@ -1,5 +1,6 @@
 package com.org.therapistService.Entity;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -36,6 +37,9 @@ public class TherapistAvailability {
 	
 	@Column(nullable = true)
 	private String serviceId;
+	
+	@Column(nullable = true)
+	private BigDecimal sessionFee;
 	
 	@PrePersist
     public void generateId() {

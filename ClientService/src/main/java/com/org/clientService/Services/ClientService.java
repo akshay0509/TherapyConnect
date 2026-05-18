@@ -58,6 +58,7 @@ public class ClientService {
 		clientEvent.setLastName(client.getLastName());
 		clientEvent.setOccurredAt(LocalDateTime.now());
 		clientEvent.setStatus(client.getStatus());
+		clientEvent.setDsf(client.isDsf());
 		
 		outboxService.saveOutboxEvent("CLIENT", client.getClientId(), "ClientCreated", clientEvent);
 		

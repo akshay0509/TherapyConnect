@@ -1,5 +1,7 @@
 package com.org.therapistService.Services;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -278,11 +280,12 @@ public class TherapistService {
 		return dtoList;
 	}
 
-	public void addClient(String therapistId, String clientId, String clientName) {
+	public void addClient(String therapistId, String clientId, String clientName, boolean dsf) {
 		TherapistClients therapistClient = new TherapistClients();
 		therapistClient.setClientId(clientId);
 		therapistClient.setClientName(clientName);
 		therapistClient.setTherapistId(therapistId);
+		therapistClient.setDsf(dsf);
 
 		therapistClientsRepository.save(therapistClient);
 	}
@@ -324,6 +327,10 @@ public class TherapistService {
 		LocalDate startOfWeekDate = today.minusDays(today.getDayOfWeek().getValue() - 1L);
 		LocalDateTime startOfWeek = startOfWeekDate.atStartOfDay();
 		LocalDateTime endOfWeek = startOfWeek.plusDays(7);
+		
+		LocalDateTime startOfMonth = today.withDayOfMonth(1).atStartOfDay();
+		LocalDateTime endOfMonth = startOfMonth.plusMonths(1);
+		LocalDateTime lifetimeStart = LocalDate.of(1970, 1, 1).atStartOfDay();
 
 		long sessionsToday = appointmentProjectionRepository.countByTherapistIdAndStatusInAndStartTimeBetween(
 				therapistId,
@@ -347,8 +354,20 @@ public class TherapistService {
 		return new DashboardStatsDto(
 				sessionsToday,
 				activeClients,
-				completedThisWeek
+				completedThisWeek,
+				calculatePaidEarnings(therapistId, startOfToday, endOfToday),
+				calculatePaidEarnings(therapistId, startOfWeek, endOfWeek),
+				calculatePaidEarnings(therapistId, startOfMonth, endOfMonth),
+				calculatePaidEarnings(therapistId, lifetimeStart, endOfToday)
 				);
+	}
+	
+	private BigDecimal calculatePaidEarnings(String therapistId, LocalDateTime start, LocalDateTime end) {
+		return toMoney(appointmentProjectionRepository.sumPaidCompletedEarningsBetween(therapistId, start, end));
+	}
+	
+	private BigDecimal toMoney(BigDecimal amount) {
+		return (amount == null ? BigDecimal.ZERO : amount).setScale(2, RoundingMode.HALF_UP);
 	}
 
 	private void validateAvailabilityOverride(TherapistAvailabilityOverridesDto dto) {

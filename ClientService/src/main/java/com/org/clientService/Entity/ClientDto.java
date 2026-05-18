@@ -19,6 +19,7 @@ public class ClientDto {
 	private String gender;
 	private String therapistId;
 	private ClientStatus status;
+	private Boolean dsf = false;
 	//private String qualification;
 	//private String currentOccupation;
 }

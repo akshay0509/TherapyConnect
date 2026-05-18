@@ -147,6 +147,7 @@ public class TherapistAssembler {
 		therapistClientsDto.setTherapistId(therapistClients.getTherapistId());
 		therapistClientsDto.setClientId(therapistClients.getClientId());
 		therapistClientsDto.setClientName(therapistClients.getClientName());
+		therapistClientsDto.setDsf(therapistClients.isDsf());
 		
 		return therapistClientsDto;
 	}

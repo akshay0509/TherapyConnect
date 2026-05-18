@@ -1,5 +1,6 @@
 package com.org.events.TherapistAppointment;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -12,6 +13,7 @@ public class AppointmentEvent {
 	private String eventType;
 	private String appointmentId;
 	private String slotId;
+	private BigDecimal sessionFee;
 	private String therapistId;
 	private String clientId;
 	private String sessionType;

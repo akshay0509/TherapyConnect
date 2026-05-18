@@ -1,5 +1,6 @@
 package com.org.appointmentService.Entity;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -44,6 +45,9 @@ public class TherapistAppointments {
 	
 	@Enumerated(EnumType.STRING)
 	private SessionType sessionType;
+	
+	@Column(nullable = true)
+	private BigDecimal sessionFee;
 
 	@Column(nullable = false)
 	private LocalDateTime startTime;

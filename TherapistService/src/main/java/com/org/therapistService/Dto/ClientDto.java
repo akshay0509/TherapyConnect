@@ -16,6 +16,7 @@ public class ClientDto {
 	private String pronouns;
 	private String gender;
 	private String therapistId;
+	private Boolean dsf = false;
 	//private String qualification;
 	//private String currentOccupation;
 }

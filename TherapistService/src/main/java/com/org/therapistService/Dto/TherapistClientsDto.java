@@ -8,4 +8,5 @@ public class TherapistClientsDto {
 	private String therapistId;
 	private String clientId;
 	private String clientName;
+	private boolean dsf;
 }

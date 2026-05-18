@@ -32,6 +32,7 @@ public class Client {
 	private String gender;
 	private LocalDateTime createdAt = LocalDateTime.now();
 	private ClientStatus status = ClientStatus.ACTIVE;
+	private boolean dsf = false;
 	
 	@PrePersist
 	public void generateId() {

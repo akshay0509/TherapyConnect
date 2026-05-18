@@ -31,7 +31,8 @@ public class TherapistClients {
 	
 	private String clientName;
 	private LocalDateTime createdAt = LocalDateTime.now();
-	private ClientStatus status;
+	private ClientStatus status = ClientStatus.ACTIVE;
+	private boolean dsf = false;
 	
 	@PrePersist
     public void generateId() {

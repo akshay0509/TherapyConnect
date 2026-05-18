@@ -94,7 +94,7 @@ public class TherapistController {
 		String clientId = clientServiceProxy.createClient(clientDto);
 		System.out.println("printing the client ID: "+clientId);
 		String clientName = clientDto.getFirstName() + " " + clientDto.getLastName();
-		therapistService.addClient(therapistId, clientId, clientName);
+		therapistService.addClient(therapistId, clientId, clientName, Boolean.TRUE.equals(clientDto.getDsf()));
 		return ResponseEntity.ok(clientId);
 	}
 

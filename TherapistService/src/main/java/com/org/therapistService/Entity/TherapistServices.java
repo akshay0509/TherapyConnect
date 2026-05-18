@@ -1,5 +1,6 @@
 package com.org.therapistService.Entity;
 
+import java.math.BigDecimal;
 import java.util.UUID;
 
 import com.org.therapistService.Enums.ServiceType;
@@ -31,7 +32,7 @@ public class TherapistServices {
 	private ServiceType serviceType;
 	
 	private int duration;
-	private float price;
+	private BigDecimal price;
 	private boolean isActive;
 	
 	@PrePersist

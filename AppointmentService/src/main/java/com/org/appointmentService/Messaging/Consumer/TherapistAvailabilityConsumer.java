@@ -86,6 +86,7 @@ public class TherapistAvailabilityConsumer {
 		TherapistAvailability therapistAvailability = new TherapistAvailability();
 		therapistAvailability.setSlotId(event.getSlotId());
 		therapistAvailability.setTherapistId(event.getTherapistId());
+		therapistAvailability.setSessionFee(event.getSessionFee());
 		therapistAvailability.setStartTime(event.getStartTime());
 		therapistAvailability.setEndTime(event.getEndTime());
 		therapistAvailability.setStatus(AvailabilityStatus.AVAILABLE);
@@ -130,6 +131,7 @@ public class TherapistAvailabilityConsumer {
 			TherapistAvailability therapistAvailability = new TherapistAvailability();
 			therapistAvailability.setSlotId(slot.getSlotId());
 			therapistAvailability.setTherapistId(event.getTherapistId());
+			therapistAvailability.setSessionFee(slot.getSessionFee());
 			therapistAvailability.setStartTime(slot.getStartTime());
 			therapistAvailability.setEndTime(slot.getEndTime());
 			therapistAvailability.setStatus(AvailabilityStatus.AVAILABLE);
