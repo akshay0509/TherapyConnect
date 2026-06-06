@@ -189,6 +189,7 @@ public class AvailabilitySlotService {
 			event.setEventType("AvailabilitySlotCreated");
 			event.setSlotId(slot.getSlotId());
 			event.setTherapistId(slot.getTherapistId());
+			event.setSessionFee(slot.getSessionFee());
 			event.setStartTime(slot.getStartTime());
 			event.setEndTime(slot.getEndTime());
 
@@ -202,6 +203,7 @@ public class AvailabilitySlotService {
 			event.setEventType("AvailabilitySlotRemoved");
 			event.setSlotId(slot.getSlotId());
 			event.setTherapistId(slot.getTherapistId());
+			event.setSessionFee(slot.getSessionFee());
 			event.setStartTime(slot.getStartTime());
 			event.setEndTime(slot.getEndTime());
 
@@ -248,6 +250,7 @@ public class AvailabilitySlotService {
 				slot.setStartTime(slotStartTime);
 				slot.setEndTime(slotEndTime);
 				slot.setServiceId(serviceId);
+				slot.setSessionFee(service.getPrice());
 				slot.setSessionType(sessionType);
 
 				newSlots.add(slot);
@@ -267,6 +270,7 @@ public class AvailabilitySlotService {
 				.map(a -> {
 					Slot p = new Slot();
 					p.setSlotId(a.getSlotId());
+					p.setSessionFee(a.getSessionFee());
 					p.setStartTime(a.getStartTime());
 					p.setEndTime(a.getEndTime());
 					return p;
