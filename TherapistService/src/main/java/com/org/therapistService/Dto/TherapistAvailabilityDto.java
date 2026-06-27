@@ -1,8 +1,7 @@
 package com.org.therapistService.Dto;
 
 import java.time.LocalDateTime;
-
-import com.org.therapistService.Enums.SessionType;
+import java.util.List;
 
 import lombok.Data;
 
@@ -13,6 +12,6 @@ public class TherapistAvailabilityDto {
 	private String therapistId;
 	private LocalDateTime startTime;
 	private LocalDateTime endTime;
-	private SessionType sessionType;
 	private String serviceId;
+	private List<SlotDeliveryOptionDto> deliveryOptions;
 }

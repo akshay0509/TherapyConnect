@@ -1,7 +1,7 @@
 package com.org.clientService.Assembler;
 
+import com.org.clientService.Dto.ClientDto;
 import com.org.clientService.Entity.Client;
-import com.org.clientService.Entity.ClientDto;
 
 public class ClientAssembler {
 
@@ -27,6 +27,7 @@ public class ClientAssembler {
 	public ClientDto assembleEntityToDto(Client client) {
 		ClientDto clientDto = new ClientDto();
 		//clientDto.setCurrentOccupation(client.getCurrentOccupation());
+		clientDto.setClientId(client.getClientId());
 		clientDto.setDob(client.getDob());
 		clientDto.setEmail(client.getEmail());
 		clientDto.setEmergencyPhoneNumber(client.getEmergencyPhoneNumber());

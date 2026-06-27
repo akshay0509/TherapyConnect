@@ -27,11 +27,6 @@ public class TherapistAvailabilityOverrides {
 	@Column(nullable = false)
 	private LocalDateTime endTime;
 	
-	/*
-	@Enumerated(EnumType.STRING)
-	private SessionType sessionType;
-	*/
-	
 	private String reason;
 
     @Column(nullable = false)

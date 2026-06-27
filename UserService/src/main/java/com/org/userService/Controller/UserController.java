@@ -5,11 +5,15 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.org.userService.Dto.AuthRequest;
 import com.org.userService.Dto.AuthResponse;
+import com.org.userService.Dto.ForgotPasswordRequest;
+import com.org.userService.Dto.ResetPasswordRequest;
+import com.org.userService.Dto.UpdateAccountRequest;
 import com.org.userService.Dto.UserDto;
 import com.org.userService.Services.UserService;
 
@@ -32,6 +36,23 @@ public class UserController {
 		AuthResponse authResponse = userService.validateUser(authRequest);
 		logger.debug("exiting validate user "+authResponse);
 		return ResponseEntity.ok(authResponse);
+	}
+	
+	@PostMapping("/forgot-password")
+	public ResponseEntity<String> forgotPassword(@RequestBody ForgotPasswordRequest request) {
+		userService.createPasswordResetToken(request.getEmail());
+		return ResponseEntity.ok("If the email exists, reset instructions will be sent.");
+	}
+
+	@PostMapping("/reset-password")
+	public ResponseEntity<String> resetPassword(@RequestBody ResetPasswordRequest request) {
+		userService.resetPassword(request.getToken(), request.getNewPassword());
+		return ResponseEntity.ok("Password reset successfully.");
+	}
+
+	@PutMapping("/update-account")
+	public ResponseEntity<UserDto> updateAccount(@RequestBody UpdateAccountRequest request) {
+		return ResponseEntity.ok(userService.updateAccount(request));
 	}
 	
 }

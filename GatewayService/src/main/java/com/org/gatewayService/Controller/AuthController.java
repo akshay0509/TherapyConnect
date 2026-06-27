@@ -82,4 +82,16 @@ public class AuthController {
 											therapistId); 
 		return Map.of("token", token);
 	}
+	
+	@PostMapping("/forgot-password")
+	public Map<String, String> forgotPassword(@RequestBody Map<String, String> request) {
+		userServiceProxy.forgotPassword(request);
+		return Map.of("message", "If the email exists, reset instructions will be sent.");
+	}
+
+	@PostMapping("/reset-password")
+	public Map<String, String> resetPassword(@RequestBody Map<String, String> request) {
+		userServiceProxy.resetPassword(request);
+		return Map.of("message", "Password reset successfully.");
+	}
 }

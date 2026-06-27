@@ -16,6 +16,6 @@ public class SessionDetailsDto {
 	private LocalDateTime startTime;
 	private LocalDateTime endTime;
 	private AppointmentStatus status;
-	private String sessionType;
+	private String modeId;
 	private String sessionNotes;
 }

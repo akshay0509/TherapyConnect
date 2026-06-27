@@ -1,5 +1,7 @@
 package com.org.gatewayService.Proxy;
 
+import java.util.Map;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
@@ -33,6 +35,14 @@ public class UserServiceProxy {
 
 		return response.getBody();
 		*/
+	}
+	
+	public void forgotPassword(Map<String, String> request) {
+		restTemplate.postForObject(userServiceBaseUrl + "/forgot-password", request, String.class);
+	}
+
+	public void resetPassword(Map<String, String> request) {
+		restTemplate.postForObject(userServiceBaseUrl + "/reset-password", request, String.class);
 	}
 
 }

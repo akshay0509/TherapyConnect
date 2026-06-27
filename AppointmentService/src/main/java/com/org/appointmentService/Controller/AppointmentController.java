@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.org.appointmentService.Dto.AppointmentScheduleAppointmentDto;
 import com.org.appointmentService.Dto.AppointmentScheduleViewDto;
 import com.org.appointmentService.Dto.AvailabilityResponseDto;
 import com.org.appointmentService.Dto.BookAppointmentRequest;
@@ -22,6 +23,7 @@ import com.org.appointmentService.Dto.UpdateAppointmentStatusRequest;
 import com.org.appointmentService.Entity.TherapistAppointments;
 import com.org.appointmentService.Services.AppointmentService;
 import com.org.appointmentService.Utility.SecurityUtils;
+import com.org.events.TherapistAppointment.AppointmentStatus;
 
 import jakarta.validation.Valid;
 
@@ -108,4 +110,18 @@ public class AppointmentController {
 		return ResponseEntity.ok(appointmentService.getAppointmentEditorView(therapistId, fromDate, toDate));
 	}
 
+	@GetMapping("/search")
+	public ResponseEntity<List<AppointmentScheduleAppointmentDto>> searchAppointments(
+			@RequestParam(required = false) String clientName,
+			@RequestParam(required = false) List<AppointmentStatus> status,
+			@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
+			@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate) {
+
+		if (toDate.isBefore(fromDate)) {
+			return ResponseEntity.badRequest().build();
+		}
+
+		String therapistId = SecurityUtils.getTherapistId();
+		return ResponseEntity.ok(appointmentService.searchAppointments(therapistId, clientName, status, fromDate, toDate));
+	}
 }

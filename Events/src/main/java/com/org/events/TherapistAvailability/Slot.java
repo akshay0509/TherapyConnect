@@ -9,6 +9,8 @@ import lombok.Data;
 public class Slot {
 
 	private String slotId;
+	private String serviceId;
+	private String modeId;
 	private BigDecimal sessionFee;
     private LocalDateTime startTime;
     private LocalDateTime endTime;

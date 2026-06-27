@@ -5,7 +5,6 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 import com.org.appointmentService.Enums.Creator;
-import com.org.appointmentService.Enums.SessionType;
 import com.org.events.TherapistAppointment.AppointmentStatus;
 
 import jakarta.persistence.Column;
@@ -34,20 +33,17 @@ public class TherapistAppointments {
 	@Column(nullable = false)
 	private String clientName;
 	
-	/*
-	@Column(nullable = false)
-	private String serviceId;
-	*/
-	
-	
 	@Column(nullable = false)
 	private String slotId;
 	
-	@Enumerated(EnumType.STRING)
-	private SessionType sessionType;
+	@Column(nullable = true)
+	private String modeId;
 	
 	@Column(nullable = true)
 	private BigDecimal sessionFee;
+	
+	@Column(nullable = true)
+	private String statusReason;
 
 	@Column(nullable = false)
 	private LocalDateTime startTime;

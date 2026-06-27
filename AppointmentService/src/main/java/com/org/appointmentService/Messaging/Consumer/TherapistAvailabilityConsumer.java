@@ -57,7 +57,6 @@ public class TherapistAvailabilityConsumer {
 
 		case "AvailabilitySlotCreated",
 		"AvailabilitySlotRemoved" -> {
-
 			AvailabilityEvent singleEvent = objectMapper.convertValue(payload, AvailabilityEvent.class);
 			processSingleSlotEvent(singleEvent);
 		}
@@ -87,6 +86,7 @@ public class TherapistAvailabilityConsumer {
 		therapistAvailability.setSlotId(event.getSlotId());
 		therapistAvailability.setTherapistId(event.getTherapistId());
 		therapistAvailability.setSessionFee(event.getSessionFee());
+		therapistAvailability.setServiceId(event.getServiceId());
 		therapistAvailability.setStartTime(event.getStartTime());
 		therapistAvailability.setEndTime(event.getEndTime());
 		therapistAvailability.setStatus(AvailabilityStatus.AVAILABLE);
@@ -118,6 +118,7 @@ public class TherapistAvailabilityConsumer {
 		LocalDateTime end = event.getRangeEnd().plusDays(1).atStartOfDay();
 
 		rejectIfBookedSlotsExist(event.getTherapistId(), start, end, "AvailabilitySlotsGenerated");
+
 		therapistAvailabilityRepository.deleteAvailableSlotsInRange(event.getTherapistId(), start, end);
 
 		List<TherapistAvailability> therapistAvailabilityList = new ArrayList<>();
@@ -132,14 +133,14 @@ public class TherapistAvailabilityConsumer {
 			therapistAvailability.setSlotId(slot.getSlotId());
 			therapistAvailability.setTherapistId(event.getTherapistId());
 			therapistAvailability.setSessionFee(slot.getSessionFee());
+			therapistAvailability.setServiceId(slot.getServiceId());
 			therapistAvailability.setStartTime(slot.getStartTime());
 			therapistAvailability.setEndTime(slot.getEndTime());
 			therapistAvailability.setStatus(AvailabilityStatus.AVAILABLE);
 
 			therapistAvailabilityList.add(therapistAvailability);
-
 		}
-		
+
 		if (!therapistAvailabilityList.isEmpty()) {
 			therapistAvailabilityRepository.saveAll(therapistAvailabilityList);
 		}
@@ -155,6 +156,7 @@ public class TherapistAvailabilityConsumer {
 		LocalDateTime end = event.getRangeEnd().plusDays(1).atStartOfDay();
 
 		rejectIfBookedSlotsExist(event.getTherapistId(), start, end, "AvailabilitySlotsDeleted");
+
 		therapistAvailabilityRepository.deleteAvailableSlotsInRange(event.getTherapistId(), start, end);
 	}
 

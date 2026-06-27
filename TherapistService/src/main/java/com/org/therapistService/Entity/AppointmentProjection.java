@@ -32,5 +32,5 @@ public class AppointmentProjection {
 
     private LocalDateTime updatedAt;
     
-    private String sessionType;
+    private String modeId;
 }

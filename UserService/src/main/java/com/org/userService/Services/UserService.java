@@ -1,6 +1,9 @@
 package com.org.userService.Services;
 
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Set;
+import java.util.UUID;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -11,6 +14,7 @@ import org.springframework.stereotype.Service;
 import com.org.userService.Assembler.UserAssembler;
 import com.org.userService.Dto.AuthRequest;
 import com.org.userService.Dto.AuthResponse;
+import com.org.userService.Dto.UpdateAccountRequest;
 import com.org.userService.Dto.UserDto;
 import com.org.userService.Entity.User;
 import com.org.userService.Enum.FailureReason;
@@ -67,5 +71,57 @@ public class UserService {
                 user.isAccountLocked()
         );
 		
+	}
+	
+	public void createPasswordResetToken(String email) {
+		User user = userRepository.findByEmail(email);
+		if (user == null) {
+			return;
+		}
+
+		user.setResetPasswordToken(UUID.randomUUID().toString());
+		user.setResetPasswordTokenExpiresAt(Instant.now().plus(30, ChronoUnit.MINUTES));
+		userRepository.save(user);
+
+		logger.info("Password reset token generated for userId={}. Email delivery integration pending.", user.getUserId());
+	}
+
+	public void resetPassword(String token, String newPassword) {
+		User user = userRepository.findByResetPasswordToken(token);
+		if (user == null || user.getResetPasswordTokenExpiresAt() == null || user.getResetPasswordTokenExpiresAt().isBefore(Instant.now())) {
+			throw new IllegalArgumentException("Invalid or expired reset token.");
+		}
+
+		user.setPasswordHash(passwordEncoder.encode(newPassword));
+		user.setResetPasswordToken(null);
+		user.setResetPasswordTokenExpiresAt(null);
+		userRepository.save(user);
+	}
+
+	public UserDto updateAccount(UpdateAccountRequest request) {
+		String lookupUsername = request.getCurrentUsername() != null ? request.getCurrentUsername() : request.getUsername();
+		User user = userRepository.findByUsername(lookupUsername);
+		if (user == null) {
+			throw new IllegalArgumentException("User not found.");
+		}
+
+		if (!passwordEncoder.matches(request.getCurrentPassword(), user.getPasswordHash())) {
+			throw new IllegalArgumentException("Current password is invalid.");
+		}
+
+		if (request.getEmail() != null && !request.getEmail().isBlank()) {
+			user.setEmail(request.getEmail());
+		}
+		if (request.getUsername() != null && !request.getUsername().isBlank()) {
+			user.setUsername(request.getUsername());
+		}
+
+		userRepository.save(user);
+
+		UserDto dto = new UserDto();
+		dto.setUsername(user.getUsername());
+		dto.setEmail(user.getEmail());
+		dto.setUserRole(user.getUserRole());
+		return dto;
 	}
 }

@@ -2,7 +2,6 @@ package com.org.appointmentService.Dto;
 
 import java.time.LocalDateTime;
 
-import com.org.appointmentService.Enums.SessionType;
 import com.org.events.TherapistAppointment.AppointmentStatus;
 
 import lombok.Data;
@@ -16,5 +15,6 @@ public class AppointmentScheduleAppointmentDto {
     private LocalDateTime startTime;
     private LocalDateTime endTime;
     private AppointmentStatus status;
-    private SessionType sessionType;
+    private String modeId;
+    private String reason;
 }

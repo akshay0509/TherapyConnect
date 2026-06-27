@@ -16,8 +16,11 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.org.therapistService.Dto.BulkAvailabilityOverridesRequest;
 import com.org.therapistService.Dto.ClientDto;
+import com.org.therapistService.Dto.ClientNotesDto;
 import com.org.therapistService.Dto.DashboardStatsDto;
+import com.org.therapistService.Dto.PageResponseDto;
 import com.org.therapistService.Dto.SessionDetailsDto;
 import com.org.therapistService.Dto.SessionNotesDto;
 import com.org.therapistService.Dto.TherapistAvailabilityOverridesDto;
@@ -25,6 +28,7 @@ import com.org.therapistService.Dto.TherapistAvailabilityRulesDto;
 import com.org.therapistService.Dto.TherapistClientsDto;
 import com.org.therapistService.Dto.TherapistDto;
 import com.org.therapistService.Dto.TherapistServicesDto;
+import com.org.therapistService.Dto.TherapyDeliveryModeDto;
 import com.org.therapistService.Proxy.ClientServiceProxy;
 import com.org.therapistService.Services.AvailabilitySlotService;
 import com.org.therapistService.Services.TherapistService;
@@ -67,6 +71,12 @@ public class TherapistController {
 		return therapistService.getTherapistServices(therapistId);
 	}
 
+	@GetMapping(value = "/therapist-services", params = {"page", "size"})
+	public PageResponseDto<TherapistServicesDto> getAllTherapistServicesPage(@RequestParam int page, @RequestParam int size) {
+		String therapistId = SecurityUtils.getTherapistId();
+		return therapistService.getTherapistServices(therapistId, page, size);
+	}
+
 	//get all services for a therapist
 	@GetMapping("{therapistId}/therapist-services")
 	public List<TherapistServicesDto> getTherapistServices(@PathVariable String therapistId){
@@ -105,6 +115,12 @@ public class TherapistController {
 		return ResponseEntity.ok(therapistClientsDtoList);
 	}
 
+	@GetMapping(value = "/clients", params = {"page", "size"})
+	public ResponseEntity<PageResponseDto<TherapistClientsDto>> getClientsPage(@RequestParam int page, @RequestParam int size) {
+		String therapistId = SecurityUtils.getTherapistId();
+		return ResponseEntity.ok(therapistService.getClientsForTherapist(therapistId, page, size));
+	}
+
 	//create a therapist service
 	@PostMapping("/create-service")
 	public void createTherapistService(@RequestBody TherapistServicesDto therapistServicesDto) {
@@ -113,10 +129,60 @@ public class TherapistController {
 		therapistService.createTherapistServices(therapistServicesDto);
 	}
 
+	@PutMapping("/update-service/{serviceId}")
+	public ResponseEntity<TherapistServicesDto> updateTherapistService(@PathVariable String serviceId, @RequestBody TherapistServicesDto therapistServicesDto) {
+		String therapistId = SecurityUtils.getTherapistId();
+		return ResponseEntity.ok(therapistService.updateTherapistService(therapistId, serviceId, therapistServicesDto));
+	}
+
+	@DeleteMapping("/delete-service/{serviceId}")
+	public ResponseEntity<String> deleteTherapistService(@PathVariable String serviceId) {
+		String therapistId = SecurityUtils.getTherapistId();
+		therapistService.deleteTherapistService(therapistId, serviceId);
+		return ResponseEntity.ok("Therapist service deleted successfully.");
+	}
+
+	@PostMapping("/delivery-modes")
+	public ResponseEntity<TherapyDeliveryModeDto> createDeliveryMode(@RequestBody TherapyDeliveryModeDto dto) throws JsonProcessingException{
+		String therapistId = SecurityUtils.getTherapistId();
+		return ResponseEntity.ok(therapistService.createDeliveryMode(therapistId, dto));
+	}
+
+	@GetMapping("/delivery-modes")
+	public ResponseEntity<List<TherapyDeliveryModeDto>> getDeliveryModes(
+			@RequestParam(required = false) String serviceId) {
+		String therapistId = SecurityUtils.getTherapistId();
+		if (serviceId != null) {
+			return ResponseEntity.ok(therapistService.getDeliveryModesForService(therapistId, serviceId));
+		}
+		return ResponseEntity.ok(therapistService.getDeliveryModes(therapistId));
+	}
+
+	@PutMapping("/delivery-modes/{modeId}")
+	public ResponseEntity<TherapyDeliveryModeDto> updateDeliveryMode(
+			@PathVariable String modeId,
+			@RequestBody TherapyDeliveryModeDto dto) throws JsonProcessingException{
+		String therapistId = SecurityUtils.getTherapistId();
+		return ResponseEntity.ok(therapistService.updateDeliveryMode(therapistId, modeId, dto));
+	}
+
+	@DeleteMapping("/delivery-modes/{modeId}")
+	public ResponseEntity<String> deleteDeliveryMode(@PathVariable String modeId) throws JsonProcessingException{
+		String therapistId = SecurityUtils.getTherapistId();
+		therapistService.deleteDeliveryMode(therapistId, modeId);
+		return ResponseEntity.ok("Delivery mode deleted successfully.");
+	}
+
 	@GetMapping("/availability-rules")
 	public List<TherapistAvailabilityRulesDto> getTherapistAvailabilityRules() {
 		String therapistId = SecurityUtils.getTherapistId();
 		return therapistService.getAllTherapistAvailabilityRules(therapistId);
+	}
+
+	@GetMapping(value = "/availability-rules", params = {"page", "size"})
+	public PageResponseDto<TherapistAvailabilityRulesDto> getTherapistAvailabilityRulesPage(@RequestParam int page, @RequestParam int size) {
+		String therapistId = SecurityUtils.getTherapistId();
+		return therapistService.getAllTherapistAvailabilityRules(therapistId, page, size);
 	}
 
 	@PostMapping("/create-availability-rules")
@@ -128,12 +194,32 @@ public class TherapistController {
 		therapistService.createTherapistAvailabilityRules(therapistAvailabilityRulesDtoList);
 	}
 
+	@DeleteMapping("/availability-rules/{ruleId}")
+	public ResponseEntity<String> deleteAvailabilityRule(@PathVariable String ruleId) {
+		String therapistId = SecurityUtils.getTherapistId();
+		therapistService.deleteAvailabilityRule(therapistId, ruleId);
+		return ResponseEntity.ok("Availability rule deleted successfully.");
+	}
+
+	@PutMapping("/availability-rules/{ruleId}")
+	public ResponseEntity<TherapistAvailabilityRulesDto> updateAvailabilityRule(@PathVariable String ruleId, @RequestBody TherapistAvailabilityRulesDto dto) {
+		String therapistId = SecurityUtils.getTherapistId();
+		return ResponseEntity.ok(therapistService.updateAvailabilityRule(therapistId, ruleId, dto));
+	}
+
 	@PostMapping("/create-availability-overrides")
 	public void createTherapistAvailabilityOverrides(@RequestBody TherapistAvailabilityOverridesDto therapistAvailabilityOverridesDto) throws JsonProcessingException {
 		String therapistId = SecurityUtils.getTherapistId();
 		therapistAvailabilityOverridesDto.setTherapistId(therapistId);
-		
+
 		therapistService.createTherapistAvailabilityOverrides(therapistAvailabilityOverridesDto);
+	}
+
+	@PostMapping("/bulk-availability-overrides")
+	public ResponseEntity<String> createBulkAvailabilityOverrides(@RequestBody BulkAvailabilityOverridesRequest request) throws JsonProcessingException {
+		String therapistId = SecurityUtils.getTherapistId();
+		therapistService.createBulkAvailabilityOverrides(therapistId, request);
+		return ResponseEntity.ok("Bulk availability overrides created successfully.");
 	}
 
 	@GetMapping("/availability-overrides")
@@ -209,6 +295,19 @@ public class TherapistController {
 
 		String therapistId = SecurityUtils.getTherapistId();
 		return ResponseEntity.ok(therapistService.getClientAppointmentHistory(therapistId, clientId));
+	}
+
+	@GetMapping("/{clientId}/note")
+	public ResponseEntity<ClientNotesDto> getClientNotes(@PathVariable String clientId) {
+		String therapistId = SecurityUtils.getTherapistId();
+		return ResponseEntity.ok(therapistService.getClientNote(therapistId, clientId));
+	}
+
+	@PutMapping("/{clientId}/note")
+	public ResponseEntity<ClientNotesDto> putClientNote(@PathVariable String clientId, @RequestBody ClientNotesDto clientNotesDto) {
+		String therapistId = SecurityUtils.getTherapistId();
+		clientNotesDto.setTherapistId(therapistId);
+		return ResponseEntity.ok(therapistService.putClientNote(therapistId, clientId, clientNotesDto));
 	}
 
 }

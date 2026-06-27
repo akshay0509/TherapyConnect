@@ -13,6 +13,8 @@ public class AvailabilityEvent {
 	private String eventType;
     private String slotId;
     private String therapistId;
+    private String serviceId;
+    private String modeId;
     private BigDecimal sessionFee;
     private LocalDateTime startTime;
     private LocalDateTime endTime;

@@ -13,10 +13,11 @@ public class AppointmentEvent {
 	private String eventType;
 	private String appointmentId;
 	private String slotId;
+	private String serviceId;
+	private String modeId;
 	private BigDecimal sessionFee;
 	private String therapistId;
 	private String clientId;
-	private String sessionType;
 	private LocalDateTime startTime;
 	private LocalDateTime endTime;
 	private String bookingSource;

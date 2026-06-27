@@ -51,6 +51,10 @@ public class User {
 	private String lastLoginIp;
 	
 	private String lastLoginUserAgent;
+	
+	private String resetPasswordToken;
+	
+	private Instant resetPasswordTokenExpiresAt;
 
 	@Column(nullable = false)
 	private Instant createdAt = Instant.now();

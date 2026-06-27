@@ -12,6 +12,7 @@ public class ClientEvent {
 	private String eventType;
 	private LocalDateTime occurredAt;
 	private String clientId;
+	private String therapistId;
     private String email;
     private String firstName;
     private String lastName;

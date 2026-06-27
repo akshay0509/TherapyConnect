@@ -15,4 +15,5 @@ public class RescheduleAppointmentRequest {
     private String therapistId;
 
     private String reason;
+    private String modeId;
 }

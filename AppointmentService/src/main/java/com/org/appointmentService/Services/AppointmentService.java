@@ -1,5 +1,6 @@
 package com.org.appointmentService.Services;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.EnumSet;
@@ -19,6 +20,7 @@ import com.org.appointmentService.Dto.UpdateAppointmentStatusRequest;
 import com.org.appointmentService.Entity.TherapistAppointments;
 import com.org.appointmentService.Entity.TherapistAvailability;
 import com.org.appointmentService.Entity.TherapistAvailabilityOverride;
+import com.org.appointmentService.Entity.TherapyDeliveryMode;
 import com.org.appointmentService.Exception.AppointmentNotFoundException;
 import com.org.appointmentService.Exception.InvalidAppointmentStatusTransitionException;
 import com.org.appointmentService.Exception.SlotAlreadyBookedException;
@@ -26,6 +28,7 @@ import com.org.appointmentService.Exception.SlotNotAvailableException;
 import com.org.appointmentService.Repository.TherapistAppointmentsRepository;
 import com.org.appointmentService.Repository.TherapistAvailabilityOverrideRepository;
 import com.org.appointmentService.Repository.TherapistAvailabilityRepository;
+import com.org.appointmentService.Repository.TherapyDeliveryModeRepository;
 import com.org.events.TherapistAppointment.AppointmentEvent;
 import com.org.events.TherapistAppointment.AppointmentStatus;
 
@@ -39,9 +42,12 @@ public class AppointmentService {
 
 	@Autowired
 	private TherapistAppointmentsRepository therapistAppointmentsRepository;
-	
+
 	@Autowired
 	private TherapistAvailabilityOverrideRepository therapistAvailabilityOverrideRepository;
+
+	@Autowired
+	private TherapyDeliveryModeRepository therapyDeliveryModeRepository;
 
 	@Autowired
 	private OutboxService outboxService;
@@ -63,13 +69,24 @@ public class AppointmentService {
 	public String bookAppointment(BookAppointmentRequest bookAppointmentRequest) throws JsonProcessingException {
 
 		String slotId = bookAppointmentRequest.getSlotId();
-		
+		String modeId = bookAppointmentRequest.getModeId();
+
 		TherapistAvailability therapistAvailability = therapistAvailabilityRepository.findBySlotIdAndTherapistId(slotId, bookAppointmentRequest.getTherapistId())
 				.orElseThrow(() -> new SlotNotAvailableException(slotId));
 
 		if (isBlockedByUnavailableOverride(bookAppointmentRequest.getTherapistId(), therapistAvailability.getStartTime(), therapistAvailability.getEndTime())) {
 			throw new SlotNotAvailableException(slotId);
 		}
+
+		TherapyDeliveryMode deliveryMode = therapyDeliveryModeRepository
+				.findByModeIdAndTherapistIdAndServiceIdAndIsActiveTrue(
+						modeId,
+						bookAppointmentRequest.getTherapistId(),
+						therapistAvailability.getServiceId())
+				.orElseThrow(() -> new SlotNotAvailableException(
+						"Mode " + modeId + " is not available for slot " + slotId));
+
+		BigDecimal sessionFee = deliveryMode.getPrice();
 
 		int updated = therapistAvailabilityRepository.markSlotAsBooked(slotId);
 
@@ -83,13 +100,13 @@ public class AppointmentService {
 		therapistAppointment.setTherapistId(bookAppointmentRequest.getTherapistId());
 		therapistAppointment.setClientId(bookAppointmentRequest.getClientId());
 		therapistAppointment.setClientName(bookAppointmentRequest.getClientName());
-		therapistAppointment.setSessionFee(therapistAvailability.getSessionFee());
-		therapistAppointment.setSessionType(bookAppointmentRequest.getSessionType());
+		therapistAppointment.setSessionFee(sessionFee);
+		therapistAppointment.setModeId(modeId);
 		therapistAppointment.setStartTime(therapistAvailability.getStartTime());
 		therapistAppointment.setEndTime(therapistAvailability.getEndTime());
 
 		therapistAppointmentsRepository.save(therapistAppointment);
-		
+
 		AppointmentEvent appointmentEvent = new AppointmentEvent();
 		appointmentEvent.setEventType("AppointmentCreated");
 		appointmentEvent.setAppointmentId(therapistAppointment.getAppointmentId());
@@ -97,11 +114,11 @@ public class AppointmentService {
 		appointmentEvent.setSessionFee(therapistAppointment.getSessionFee());
 		appointmentEvent.setTherapistId(therapistAppointment.getTherapistId());
 		appointmentEvent.setClientId(therapistAppointment.getClientId());
-		appointmentEvent.setSessionType(therapistAppointment.getSessionType().toString());
+		appointmentEvent.setModeId(therapistAppointment.getModeId());
 		appointmentEvent.setStartTime(therapistAppointment.getStartTime());
 		appointmentEvent.setEndTime(therapistAppointment.getEndTime());
 		appointmentEvent.setBookingSource("THERAPIST");
-		
+
 		outboxService.saveOutboxEvent("THERAPIST_APPOINTMENT", therapistAppointment.getTherapistId(), "AppointmentCreated", appointmentEvent);
 
 		return therapistAppointment.getAppointmentId();
@@ -133,6 +150,7 @@ public class AppointmentService {
 		validateStatusTransition(currentStatus, targetStatus);
 
 		therapistAppointment.setStatus(targetStatus);
+		therapistAppointment.setStatusReason(updateAppointmentStatusRequest.getReason());
 		therapistAppointmentsRepository.save(therapistAppointment);
 
 		if (targetStatus == AppointmentStatus.CANCELLED) {
@@ -169,10 +187,24 @@ public class AppointmentService {
 
 		TherapistAvailability newSlot = therapistAvailabilityRepository.findBySlotIdAndTherapistId(newSlotId, therapistId)
 				.orElseThrow(() -> new SlotNotAvailableException(newSlotId));
-		
+
 		if (isBlockedByUnavailableOverride(therapistId, newSlot.getStartTime(), newSlot.getEndTime())) {
 			throw new SlotNotAvailableException(newSlotId);
 		}
+
+		String modeId = rescheduleAppointmentRequest.getModeId() != null
+				? rescheduleAppointmentRequest.getModeId()
+				: therapistAppointment.getModeId();
+
+		TherapyDeliveryMode deliveryMode = therapyDeliveryModeRepository
+				.findByModeIdAndTherapistIdAndServiceIdAndIsActiveTrue(
+						modeId,
+						therapistId,
+						newSlot.getServiceId())
+				.orElseThrow(() -> new SlotNotAvailableException(
+						"Mode " + modeId + " is not available for slot " + newSlotId));
+
+		BigDecimal sessionFee = deliveryMode.getPrice();
 
 		int booked = therapistAvailabilityRepository.markSlotAsBooked(newSlotId);
 		if (booked == 0) {
@@ -185,10 +217,12 @@ public class AppointmentService {
 		releaseSlotOrThrow(oldSlotId, "Previous slot must be released after reschedule.");
 
 		therapistAppointment.setSlotId(newSlot.getSlotId());
-		therapistAppointment.setSessionFee(newSlot.getSessionFee());
+		therapistAppointment.setSessionFee(sessionFee);
+		therapistAppointment.setModeId(modeId);
 		therapistAppointment.setStartTime(newSlot.getStartTime());
 		therapistAppointment.setEndTime(newSlot.getEndTime());
 		therapistAppointment.setStatus(AppointmentStatus.RESCHEDULED);
+		therapistAppointment.setStatusReason(rescheduleAppointmentRequest.getReason());
 
 		therapistAppointmentsRepository.save(therapistAppointment);
 
@@ -214,9 +248,9 @@ public class AppointmentService {
 		return therapistAppointmentsRepository.findByTherapistIdAndStatusInAndStartTimeBetweenOrderByStartTimeAsc(
 				therapistId,
 				List.of(
-		                AppointmentStatus.CONFIRMED,
-		                AppointmentStatus.RESCHEDULED
-		        ),
+						AppointmentStatus.CONFIRMED,
+						AppointmentStatus.RESCHEDULED
+				),
 				startOfDay,
 				endOfDay);
 	}
@@ -224,8 +258,8 @@ public class AppointmentService {
 	public List<AvailabilityResponseDto> getTherapistAvailabilityWithAppointments(String therapistId){
 		return therapistAvailabilityRepository.findEffectiveSlotsWithAppointment(therapistId);
 	}
-	
-	public AppointmentScheduleViewDto getAppointmentEditorView(String therapistId, LocalDate fromDate, LocalDate toDate) { // CODEX-OVERRIDE-PROJECTION-HYBRID
+
+	public AppointmentScheduleViewDto getAppointmentEditorView(String therapistId, LocalDate fromDate, LocalDate toDate) {
 		LocalDateTime from = fromDate.atStartOfDay();
 		LocalDateTime to = toDate.plusDays(1).atStartOfDay();
 
@@ -244,6 +278,16 @@ public class AppointmentService {
 		return new AppointmentScheduleViewDto(slots, appointments, overrides);
 	}
 
+	public List<AppointmentScheduleAppointmentDto> searchAppointments(String therapistId, String clientName, List<AppointmentStatus> statuses, LocalDate fromDate, LocalDate toDate) {
+		LocalDateTime from = fromDate.atStartOfDay();
+		LocalDateTime to = toDate.plusDays(1).atStartOfDay();
+		boolean statusesEmpty = statuses == null || statuses.isEmpty();
+		List<AppointmentStatus> effectiveStatuses = statusesEmpty ? List.of(AppointmentStatus.values()) : statuses;
+		return therapistAppointmentsRepository.searchAppointments(therapistId, blankToNull(clientName), statusesEmpty, effectiveStatuses, from, to).stream()
+				.map(this::toAppointmentScheduleAppointmentDto)
+				.toList();
+	}
+
 	private AppointmentScheduleAppointmentDto toAppointmentScheduleAppointmentDto(TherapistAppointments appointment) {
 		AppointmentScheduleAppointmentDto dto = new AppointmentScheduleAppointmentDto();
 		dto.setAppointmentId(appointment.getAppointmentId());
@@ -252,8 +296,13 @@ public class AppointmentService {
 		dto.setStartTime(appointment.getStartTime());
 		dto.setEndTime(appointment.getEndTime());
 		dto.setStatus(appointment.getStatus());
-		dto.setSessionType(appointment.getSessionType());
+		dto.setModeId(appointment.getModeId());
+		dto.setReason(appointment.getStatusReason());
 		return dto;
+	}
+
+	private String blankToNull(String value) {
+		return value == null || value.isBlank() ? null : value;
 	}
 
 	private AppointmentScheduleOverrideDto toAppointmentScheduleOverrideDto(TherapistAvailabilityOverride override) {
@@ -314,9 +363,7 @@ public class AppointmentService {
 		event.setTherapistId(appointment.getTherapistId());
 		event.setClientId(appointment.getClientId());
 		event.setSessionFee(appointment.getSessionFee());
-		if (appointment.getSessionType() != null) {
-			event.setSessionType(appointment.getSessionType().toString());
-		}
+		event.setModeId(appointment.getModeId());
 		event.setStartTime(appointment.getStartTime());
 		event.setEndTime(appointment.getEndTime());
 		event.setBookingSource("THERAPIST");

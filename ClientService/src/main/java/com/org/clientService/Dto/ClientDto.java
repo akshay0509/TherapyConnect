@@ -1,4 +1,4 @@
-package com.org.clientService.Entity;
+package com.org.clientService.Dto;
 
 import java.sql.Date;
 
@@ -9,6 +9,7 @@ import lombok.Data;
 @Data
 public class ClientDto {
 	
+	private String clientId;
 	private String firstName;
 	private String lastName;
 	private Date dob;

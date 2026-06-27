@@ -22,7 +22,7 @@ public interface SessionNotesRepository extends JpaRepository<SessionNotes, Stri
 	            a.startTime,
 	            a.endTime,
 	            a.status,
-	            a.sessionType,
+	            a.modeId,
 	            s.noteContent
 	        )
 	        FROM AppointmentProjection a

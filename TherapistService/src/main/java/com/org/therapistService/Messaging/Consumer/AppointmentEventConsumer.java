@@ -69,7 +69,7 @@ public class AppointmentEventConsumer {
 		appointmentProjection.setEndTime(event.getEndTime());
 		if("AppointmentCreated".equals(event.getEventType()))
 			appointmentProjection.setStatus(AppointmentStatus.SCHEDULED);
-		appointmentProjection.setSessionType(event.getSessionType());
+		appointmentProjection.setModeId(event.getModeId());
 		appointmentProjection.setUpdatedAt(LocalDateTime.now());
 
 		appointmentProjectionRepository.save(appointmentProjection);
@@ -99,6 +99,7 @@ public class AppointmentEventConsumer {
 		}
 
 		appointmentProjection.setSessionFee(event.getSessionFee());
+		appointmentProjection.setModeId(event.getModeId());
 		appointmentProjection.setStartTime(event.getStartTime());
 		appointmentProjection.setEndTime(event.getEndTime());
 		appointmentProjection.setStatus(AppointmentStatus.RESCHEDULED);
