@@ -1,0 +1,48 @@
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500;600&display=swap');
+
+.page { min-height: 100vh; background: #080d0f; font-family: 'DM Sans', sans-serif; color: #f1f5f9; }
+
+.header { border-bottom: 1px solid rgba(255,255,255,0.06); padding: 0 24px; background: rgba(255,255,255,0.02); }
+.headerInner { max-width: 780px; margin: 0 auto; height: 60px; display: flex; align-items: center; justify-content: space-between; }
+.back { background: none; border: none; color: #64748b; font-family: 'DM Sans', sans-serif; font-size: 0.875rem; cursor: pointer; transition: color 0.15s; }
+.back:hover { color: #e2e8f0; }
+.logo { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 1rem; color: #10b981; }
+.rolePill { font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; padding: 3px 10px; border-radius: 20px; background: rgba(16,185,129,0.12); color: #34d399; border: 1px solid rgba(16,185,129,0.25); }
+
+.main { max-width: 780px; margin: 0 auto; padding: 48px 24px 80px; }
+.content { display: flex; flex-direction: column; gap: 28px; max-width: 520px; }
+
+.hero { }
+.heading { font-family: 'Syne', sans-serif; font-size: 1.8rem; font-weight: 800; letter-spacing: -0.02em; color: #e2e8f0; margin: 0 0 8px; }
+.sub { font-size: 0.9rem; color: #64748b; line-height: 1.6; margin: 0; }
+
+.card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 28px; }
+.form { display: flex; flex-direction: column; gap: 18px; }
+
+.field { display: flex; flex-direction: column; gap: 7px; }
+.label { font-size: 0.78rem; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.07em; }
+.hint { font-size: 0.72rem; color: #475569; }
+.optional { color: #475569; font-weight: 400; text-transform: none; letter-spacing: 0; }
+.required { color: #f87171; }
+
+.inputWrapper { position: relative; display: flex; }
+.input { width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 10px 14px; color: #e2e8f0; font-family: 'DM Sans', sans-serif; font-size: 0.9rem; transition: border-color 0.2s; }
+.input:focus { outline: none; border-color: rgba(99,102,241,0.5); }
+.toggle { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: none; border: none; color: #64748b; font-size: 0.78rem; cursor: pointer; transition: color 0.15s; }
+.toggle:hover { color: #94a3b8; }
+
+.divider { height: 1px; background: rgba(255,255,255,0.07); margin: 4px 0; }
+
+.errorBox { display: flex; align-items: center; gap: 10px; padding: 12px 14px; background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.2); border-radius: 10px; color: #fca5a5; font-size: 0.875rem; }
+.errorIcon { width: 18px; height: 18px; border-radius: 50%; background: rgba(239,68,68,0.25); display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 700; flex-shrink: 0; }
+.successBox { display: flex; align-items: center; gap: 10px; padding: 12px 14px; background: rgba(16,185,129,0.08); border: 1px solid rgba(16,185,129,0.2); border-radius: 10px; color: #6ee7b7; font-size: 0.875rem; }
+.successIcon { color: #10b981; font-weight: 700; }
+
+.actions { display: flex; gap: 12px; justify-content: flex-end; margin-top: 4px; }
+.cancelBtn { padding: 10px 20px; background: transparent; border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; color: #64748b; font-family: 'DM Sans', sans-serif; font-size: 0.875rem; cursor: pointer; }
+.cancelBtn:hover { border-color: rgba(255,255,255,0.22); color: #94a3b8; }
+.submitBtn { padding: 10px 24px; background: linear-gradient(135deg, #10b981, #059669); border: none; border-radius: 10px; color: #fff; font-family: 'Syne', sans-serif; font-size: 0.875rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; min-width: 130px; transition: opacity 0.2s; }
+.submitBtn:hover:not(:disabled) { opacity: 0.9; }
+.submitBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btnSpinner { width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: spin 0.7s linear infinite; display: inline-block; }
+@keyframes spin { to { transform: rotate(360deg); } }
