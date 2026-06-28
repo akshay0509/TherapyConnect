@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Configuration status="WARN" monitorInterval="30">
+    <Properties>
+        <Property name="LOG_PATH">/logs/analytics-service</Property>
+        <Property name="ARCHIVE_PATH">${LOG_PATH}/archive</Property>
+    </Properties>
+
+    <Appenders>
+        <Console name="JsonConsole" target="SYSTEM_OUT">
+            <JsonTemplateLayout eventTemplateUri="classpath:EcsLayout.json">
+                <EventTemplateAdditionalField key="traceId" format="JSON" value='{"$resolver": "mdc", "key": "traceId"}'/>
+                <EventTemplateAdditionalField key="therapistId" format="JSON" value='{"$resolver": "mdc", "key": "therapistId"}'/>
+                <EventTemplateAdditionalField key="path" format="JSON" value='{"$resolver": "mdc", "key": "path"}'/>
+
+                <EventTemplateAdditionalField key="appName" value="AnalyticsService"/>
+                <EventTemplateAdditionalField key="environment" value="PROD"/>
+            </JsonTemplateLayout>
+        </Console>
+
+        <RollingFile name="AuditFile"
+                     fileName="${LOG_PATH}/audit.json"
+                     filePattern="${ARCHIVE_PATH}/audit-%d{yyyy-MM-dd}-%i.json.gz">
+
+            <JsonTemplateLayout eventTemplateUri="classpath:EcsLayout.json">
+                <EventTemplateAdditionalField key="traceId" format="JSON" value='{"$resolver": "mdc", "key": "traceId"}'/>
+                <EventTemplateAdditionalField key="therapistId" format="JSON" value='{"$resolver": "mdc", "key": "therapistId"}'/>
+                <EventTemplateAdditionalField key="path" format="JSON" value='{"$resolver": "mdc", "key": "path"}'/>
+
+                <EventTemplateAdditionalField key="appName" value="AnalyticsService"/>
+                <EventTemplateAdditionalField key="environment" value="PROD"/>
+            </JsonTemplateLayout>
+
+            <Policies>
+                <TimeBasedTriggeringPolicy interval="1" modulate="true"/>
+                <SizeBasedTriggeringPolicy size="250 MB"/>
+            </Policies>
+
+            <DefaultRolloverStrategy max="100"/>
+        </RollingFile>
+    </Appenders>
+
+    <Loggers>
+        <Logger name="com.org.analyticsService" level="INFO" additivity="false">
+            <AppenderRef ref="JsonConsole"/>
+            <AppenderRef ref="AuditFile"/>
+        </Logger>
+
+        <Root level="ERROR">
+            <AppenderRef ref="JsonConsole"/>
+            <AppenderRef ref="AuditFile"/>
+        </Root>
+    </Loggers>
+</Configuration>

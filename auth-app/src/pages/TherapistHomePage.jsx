@@ -7,8 +7,7 @@ import styles from "./TherapistHomePage.module.css";
 
 const MODE_TYPE_ICON = {
   ONLINE: "💻",
-  OFFLINE_AT_HALUSURU: "📍",
-  OFFLINE_AT_SESHADRIPURAM: "📍",
+  OFFLINE: "📍",
 };
 
 function toISODate(date) {
@@ -71,8 +70,6 @@ export default function TherapistHomePage() {
       .catch(() => {})
       .finally(() => setStatsLoading(false));
 
-    // Fetch upcoming sessions for the next 30 days via editor-view
-    // (get-appointments only returns today; editor-view supports a date range)
     const today = toISODate(new Date());
     const next30 = toISODate(addDays(new Date(), 30));
     getAvailability(today, next30)
@@ -126,30 +123,6 @@ export default function TherapistHomePage() {
                 <span className={styles.statLabel}>Completed this week</span>
                 <span className={styles.statValue}>{statsLoading ? "—" : (stats?.completedThisWeek ?? 0)}</span>
               </div>
-              <div className={`${styles.statCard} ${styles.earningsCard}`}>
-                <div className={styles.earningsHeader}>
-                  <span className={styles.statIcon}>💰</span>
-                  <span className={styles.earningsTitle}>Earnings</span>
-                </div>
-                <div className={styles.earningsGrid}>
-                  <div className={styles.earningsItem}>
-                    <span className={styles.earningsLabel}>Today</span>
-                    <span className={styles.earningsValue}>{statsLoading ? "—" : `₹${Number(stats?.dayEarnings ?? 0).toLocaleString("en-IN")}`}</span>
-                  </div>
-                  <div className={styles.earningsItem}>
-                    <span className={styles.earningsLabel}>This week</span>
-                    <span className={styles.earningsValue}>{statsLoading ? "—" : `₹${Number(stats?.weekEarnings ?? 0).toLocaleString("en-IN")}`}</span>
-                  </div>
-                  <div className={styles.earningsItem}>
-                    <span className={styles.earningsLabel}>This month</span>
-                    <span className={styles.earningsValue}>{statsLoading ? "—" : `₹${Number(stats?.monthEarnings ?? 0).toLocaleString("en-IN")}`}</span>
-                  </div>
-                  <div className={styles.earningsItem}>
-                    <span className={styles.earningsLabel}>Lifetime</span>
-                    <span className={`${styles.earningsValue} ${styles.earningsLifetime}`}>{statsLoading ? "—" : `₹${Number(stats?.lifetimeEarnings ?? 0).toLocaleString("en-IN")}`}</span>
-                  </div>
-                </div>
-              </div>
             </div>
 
             <div className={styles.actions}>
@@ -181,6 +154,11 @@ export default function TherapistHomePage() {
               <button className={styles.actionBtn} onClick={() => navigate("/therapist/earnings")}>
                 <span className={styles.actionIcon}>📊</span>
                 <div><div className={styles.actionTitle}>Earnings Report</div><div className={styles.actionSub}>View and export earnings by date range</div></div>
+                <span className={styles.actionArrow}>→</span>
+              </button>
+              <button className={styles.actionBtn} onClick={() => navigate("/therapist/analytics")}>
+                <span className={styles.actionIcon}>📈</span>
+                <div><div className={styles.actionTitle}>Analytics</div><div className={styles.actionSub}>Session trends, outcomes, and service insights</div></div>
                 <span className={styles.actionArrow}>→</span>
               </button>
             </div>

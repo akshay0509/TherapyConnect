@@ -15,6 +15,7 @@ import TherapistsPage from "./pages/TherapistsPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
 import AccountSettingsPage from "./pages/AccountSettingsPage";
 import EarningsPage from "./pages/EarningsPage";
+import AnalyticsPage from "./pages/AnalyticsPage";
 
 function RoleRedirect() {
   const { token, role } = useAuth();
@@ -91,6 +92,9 @@ export default function App() {
             } />
             <Route path="/therapist/earnings" element={
               <ProtectedRoute allowedRole="THERAPIST"><EarningsPage /></ProtectedRoute>
+            } />
+            <Route path="/therapist/analytics" element={
+              <ProtectedRoute allowedRole="THERAPIST"><AnalyticsPage /></ProtectedRoute>
             } />
 
             {/* Account settings — any authenticated user */}

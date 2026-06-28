@@ -115,6 +115,8 @@ public class AppointmentService {
 		appointmentEvent.setTherapistId(therapistAppointment.getTherapistId());
 		appointmentEvent.setClientId(therapistAppointment.getClientId());
 		appointmentEvent.setModeId(therapistAppointment.getModeId());
+		appointmentEvent.setModeType(deliveryMode.getModeType().name());
+		appointmentEvent.setAddress(deliveryMode.getAddress());
 		appointmentEvent.setStartTime(therapistAppointment.getStartTime());
 		appointmentEvent.setEndTime(therapistAppointment.getEndTime());
 		appointmentEvent.setBookingSource("THERAPIST");
@@ -228,6 +230,8 @@ public class AppointmentService {
 
 		AppointmentEvent event = baseEventFromAppointment(therapistAppointment);
 		event.setEventType("AppointmentRescheduled");
+		event.setModeType(deliveryMode.getModeType().name());
+		event.setAddress(deliveryMode.getAddress());
 		event.setOldSlotId(oldSlotId);
 		event.setNewSlotId(newSlot.getSlotId());
 		event.setOldStartTime(oldStartTime);
@@ -367,6 +371,10 @@ public class AppointmentService {
 		event.setStartTime(appointment.getStartTime());
 		event.setEndTime(appointment.getEndTime());
 		event.setBookingSource("THERAPIST");
+		therapyDeliveryModeRepository.findById(appointment.getModeId()).ifPresent(mode -> {
+			event.setModeType(mode.getModeType().name());
+			event.setAddress(mode.getAddress());
+		});
 		return event;
 	}
 

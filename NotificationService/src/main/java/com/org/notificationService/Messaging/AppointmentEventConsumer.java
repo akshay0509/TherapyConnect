@@ -83,7 +83,9 @@ public class AppointmentEventConsumer {
 					"Therapy Session",
 					"Appointment ID: " + appointmentEvent.getAppointmentId(),
 					appointmentEvent.getStartTime(),
-					appointmentEvent.getEndTime()
+					appointmentEvent.getEndTime(),
+					appointmentEvent.getModeType(),
+					appointmentEvent.getAddress()
 					);
 
 			AppointmentCalendarEvent appointmentCalendarEvent = new AppointmentCalendarEvent();
@@ -120,7 +122,9 @@ public class AppointmentEventConsumer {
 					"Therapy Session",
 					"Appointment ID: " + appointmentEvent.getAppointmentId(),
 					appointmentEvent.getStartTime(),
-					appointmentEvent.getEndTime()
+					appointmentEvent.getEndTime(),
+					appointmentEvent.getModeType(),
+					appointmentEvent.getAddress()
 					);
 		}
 		catch (Exception e) {

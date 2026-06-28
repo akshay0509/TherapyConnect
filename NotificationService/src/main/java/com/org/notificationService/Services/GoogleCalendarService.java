@@ -34,7 +34,9 @@ public class GoogleCalendarService {
 			String summary,
 			String description,
 			LocalDateTime startTime,
-			LocalDateTime endTime) throws Exception {
+			LocalDateTime endTime,
+			String modeType,
+			String address) throws Exception {
 
 		logger.info("inside createAppointmentEvent..");
 
@@ -46,7 +48,14 @@ public class GoogleCalendarService {
 		event.setStart(buildEventDateTime(startTime));
 		event.setEnd(buildEventDateTime(endTime));
 		event.setAttendees(buildAttendees(clientEmail, therapistEmail));
-		event.setConferenceData(buildConferenceData());
+
+		if ("OFFLINE".equals(modeType)) {
+			if (address != null && !address.isBlank()) {
+				event.setLocation(address);
+			}
+		} else {
+			event.setConferenceData(buildConferenceData());
+		}
 
 		Event createdEvent =
 				calendar.events()
@@ -67,7 +76,9 @@ public class GoogleCalendarService {
 			String summary,
 			String description,
 			LocalDateTime startTime,
-			LocalDateTime endTime) throws Exception {
+			LocalDateTime endTime,
+			String modeType,
+			String address) throws Exception {
 
 		Event existingEvent = calendar.events().get("primary", googleCalendarEventId).execute();
 		existingEvent.setSummary(summary);
@@ -75,6 +86,15 @@ public class GoogleCalendarService {
 		existingEvent.setStart(buildEventDateTime(startTime));
 		existingEvent.setEnd(buildEventDateTime(endTime));
 		existingEvent.setAttendees(buildAttendees(clientEmail, therapistEmail));
+
+		if ("OFFLINE".equals(modeType)) {
+			existingEvent.setConferenceData(null);
+			if (address != null && !address.isBlank()) {
+				existingEvent.setLocation(address);
+			}
+		} else {
+			existingEvent.setLocation(null);
+		}
 
 		calendar.events()
 		.update("primary", googleCalendarEventId, existingEvent)

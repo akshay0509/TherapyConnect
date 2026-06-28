@@ -71,7 +71,7 @@
 /* ─── Stats ─── */
 .statsRow {
   display: grid;
-  grid-template-columns: repeat(3, 1fr) 1.4fr;
+  grid-template-columns: repeat(3, 1fr);
   gap: 14px;
   animation: fadeUp 0.5s 0.05s cubic-bezier(0.22,1,0.36,1) both;
 }
@@ -84,21 +84,6 @@
 .statIcon { font-size: 1.3rem; }
 .statLabel { font-size: 0.72rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.07em; }
 .statValue { font-family: 'Syne', sans-serif; font-size: 1.6rem; font-weight: 800; color: #34d399; }
-
-/* ─── Earnings card ─── */
-.earningsCard {
-  border-color: rgba(245,158,11,0.15) !important;
-  background: rgba(245,158,11,0.04) !important;
-  padding: 18px; gap: 14px;
-}
-.earningsCard:hover { border-color: rgba(245,158,11,0.3) !important; }
-.earningsHeader { display: flex; align-items: center; gap: 8px; }
-.earningsTitle { font-family: 'Syne', sans-serif; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #f59e0b; }
-.earningsGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 18px; }
-.earningsItem { display: flex; flex-direction: column; gap: 3px; }
-.earningsLabel { font-size: 0.68rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.06em; }
-.earningsValue { font-family: 'Syne', sans-serif; font-size: 1rem; font-weight: 700; color: #fbbf24; }
-.earningsLifetime { color: #f59e0b; font-size: 1.1rem; }
 
 /* ─── Quick nav (action buttons) ─── */
 .actions {

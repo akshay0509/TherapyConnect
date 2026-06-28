@@ -29,6 +29,7 @@
         <module>ClientService</module>
         <module>AppointmentService</module>
         <module>NotificationService</module>
+        <module>AnalyticsService</module>
     </modules>
 
     <properties>

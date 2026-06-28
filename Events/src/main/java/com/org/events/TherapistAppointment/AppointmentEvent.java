@@ -15,6 +15,8 @@ public class AppointmentEvent {
 	private String slotId;
 	private String serviceId;
 	private String modeId;
+	private String modeType;
+	private String address;
 	private BigDecimal sessionFee;
 	private String therapistId;
 	private String clientId;
