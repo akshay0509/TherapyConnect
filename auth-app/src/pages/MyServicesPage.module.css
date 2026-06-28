@@ -249,6 +249,207 @@
 
 .serviceId { font-family: monospace; font-size: 0.72rem; color: #334155; }
 
+/* ─── Card actions ─── */
+.cardActions {
+  display: flex; gap: 8px;
+  margin-top: 12px; padding-top: 12px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+.cardEditBtn {
+  flex: 1; padding: 8px;
+  background: rgba(99,102,241,0.08);
+  border: 1px solid rgba(99,102,241,0.2);
+  border-radius: 8px; color: #a5b4fc;
+  font-size: 0.82rem; font-weight: 600;
+  font-family: 'DM Sans', sans-serif;
+  cursor: pointer; transition: background 0.15s;
+}
+.cardEditBtn:hover { background: rgba(99,102,241,0.16); }
+
+.cardDeleteBtn {
+  flex: 1; padding: 8px;
+  background: rgba(239,68,68,0.07);
+  border: 1px solid rgba(239,68,68,0.2);
+  border-radius: 8px; color: #f87171;
+  font-size: 0.82rem; font-weight: 600;
+  font-family: 'DM Sans', sans-serif;
+  cursor: pointer; transition: background 0.15s;
+}
+.cardDeleteBtn:hover { background: rgba(239,68,68,0.14); }
+
+.modesToggleBtn {
+  flex: 1; padding: 8px;
+  background: rgba(16,185,129,0.06);
+  border: 1px solid rgba(16,185,129,0.18);
+  border-radius: 8px; color: #34d399;
+  font-size: 0.82rem; font-weight: 600;
+  font-family: 'DM Sans', sans-serif;
+  cursor: pointer; transition: background 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+.modesToggleBtn:hover { background: rgba(16,185,129,0.12); border-color: rgba(16,185,129,0.3); }
+
+/* ─── Delivery modes expandable section ─── */
+.modesSection {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255,255,255,0.05);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.modesSectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.modesSectionTitle {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: #475569;
+}
+
+.addModeBtn {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #10b981;
+  background: rgba(16,185,129,0.08);
+  border: 1px solid rgba(16,185,129,0.2);
+  border-radius: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  transition: background 0.15s, border-color 0.15s;
+}
+.addModeBtn:hover { background: rgba(16,185,129,0.14); border-color: rgba(16,185,129,0.35); }
+
+.modesLoading {
+  display: flex;
+  justify-content: center;
+  padding: 16px 0;
+}
+
+.spinnerSm {
+  width: 20px; height: 20px;
+  border: 2px solid rgba(255,255,255,0.08);
+  border-top-color: #10b981;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.modesEmpty {
+  font-size: 0.8rem;
+  color: #475569;
+  text-align: center;
+  padding: 10px 0 4px;
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* ─── Mode item row ─── */
+.modeItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.05);
+  border-radius: 10px;
+  padding: 10px 12px;
+  transition: border-color 0.15s;
+}
+.modeItem:hover { border-color: rgba(255,255,255,0.09); }
+
+.modeItemLeft {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.modeItemIcon { font-size: 1rem; flex-shrink: 0; margin-top: 2px; }
+
+.modeItemInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.modeItemName {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #e2e8f0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.modeItemType {
+  font-size: 0.72rem;
+  color: #64748b;
+}
+
+.modeItemAddress {
+  font-size: 0.7rem;
+  color: #475569;
+  font-style: italic;
+}
+
+.modeItemPrice {
+  font-size: 0.78rem;
+  color: #a5b4fc;
+  font-family: 'Syne', sans-serif;
+  font-weight: 700;
+}
+
+.modeItemActions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.modeBadge {
+  display: inline-block;
+  font-size: 0.62rem; font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 20px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  width: fit-content;
+}
+
+.modeEditBtn {
+  width: 28px; height: 28px;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(99,102,241,0.08);
+  border: 1px solid rgba(99,102,241,0.2);
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: background 0.15s;
+}
+.modeEditBtn:hover { background: rgba(99,102,241,0.16); }
+
+.modeDeleteBtn {
+  width: 28px; height: 28px;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(239,68,68,0.07);
+  border: 1px solid rgba(239,68,68,0.2);
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: background 0.15s;
+}
+.modeDeleteBtn:hover { background: rgba(239,68,68,0.14); }
+
 /* ─── Backdrop ─── */
 .backdrop {
   position: fixed; inset: 0;
@@ -312,6 +513,13 @@
   font-size: 0.75rem; color: #94a3b8;
   text-transform: uppercase; letter-spacing: 0.08em; font-weight: 500;
 }
+.optionalTag {
+  font-size: 0.72rem;
+  color: #475569;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+}
 .formRow {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -319,11 +527,12 @@
 }
 @media (max-width: 520px) { .formRow { grid-template-columns: 1fr; } }
 
-/* Service type radio cards */
-.typeOptions { display: flex; gap: 12px; }
+/* Service/mode type radio cards */
+.typeOptions { display: flex; gap: 12px; flex-wrap: wrap; }
 .hiddenRadio { display: none; }
 .typeOption {
   flex: 1;
+  min-width: 100px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -446,26 +655,48 @@
   animation: spin 0.7s linear infinite;
 }
 
+/* ─── Centered modal ─── */
+.modal {
+  position: fixed; top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(520px, 92vw);
+  background: #0f1923;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 16px;
+  z-index: 200;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.6);
+  animation: modalIn 0.2s ease both;
+  padding: 24px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+.modalHeader {
+  display: flex; align-items: center;
+  justify-content: space-between; margin-bottom: 20px;
+}
+@keyframes modalIn {
+  from { opacity: 0; transform: translate(-50%, calc(-50% + 12px)); }
+  to   { opacity: 1; transform: translate(-50%, -50%); }
+}
+
+/* ─── Delete warning ─── */
+.deleteWarning { font-size: 0.9rem; color: #94a3b8; line-height: 1.6; margin-bottom: 16px; }
+.deleteBtnConfirm {
+  padding: 9px 22px;
+  background: rgba(239,68,68,0.15);
+  border: 1px solid rgba(239,68,68,0.35);
+  border-radius: 9px; color: #f87171;
+  font-family: 'Syne', sans-serif;
+  font-size: 0.875rem; font-weight: 700;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  min-width: 100px;
+}
+.deleteBtnConfirm:hover:not(:disabled) { background: rgba(239,68,68,0.25); }
+.deleteBtnConfirm:disabled { opacity: 0.5; cursor: not-allowed; }
+
 @keyframes fadeUp {
   from { opacity: 0; transform: translateY(16px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 @keyframes spin { to { transform: rotate(360deg); } }
-
-/* ─── Card actions ─── */
-.cardActions { display: flex; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.06); }
-.cardEditBtn { flex: 1; padding: 8px; background: rgba(99,102,241,0.08); border: 1px solid rgba(99,102,241,0.2); border-radius: 8px; color: #a5b4fc; font-size: 0.82rem; font-weight: 600; cursor: pointer; transition: background 0.15s; }
-.cardEditBtn:hover { background: rgba(99,102,241,0.16); }
-.cardDeleteBtn { flex: 1; padding: 8px; background: rgba(239,68,68,0.07); border: 1px solid rgba(239,68,68,0.2); border-radius: 8px; color: #f87171; font-size: 0.82rem; font-weight: 600; cursor: pointer; transition: background 0.15s; }
-.cardDeleteBtn:hover { background: rgba(239,68,68,0.14); }
-
-/* ─── Centered modal ─── */
-.modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: min(520px, 92vw); background: #0f1923; border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; z-index: 200; box-shadow: 0 24px 64px rgba(0,0,0,0.6); animation: modalIn 0.2s ease both; padding: 24px; }
-.modalHeader { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
-@keyframes modalIn { from { opacity: 0; transform: translate(-50%, calc(-50% + 12px)); } to { opacity: 1; transform: translate(-50%, -50%); } }
-
-/* ─── Delete warning ─── */
-.deleteWarning { font-size: 0.9rem; color: #94a3b8; line-height: 1.6; margin-bottom: 16px; }
-.deleteBtnConfirm { padding: 9px 22px; background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.35); border-radius: 9px; color: #f87171; font-family: 'Syne', sans-serif; font-size: 0.875rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; min-width: 100px; }
-.deleteBtnConfirm:hover:not(:disabled) { background: rgba(239,68,68,0.25); }
-.deleteBtnConfirm:disabled { opacity: 0.5; cursor: not-allowed; }

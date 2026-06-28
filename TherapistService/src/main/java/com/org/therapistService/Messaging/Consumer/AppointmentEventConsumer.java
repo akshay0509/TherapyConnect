@@ -64,12 +64,13 @@ public class AppointmentEventConsumer {
 		appointmentProjection.setAppointmentId(event.getAppointmentId());
 		appointmentProjection.setTherapistId(event.getTherapistId());
 		appointmentProjection.setClientId(event.getClientId());
+		appointmentProjection.setServiceId(event.getServiceId());
+		appointmentProjection.setModeId(event.getModeId());
 		appointmentProjection.setSessionFee(event.getSessionFee());
 		appointmentProjection.setStartTime(event.getStartTime());
 		appointmentProjection.setEndTime(event.getEndTime());
 		if("AppointmentCreated".equals(event.getEventType()))
 			appointmentProjection.setStatus(AppointmentStatus.SCHEDULED);
-		appointmentProjection.setModeId(event.getModeId());
 		appointmentProjection.setUpdatedAt(LocalDateTime.now());
 
 		appointmentProjectionRepository.save(appointmentProjection);

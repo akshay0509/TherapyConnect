@@ -2,6 +2,7 @@ package com.org.therapistService.Services;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -27,6 +28,8 @@ import com.org.therapistService.Assembler.TherapistAssembler;
 import com.org.therapistService.Dto.BulkAvailabilityOverridesRequest;
 import com.org.therapistService.Dto.ClientNotesDto;
 import com.org.therapistService.Dto.DashboardStatsDto;
+import com.org.therapistService.Dto.EarningsSessionDto;
+import com.org.therapistService.Dto.EarningsSummaryDto;
 import com.org.therapistService.Dto.PageResponseDto;
 import com.org.therapistService.Dto.SessionDetailsDto;
 import com.org.therapistService.Dto.SessionNotesDto;
@@ -558,6 +561,81 @@ public class TherapistService {
 
 	private BigDecimal toMoney(BigDecimal amount) {
 		return (amount == null ? BigDecimal.ZERO : amount).setScale(2, RoundingMode.HALF_UP);
+	}
+
+	public EarningsSummaryDto getEarningsSummary(String therapistId) {
+		LocalDate today = LocalDate.now();
+		LocalDateTime now = today.plusDays(1).atStartOfDay();
+
+		LocalDateTime weekStart = today.minusDays(today.getDayOfWeek().getValue() - 1L).atStartOfDay();
+		LocalDateTime monthStart = today.withDayOfMonth(1).atStartOfDay();
+		LocalDateTime lifetimeStart = LocalDate.of(1970, 1, 1).atStartOfDay();
+
+		BigDecimal weekEarnings   = toMoney(appointmentProjectionRepository.sumPaidCompletedEarningsBetween(therapistId, weekStart, now));
+		BigDecimal monthEarnings  = toMoney(appointmentProjectionRepository.sumPaidCompletedEarningsBetween(therapistId, monthStart, now));
+		BigDecimal lifetimeEarnings = toMoney(appointmentProjectionRepository.sumPaidCompletedEarningsBetween(therapistId, lifetimeStart, now));
+
+		long weekPaidCount      = appointmentProjectionRepository.countPaidCompletedBetween(therapistId, weekStart, now);
+		long monthPaidCount     = appointmentProjectionRepository.countPaidCompletedBetween(therapistId, monthStart, now);
+		long lifetimePaidCount  = appointmentProjectionRepository.countPaidCompletedBetween(therapistId, lifetimeStart, now);
+
+		long weekDsfCount      = appointmentProjectionRepository.countDsfCompletedBetween(therapistId, weekStart, now);
+		long monthDsfCount     = appointmentProjectionRepository.countDsfCompletedBetween(therapistId, monthStart, now);
+		long lifetimeDsfCount  = appointmentProjectionRepository.countDsfCompletedBetween(therapistId, lifetimeStart, now);
+
+		return new EarningsSummaryDto(
+				weekEarnings, monthEarnings, lifetimeEarnings,
+				weekPaidCount, monthPaidCount, lifetimePaidCount,
+				weekDsfCount, monthDsfCount, lifetimeDsfCount
+				);
+	}
+
+	public List<EarningsSessionDto> getEarningsSessions(
+			String therapistId,
+			LocalDate fromDate,
+			LocalDate toDate,
+			String serviceId,
+			String modeId) {
+		LocalDateTime from = fromDate.atStartOfDay();
+		LocalDateTime to = toDate.plusDays(1).atStartOfDay();
+		return appointmentProjectionRepository.findEarningsSessions(
+				therapistId, from, to,
+				(serviceId != null && !serviceId.isBlank()) ? serviceId : null,
+				(modeId != null && !modeId.isBlank()) ? modeId : null
+				);
+	}
+
+	public byte[] exportEarningsCsv(
+			String therapistId,
+			LocalDate fromDate,
+			LocalDate toDate,
+			String serviceId,
+			String modeId) {
+		List<EarningsSessionDto> sessions = getEarningsSessions(therapistId, fromDate, toDate, serviceId, modeId);
+		StringBuilder csv = new StringBuilder();
+		csv.append("appointmentId,clientId,clientName,serviceId,modeId,startTime,endTime,sessionFee,dsf,earningAmount\n");
+		for (EarningsSessionDto session : sessions) {
+			csv.append(csv(session.getAppointmentId())).append(',')
+					.append(csv(session.getClientId())).append(',')
+					.append(csv(session.getClientName())).append(',')
+					.append(csv(session.getServiceId())).append(',')
+					.append(csv(session.getModeId())).append(',')
+					.append(csv(session.getStartTime())).append(',')
+					.append(csv(session.getEndTime())).append(',')
+					.append(csv(toMoney(session.getSessionFee()))).append(',')
+					.append(session.isDsf()).append(',')
+					.append(csv(toMoney(session.getEarningAmount()))).append('\n');
+		}
+		return csv.toString().getBytes(StandardCharsets.UTF_8);
+	}
+
+	private String csv(Object value) {
+		if (value == null) return "";
+		String text = String.valueOf(value);
+		if (text.contains(",") || text.contains("\"") || text.contains("\n")) {
+			return "\"" + text.replace("\"", "\"\"") + "\"";
+		}
+		return text;
 	}
 
 	private DeliveryModeEvent buildDeliveryModeEvent(String eventType, TherapyDeliveryMode mode) {

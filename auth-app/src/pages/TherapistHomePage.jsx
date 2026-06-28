@@ -1,25 +1,33 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useNavigate } from "react-router-dom";
-import { getAppointments, getDashboardStats } from "../api/appointments";
+import { getAvailability, getDashboardStats } from "../api/appointments";
+import { useModeMap } from "../context/DeliveryModesContext";
 import styles from "./TherapistHomePage.module.css";
 
-const SESSION_TYPE_LABEL = {
-  ONLINE: "Online",
-  OFFLINE_AT_HALUSURU: "Offline – Halusuru",
-  OFFLINE_AT_SESHADRIPURAM: "Offline – Seshadripuram",
-};
-const SESSION_TYPE_ICON = {
+const MODE_TYPE_ICON = {
   ONLINE: "💻",
   OFFLINE_AT_HALUSURU: "📍",
   OFFLINE_AT_SESHADRIPURAM: "📍",
 };
 
+function toISODate(date) {
+  const d = new Date(date);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function addDays(date, n) {
+  const d = new Date(date);
+  d.setDate(d.getDate() + n);
+  return d;
+}
+
 function formatDate(dt) {
   if (!dt) return "—";
   const d = new Date(dt);
   const today = new Date();
-  const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
+  const tomorrow = new Date(today);
+  tomorrow.setDate(today.getDate() + 1);
   if (d.toDateString() === today.toDateString()) return "Today";
   if (d.toDateString() === tomorrow.toDateString()) return "Tomorrow";
   return d.toLocaleDateString("en-IN", { day: "2-digit", month: "short" });
@@ -27,7 +35,9 @@ function formatDate(dt) {
 
 function formatTime(dt) {
   if (!dt) return "—";
-  return new Date(dt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true });
+  return new Date(dt).toLocaleTimeString("en-IN", {
+    hour: "2-digit", minute: "2-digit", hour12: true,
+  });
 }
 
 function isUpcoming(dt) {
@@ -44,6 +54,7 @@ function getGreeting() {
 export default function TherapistHomePage() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const modeMap = useModeMap();
 
   const [appointments, setAppointments] = useState([]);
   const [apptLoading, setApptLoading] = useState(true);
@@ -60,14 +71,18 @@ export default function TherapistHomePage() {
       .catch(() => {})
       .finally(() => setStatsLoading(false));
 
-    getAppointments()
-      .then(setAppointments)
+    // Fetch upcoming sessions for the next 30 days via editor-view
+    // (get-appointments only returns today; editor-view supports a date range)
+    const today = toISODate(new Date());
+    const next30 = toISODate(addDays(new Date(), 30));
+    getAvailability(today, next30)
+      .then((data) => setAppointments(data.appointments || []))
       .catch((e) => setApptError(e.message))
       .finally(() => setApptLoading(false));
   }, []);
 
   const upcoming = appointments
-    .filter(a => isUpcoming(a.startTime))
+    .filter((a) => isUpcoming(a.startTime))
     .sort((a, b) => new Date(a.startTime) - new Date(b.startTime));
 
   return (
@@ -85,7 +100,6 @@ export default function TherapistHomePage() {
       </header>
 
       <main className={styles.main}>
-        {/* Greeting */}
         <div className={styles.hero}>
           <p className={styles.eyebrow}>Therapist Portal ✦</p>
           <h1 className={styles.heading}>
@@ -93,13 +107,9 @@ export default function TherapistHomePage() {
           </h1>
         </div>
 
-        {/* Two-column layout */}
         <div className={styles.layout}>
-
           {/* ── Left column ── */}
           <div className={styles.leftCol}>
-
-            {/* Stats */}
             <div className={styles.statsRow}>
               <div className={styles.statCard}>
                 <span className={styles.statIcon}>🧠</span>
@@ -142,7 +152,6 @@ export default function TherapistHomePage() {
               </div>
             </div>
 
-            {/* Quick nav */}
             <div className={styles.actions}>
               <button className={styles.actionBtn} onClick={() => navigate("/therapist/profile")}>
                 <span className={styles.actionIcon}>🧑‍⚕️</span>
@@ -167,6 +176,11 @@ export default function TherapistHomePage() {
               <button className={styles.actionBtn} onClick={() => navigate("/therapist/clients")}>
                 <span className={styles.actionIcon}>👥</span>
                 <div><div className={styles.actionTitle}>My Clients</div><div className={styles.actionSub}>Browse your client list</div></div>
+                <span className={styles.actionArrow}>→</span>
+              </button>
+              <button className={styles.actionBtn} onClick={() => navigate("/therapist/earnings")}>
+                <span className={styles.actionIcon}>📊</span>
+                <div><div className={styles.actionTitle}>Earnings Report</div><div className={styles.actionSub}>View and export earnings by date range</div></div>
                 <span className={styles.actionArrow}>→</span>
               </button>
             </div>
@@ -208,24 +222,27 @@ export default function TherapistHomePage() {
                   </div>
                 )}
 
-                {!apptLoading && !apptError && upcoming.map((a, i) => (
-                  <div key={a.appointmentId} className={styles.sessionItem} style={{ animationDelay: `${i * 0.05}s` }}>
-                    <div className={styles.sessionTimeBlock}>
-                      <span className={styles.sessionDate}>{formatDate(a.startTime)}</span>
-                      <span className={styles.sessionTime}>{formatTime(a.startTime)}</span>
-                    </div>
-                    <div className={styles.sessionDivider} />
-                    <div className={styles.sessionInfo}>
-                      <div className={styles.sessionClient}>
-                        <span className={styles.sessionAvatar}>{a.clientName?.[0]?.toUpperCase() ?? "?"}</span>
-                        <span className={styles.sessionClientName}>{a.clientName || "—"}</span>
+                {!apptLoading && !apptError && upcoming.map((a, i) => {
+                  const mode = modeMap[a.modeId];
+                  const modeIcon = MODE_TYPE_ICON[mode?.modeType] ?? "💬";
+                  const modeLabel = mode?.displayName ?? "—";
+                  return (
+                    <div key={a.appointmentId} className={styles.sessionItem} style={{ animationDelay: `${i * 0.05}s` }}>
+                      <div className={styles.sessionTimeBlock}>
+                        <span className={styles.sessionDate}>{formatDate(a.startTime)}</span>
+                        <span className={styles.sessionTime}>{formatTime(a.startTime)}</span>
                       </div>
-                      <span className={styles.sessionType}>
-                        {SESSION_TYPE_ICON[a.sessionType]} {SESSION_TYPE_LABEL[a.sessionType] ?? a.sessionType}
-                      </span>
+                      <div className={styles.sessionDivider} />
+                      <div className={styles.sessionInfo}>
+                        <div className={styles.sessionClient}>
+                          <span className={styles.sessionAvatar}>{a.clientName?.[0]?.toUpperCase() ?? "?"}</span>
+                          <span className={styles.sessionClientName}>{a.clientName || "—"}</span>
+                        </div>
+                        <span className={styles.sessionType}>{modeIcon} {modeLabel}</span>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           </div>

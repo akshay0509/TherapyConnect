@@ -2,14 +2,10 @@ import { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { getAvailability, createAppointment, generateSlots, updateAppointmentStatus, rescheduleAppointment, createAvailabilityOverride, deleteAvailabilityOverride, bulkAvailabilityOverrides, searchAppointments } from "../api/appointments";
 import { getTherapistClients } from "../api/therapistClients";
+import { useModeMap, useAllModes } from "../context/DeliveryModesContext";
 import styles from "./AppointmentsPage.module.css";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-const SESSION_TYPE_LABEL = {
-  ONLINE: "Online",
-  OFFLINE_AT_HALUSURU: "Offline – Halusuru",
-  OFFLINE_AT_SESHADRIPURAM: "Offline – Seshadripuram",
-};
 const DAY_SHORT = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 const MONTHS_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
@@ -40,8 +36,8 @@ const APPT_STATUS_COLORS = {
 };
 
 // ─── Time helpers ─────────────────────────────────────────────────────────────
-const HOUR_START = 6;   // 6 AM
-const HOUR_END   = 22;  // 10 PM
+const HOUR_START = 6;
+const HOUR_END   = 22;
 const TOTAL_HOURS = HOUR_END - HOUR_START;
 const PX_PER_HOUR = 80;
 const CANVAS_HEIGHT = TOTAL_HOURS * PX_PER_HOUR;
@@ -121,26 +117,32 @@ function ClientDropdown({ clients, value, onChange }) {
   );
 }
 
-function SessionTypeDropdown({ value, onChange }) {
+function ModeDropdown({ modes, value, onChange }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
-  const SESSION_ICONS = { ONLINE:"💻", OFFLINE_AT_HALUSURU:"📍", OFFLINE_AT_SESHADRIPURAM:"📍" };
+  const selected = modes.find(m => m.modeId === value);
   useEffect(() => {
     const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
     document.addEventListener("mousedown", h); return () => document.removeEventListener("mousedown", h);
   }, []);
+  const modeIcon = { ONLINE: "💻", OFFLINE_AT_HALUSURU: "📍", OFFLINE_AT_SESHADRIPURAM: "📍" };
   return (
     <div className={styles.customDropdown} ref={ref}>
       <button type="button" className={`${styles.dropdownTrigger} ${open ? styles.dropdownTriggerOpen : ""}`} onClick={() => setOpen(o => !o)}>
-        <span className={value ? styles.dropdownValueSet : styles.dropdownPlaceholder}>{value ? `${SESSION_ICONS[value]} ${SESSION_TYPE_LABEL[value]}` : "Select session type"}</span>
+        <span className={selected ? styles.dropdownValueSet : styles.dropdownPlaceholder}>
+          {selected ? `${modeIcon[selected.modeType] ?? "💬"} ${selected.displayName}` : "Select delivery mode"}
+        </span>
         <span className={`${styles.dropdownChevron} ${open ? styles.dropdownChevronOpen : ""}`}>▾</span>
       </button>
       {open && (
         <div className={styles.dropdownMenu}>
           <div className={styles.dropdownList}>
-            {Object.entries(SESSION_TYPE_LABEL).map(([val, label]) => (
-              <div key={val} className={`${styles.dropdownItem} ${val === value ? styles.dropdownItemActive : ""}`} onClick={() => { onChange(val); setOpen(false); }}>
-                <span className={styles.dropdownItemAvatar}>{SESSION_ICONS[val]}</span>{label}
+            {modes.length === 0 && <div className={styles.dropdownEmpty}>No modes available for this service</div>}
+            {modes.map(m => (
+              <div key={m.modeId} className={`${styles.dropdownItem} ${m.modeId === value ? styles.dropdownItemActive : ""}`} onClick={() => { onChange(m.modeId); setOpen(false); }}>
+                <span className={styles.dropdownItemAvatar}>{modeIcon[m.modeType] ?? "💬"}</span>
+                <span>{m.displayName}</span>
+                {m.price != null && <span className={styles.modePrice}> · ₹{parseFloat(m.price).toFixed(0)}</span>}
               </div>
             ))}
           </div>
@@ -155,6 +157,8 @@ export default function AppointmentsPage() {
   const navigate = useNavigate();
   const now = new Date();
   const canvasRef = useRef(null);
+  const modeMap = useModeMap();
+  const allModes = useAllModes();
 
   // Week / day selection
   const [weekStart, setWeekStart] = useState(() => getWeekStart(new Date()));
@@ -174,12 +178,12 @@ export default function AppointmentsPage() {
   const [dragEnd, setDragEnd] = useState(null);
   const dragRef = useRef({ active: false, startY: 0 });
 
-  // Panel state: what's open on the right
-  const [panel, setPanel] = useState(null); // { type: "book"|"update"|"reschedule"|"generate"|"override" }
+  const [panel, setPanel] = useState(null);
   const [panelSlot, setPanelSlot] = useState(null);
 
-  // Booking form
-  const [booking, setBooking] = useState({ clientId:"", clientName:"", sessionType:"" });
+  // Booking form — uses modeId, not sessionType
+  const [booking, setBooking] = useState({ clientId: "", clientName: "", modeId: "" });
+  const [bookingModes, setBookingModes] = useState([]); // modes for the slot's service
   const [bookingLoading, setBookingLoading] = useState(false);
   const [bookingError, setBookingError] = useState(null);
   const [bookingSuccess, setBookingSuccess] = useState(false);
@@ -226,7 +230,7 @@ export default function AppointmentsPage() {
   // Search / filter
   const [searchClient, setSearchClient]         = useState("");
   const [filterStatuses, setFilterStatuses]     = useState([]);
-  const [searchResults, setSearchResults]       = useState(null); // null = not in search mode
+  const [searchResults, setSearchResults]       = useState(null);
   const [searchLoading, setSearchLoading]       = useState(false);
   const [searchError, setSearchError]           = useState(null);
 
@@ -249,7 +253,6 @@ export default function AppointmentsPage() {
     getTherapistClients().then(setClients).catch(() => {});
   }, []);
 
-  // Fetch week data whenever weekStart changes (including on mount)
   useEffect(() => {
     fetchWeekData(weekStart);
   }, [weekStart]);
@@ -259,7 +262,6 @@ export default function AppointmentsPage() {
     window.addEventListener("keydown", h); return () => window.removeEventListener("keydown", h);
   }, []);
 
-  // Group slots by date key
   const slotsByDay = useMemo(() => {
     const map = {};
     slots.forEach(s => { const k = toDateKey(s.startTime); if (!map[k]) map[k] = []; map[k].push(s); });
@@ -282,13 +284,11 @@ export default function AppointmentsPage() {
   const getAppointmentsForDate = (date) => appointmentsByDay[toDateKey(date)] || [];
   const getOverridesForDate = (date) => overridesByDay[toDateKey(date)] || [];
 
-  // Selected day data
   const daySlots = useMemo(() => getSlotsForDate(selectedDate), [selectedDate, slotsByDay]);
   const dayAppointments = useMemo(() => getAppointmentsForDate(selectedDate), [selectedDate, appointmentsByDay]);
   const dayOverrides = useMemo(() => getOverridesForDate(selectedDate), [selectedDate, overridesByDay]);
 
   const availableSlots = useMemo(() => {
-    // Only active (non-cancelled, non-abandoned) appointments block slots
     const activeAppts = dayAppointments.filter(a =>
       a.status !== "CANCELLED" && a.status !== "ABANDONED"
     );
@@ -300,7 +300,6 @@ export default function AppointmentsPage() {
     });
   }, [daySlots, dayAppointments]);
 
-  // Week nav
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
   const weekEnd = addDays(weekStart, 6);
   const weekLabel = weekStart.getMonth() === weekEnd.getMonth()
@@ -311,7 +310,6 @@ export default function AppointmentsPage() {
   const nextWeek = () => { setWeekStart(d => addDays(d, 7)); };
   const goToday = () => { setWeekStart(getWeekStart(new Date())); setSelectedDate(new Date()); };
 
-  // Dot indicators for week strip
   const hasAvailable = (date) => getSlotsForDate(date).some(s => s.slotStatus === "AVAILABLE");
   const hasBooked = (date) => getSlotsForDate(date).some(s => s.slotStatus === "BOOKED") || getAppointmentsForDate(date).length > 0;
 
@@ -321,7 +319,6 @@ export default function AppointmentsPage() {
     return clientY - canvasRef.current.getBoundingClientRect().top;
   }, []);
 
-  // Store handlers in refs so addEventListener/removeEventListener always use the same reference
   const dragMoveRef = useRef(null);
   const dragUpRef = useRef(null);
 
@@ -371,7 +368,12 @@ export default function AppointmentsPage() {
   // ─── Actions ───────────────────────────────────────────────────────────────
   const openBook = (slot) => {
     setPanelSlot(slot);
-    setBooking({ clientId:"", clientName:"", sessionType: slot.sessionType || "" });
+    // Pre-select the slot's own modeId if available; filter modes for the slot's service
+    const slotModes = slot.serviceId
+      ? allModes.filter(m => m.serviceId === slot.serviceId && m.isActive)
+      : allModes.filter(m => m.isActive);
+    setBookingModes(slotModes);
+    setBooking({ clientId: "", clientName: "", modeId: slot.modeId || "" });
     setBookingError(null); setBookingSuccess(false);
     setPanel("book");
   };
@@ -394,17 +396,25 @@ export default function AppointmentsPage() {
   const handleBook = async (e) => {
     e.preventDefault();
     if (!booking.clientId) { setBookingError("Please select a client."); return; }
-    if (!booking.sessionType) { setBookingError("Please select a session type."); return; }
+    if (!booking.modeId) { setBookingError("Please select a delivery mode."); return; }
     setBookingLoading(true); setBookingError(null);
     try {
-      const result = await createAppointment({ slotId: panelSlot.slotId, therapistId: panelSlot.therapistId, clientId: booking.clientId, clientName: booking.clientName, sessionType: booking.sessionType });
-      setSlots(prev => prev.map(s => s.slotId === panelSlot.slotId ? { ...s, slotStatus:"BOOKED", clientId: booking.clientId, clientName: booking.clientName } : s));
-      // Add to appointments list for immediate display
+      const result = await createAppointment({
+        slotId: panelSlot.slotId,
+        therapistId: panelSlot.therapistId,
+        clientId: booking.clientId,
+        clientName: booking.clientName,
+        modeId: booking.modeId,
+      });
+      setSlots(prev => prev.map(s => s.slotId === panelSlot.slotId ? { ...s, slotStatus: "BOOKED", clientId: booking.clientId, clientName: booking.clientName } : s));
       setAppointments(prev => [...prev, {
         appointmentId: result?.appointmentId || `tmp-${Date.now()}`,
-        clientId: booking.clientId, clientName: booking.clientName,
-        startTime: panelSlot.startTime, endTime: panelSlot.endTime,
-        status: "SCHEDULED", sessionType: booking.sessionType,
+        clientId: booking.clientId,
+        clientName: booking.clientName,
+        startTime: panelSlot.startTime,
+        endTime: panelSlot.endTime,
+        status: "SCHEDULED",
+        modeId: booking.modeId,
       }]);
       setBookingSuccess(true);
       setTimeout(() => setPanel(null), 1200);
@@ -427,7 +437,6 @@ export default function AppointmentsPage() {
   const reschedDaySlots = useMemo(() => {
     if (!reschedSelectedDate) return [];
     const allDay = getSlotsForDate(reschedSelectedDate);
-    // Use appointments list to find what's truly booked on the reschedule target day
     const apptOnDay = getAppointmentsForDate(reschedSelectedDate)
       .filter(a => a.appointmentId !== panelSlot?.appointmentId &&
         a.status !== "CANCELLED" && a.status !== "ABANDONED"
@@ -457,7 +466,6 @@ export default function AppointmentsPage() {
   const handleOverrideSave = async () => {
     setOverrideLoading(true); setOverrideError(null);
     try {
-      // Build startTime and endTime from selected date + override minutes
       const base = new Date(selectedDate);
       const startTime = new Date(base);
       startTime.setHours(Math.floor(overrideRange.startMin / 60), overrideRange.startMin % 60, 0, 0);
@@ -576,7 +584,6 @@ export default function AppointmentsPage() {
       <div className={styles.scheduleLayout}>
         {/* ── Left: week strip + timeline canvas ── */}
         <div className={styles.canvasArea}>
-          {/* Page title + legend */}
           <div className={styles.canvasTop}>
             <div>
               <h1 className={styles.heading}>Schedule</h1>
@@ -620,8 +627,7 @@ export default function AppointmentsPage() {
             </div>
           </div>
 
-          {/* Day label */}
-          {/* ── Search / filter bar ── */}
+          {/* Search / filter bar */}
           <div className={styles.searchBar}>
             <input
               className={styles.searchInput}
@@ -694,37 +700,31 @@ export default function AppointmentsPage() {
             <div className={styles.canvasLoading}><div className={styles.spinner}/></div>
           ) : (
             <div className={styles.timelineWrapper}>
-              {/* Time gutter */}
               <div className={styles.timeGutter}>
                 {hourLabels.map((label, i) => (
                   <div key={i} className={styles.hourLabel} style={{ top: i * PX_PER_HOUR }}>{label}</div>
                 ))}
               </div>
 
-              {/* Canvas */}
               <div
                 className={styles.canvas}
                 style={{ height: CANVAS_HEIGHT }}
                 ref={canvasRef}
                 onMouseDown={onCanvasMouseDown}
               >
-                {/* Hour grid lines */}
                 {hourLabels.map((_, i) => (
                   <div key={i} className={styles.hourLine} style={{ top: i * PX_PER_HOUR }} />
                 ))}
-                {/* Half-hour lines */}
                 {Array.from({ length: TOTAL_HOURS }, (_, i) => (
                   <div key={i} className={styles.halfHourLine} style={{ top: i * PX_PER_HOUR + PX_PER_HOUR / 2 }} />
                 ))}
 
-                {/* Now indicator */}
                 {nowMinutes !== null && nowMinutes >= HOUR_START*60 && nowMinutes <= HOUR_END*60 && (
                   <div className={styles.nowLine} style={{ top: minutesToPx(nowMinutes) }}>
                     <div className={styles.nowDot}/>
                   </div>
                 )}
 
-                {/* Drag preview */}
                 {dragging && dragStart !== null && dragEnd !== null && (
                   <div className={styles.dragPreview} style={{ top: minutesToPx(dragStart), height: Math.max(minutesToPx(dragEnd) - minutesToPx(dragStart), 24) }}>
                     <span className={styles.dragLabel}>{formatTimeFromMinutes(dragStart)} – {formatTimeFromMinutes(dragEnd)}</span>
@@ -732,7 +732,6 @@ export default function AppointmentsPage() {
                   </div>
                 )}
 
-                {/* Override blocks — unavailable time regions */}
                 {dayOverrides.map(override => {
                   const top = minutesToPx(toMinutes(override.startTime));
                   const height = Math.max(minutesToPx(toMinutes(override.endTime)) - top, 20);
@@ -749,7 +748,6 @@ export default function AppointmentsPage() {
                   );
                 })}
 
-                {/* Available slots — lightweight selectable bands */}
                 {availableSlots.map(slot => {
                   const top = minutesToPx(toMinutes(slot.startTime));
                   const height = minutesToPx(toMinutes(slot.endTime)) - top;
@@ -769,14 +767,12 @@ export default function AppointmentsPage() {
                   );
                 })}
 
-                {/* Booked appointments from appointments list — prominent blocks */}
                 {dayAppointments
                   .filter(appt => appt.status !== "CANCELLED" && appt.status !== "ABANDONED")
                   .map(appt => {
                   const top = minutesToPx(toMinutes(appt.startTime));
                   const height = Math.max(minutesToPx(toMinutes(appt.endTime)) - top, 28);
                   const colors = APPT_STATUS_COLORS[appt.status] || APPT_STATUS_COLORS.CONFIRMED;
-                  // Build a unified slot-like object for panel actions
                   const apptAsSlot = {
                     appointmentId: appt.appointmentId,
                     therapistId: appt.therapistId || slots.find(s => s.appointmentId === appt.appointmentId)?.therapistId,
@@ -785,9 +781,10 @@ export default function AppointmentsPage() {
                     startTime: appt.startTime,
                     endTime: appt.endTime,
                     appointmentStatus: appt.status,
-                    sessionType: appt.sessionType,
+                    modeId: appt.modeId,
                     slotId: slots.find(s => s.appointmentId === appt.appointmentId)?.slotId,
                   };
+                  const modeName = modeMap[appt.modeId]?.displayName;
                   return (
                     <div
                       key={appt.appointmentId}
@@ -800,7 +797,7 @@ export default function AppointmentsPage() {
                       <div className={styles.bookedBlockContent}>
                         <span className={styles.bookedBlockTime} style={{ color: colors.text }}>{formatTime(appt.startTime)} – {formatTime(appt.endTime)}</span>
                         {height > 36 && <span className={styles.bookedBlockClient}>{appt.clientName}</span>}
-                        {height > 52 && <span className={styles.bookedBlockStatus} style={{ color: colors.text }}>{STATUS_ICON[appt.status]} {appt.status}</span>}
+                        {height > 52 && <span className={styles.bookedBlockStatus} style={{ color: colors.text }}>{STATUS_ICON[appt.status]} {appt.status}{modeName ? ` · ${modeName}` : ""}</span>}
                       </div>
                       {height > 40 && (
                         <button className={styles.reschedBadge} onClick={e => { e.stopPropagation(); openReschedule(apptAsSlot); }} title="Reschedule">↺</button>
@@ -840,8 +837,8 @@ export default function AppointmentsPage() {
                   <div className={styles.field}><label className={styles.label}>Client</label>
                     <ClientDropdown clients={clients} value={booking.clientId} onChange={(id,name) => setBooking(p => ({...p, clientId:id, clientName:name}))} />
                   </div>
-                  <div className={styles.field}><label className={styles.label}>Session Type</label>
-                    <SessionTypeDropdown value={booking.sessionType} onChange={v => setBooking(p => ({...p, sessionType:v}))} />
+                  <div className={styles.field}><label className={styles.label}>Delivery Mode</label>
+                    <ModeDropdown modes={bookingModes} value={booking.modeId} onChange={v => setBooking(p => ({...p, modeId:v}))} />
                   </div>
                   <div className={styles.slotSummary}>
                     <div className={styles.summaryRow}><span className={styles.summaryLabel}>Time</span><span className={styles.summaryValue}>{formatTime(panelSlot.startTime)} – {formatTime(panelSlot.endTime)}</span></div>
@@ -879,6 +876,12 @@ export default function AppointmentsPage() {
                   <div className={styles.summaryRow}><span className={styles.summaryLabel}>Current</span>
                     <span className={`${styles.slotBadge} ${styles[`apptStatus_${panelSlot.appointmentStatus}`] || styles.apptStatusDefault}`}>{panelSlot.appointmentStatus}</span>
                   </div>
+                  {modeMap[panelSlot.modeId] && (
+                    <div className={styles.summaryRow}>
+                      <span className={styles.summaryLabel}>Mode</span>
+                      <span className={styles.summaryValue}>{modeMap[panelSlot.modeId].displayName}</span>
+                    </div>
+                  )}
                   {panelSlot.reason && (
                     <div className={styles.summaryRow}>
                       <span className={styles.summaryLabel}>Reason</span>
@@ -953,11 +956,15 @@ export default function AppointmentsPage() {
                   <div className={styles.field}><label className={styles.label}>Available Slots · {reschedSelectedDate.getDate()} {MONTHS_SHORT[reschedSelectedDate.getMonth()]}</label>
                     {reschedDaySlots.length===0 ? <p className={styles.reschedNoSlots}>No available slots.</p> : (
                       <div className={styles.reschedSlotList}>
-                        {reschedDaySlots.map(s=>(
-                          <button key={s.slotId} type="button" className={`${styles.reschedSlotBtn} ${reschedNewSlot?.slotId===s.slotId?styles.reschedSlotBtnActive:""}`} onClick={()=>setReschedNewSlot(s)}>
-                            {formatTime(s.startTime)} – {formatTime(s.endTime)}<span className={styles.reschedSlotType}>{SESSION_TYPE_LABEL[s.sessionType]??s.sessionType}</span>
-                          </button>
-                        ))}
+                        {reschedDaySlots.map(s=>{
+                          const modeName = modeMap[s.modeId]?.displayName ?? s.modeId ?? "";
+                          return (
+                            <button key={s.slotId} type="button" className={`${styles.reschedSlotBtn} ${reschedNewSlot?.slotId===s.slotId?styles.reschedSlotBtnActive:""}`} onClick={()=>setReschedNewSlot(s)}>
+                              {formatTime(s.startTime)} – {formatTime(s.endTime)}
+                              {modeName && <span className={styles.reschedSlotType}>{modeName}</span>}
+                            </button>
+                          );
+                        })}
                       </div>
                     )}
                   </div>
@@ -990,7 +997,6 @@ export default function AppointmentsPage() {
                   <span className={styles.overrideDuration}>{overrideRange.endMin - overrideRange.startMin} min</span>
                 </div>
 
-                {/* Existing override — show details + delete only */}
                 {overrideRange.overrideId ? (
                   <>
                     {overrideRange.reason && (
@@ -1011,7 +1017,6 @@ export default function AppointmentsPage() {
                   </>
                 ) : (
                   <>
-                    {/* New override — show create form */}
                     <div className={styles.field}>
                       <label className={styles.label}>Mark as</label>
                       <div className={styles.overrideToggle}>

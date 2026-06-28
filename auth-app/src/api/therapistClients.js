@@ -80,19 +80,26 @@ export async function updateClientStatus(clientId, status) {
   }
 }
 
+// Backend always returns 200 with a single ClientNotesDto.
+// When no note exists yet, returns { therapistId, clientId, content: "" } with no noteId.
+// Wraps in array so callers can use .map()/.length; returns [] when no real note exists.
 export async function getClientNotes(clientId) {
   try {
-    const response = await api.get(`/client/${clientId}/notes`);
-    return response.data;
+    const response = await api.get(`/therapist/${clientId}/note`);
+    const data = response.data;
+    return data && data.noteId ? [data] : [];
   } catch (err) {
+    if (err.response?.status === 404) return [];
     const message = err.response?.data?.message || err.response?.data?.error || "Failed to fetch notes.";
     throw new Error(message);
   }
 }
 
-export async function createClientNote(clientId, content) {
+// Backend is an upsert (PUT) — one note per therapist+client pair.
+// Calling this creates or replaces the existing note.
+export async function upsertClientNote(clientId, content) {
   try {
-    const response = await api.post(`/client/${clientId}/notes`, { content });
+    const response = await api.put(`/therapist/${clientId}/note`, { content });
     return response.data;
   } catch (err) {
     const message = err.response?.data?.message || err.response?.data?.error || "Failed to save note.";

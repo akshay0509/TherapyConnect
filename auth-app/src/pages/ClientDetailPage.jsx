@@ -2,8 +2,9 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   getClientById, getSessionDetails, createSessionNotes, updateSessionNotes,
-  updateClient, updateClientStatus, getClientNotes, createClientNote,
+  updateClient, updateClientStatus, getClientNotes, upsertClientNote,
 } from "../api/therapistClients";
+import { useModeMap } from "../context/DeliveryModesContext";
 import styles from "./ClientDetailPage.module.css";
 
 function getInitials(firstName, lastName) {
@@ -37,12 +38,7 @@ function avatarGradient(id) {
   return AVATAR_COLORS[id.charCodeAt(id.length - 1) % AVATAR_COLORS.length];
 }
 
-const SESSION_TYPE_LABEL = {
-  ONLINE: "Online",
-  OFFLINE_AT_HALUSURU: "Offline – Halusuru",
-  OFFLINE_AT_SESHADRIPURAM: "Offline – Seshadripuram",
-};
-const SESSION_ICON = { ONLINE: "💻", OFFLINE_AT_HALUSURU: "📍", OFFLINE_AT_SESHADRIPURAM: "📍" };
+const MODE_TYPE_ICON = { ONLINE: "💻", OFFLINE_AT_HALUSURU: "📍", OFFLINE_AT_SESHADRIPURAM: "📍" };
 
 function DetailField({ label, value }) {
   return (
@@ -67,12 +63,12 @@ const EDIT_FIELDS = [
 export default function ClientDetailPage() {
   const { clientId } = useParams();
   const navigate = useNavigate();
+  const modeMap = useModeMap();
 
   const [client, setClient]   = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState(null);
 
-  // Active tab: "info" | "sessions" | "notes"
   const [activeTab, setActiveTab] = useState("info");
 
   // ── Edit client ──────────────────────────────────────────
@@ -113,16 +109,11 @@ export default function ClientDetailPage() {
 
   // ── Status toggle ────────────────────────────────────────
   const [statusLoading, setStatusLoading]   = useState(false);
-  const [statusConfirm, setStatusConfirm]   = useState(false); // confirm dialog for TERMINATED
+  const [statusConfirm, setStatusConfirm]   = useState(false);
 
   const handleStatusChange = async (newStatus) => {
     if (newStatus === "TERMINATED") {
-      if (!statusConfirm) {
-        // First click — show confirmation
-        setStatusConfirm(true);
-        return;
-      }
-      // Reached only via the Confirm button — proceed
+      if (!statusConfirm) { setStatusConfirm(true); return; }
     }
     setStatusConfirm(false);
     setStatusLoading(true);
@@ -137,12 +128,12 @@ export default function ClientDetailPage() {
   };
 
   // ── Sessions ─────────────────────────────────────────────
-  const [sessions, setSessions]             = useState([]);
+  const [sessions, setSessions]               = useState([]);
   const [sessionsLoading, setSessionsLoading] = useState(false);
-  const [sessionsError, setSessionsError]   = useState(null);
-  const [sessionsLoaded, setSessionsLoaded] = useState(false);
-  const [notesState, setNotesState]         = useState({});
-  const [notesPopup, setNotesPopup]         = useState(null);
+  const [sessionsError, setSessionsError]     = useState(null);
+  const [sessionsLoaded, setSessionsLoaded]   = useState(false);
+  const [notesState, setNotesState]           = useState({});
+  const [notesPopup, setNotesPopup]           = useState(null);
 
   const loadSessions = () => {
     if (sessionsLoaded) return;
@@ -179,13 +170,15 @@ export default function ClientDetailPage() {
   };
 
   // ── Client notes ─────────────────────────────────────────
-  const [clientNotes, setClientNotes]             = useState([]);
-  const [notesLoading, setNotesLoading]           = useState(false);
-  const [notesError, setNotesError]               = useState(null);
-  const [notesLoaded, setNotesLoaded]             = useState(false);
-  const [newNote, setNewNote]                     = useState("");
-  const [noteSaving, setNoteSaving]               = useState(false);
-  const [noteSaveError, setNoteSaveError]         = useState(null);
+  // Backend stores ONE note per therapist-client pair (PUT /therapist/{clientId}/note).
+  // getClientNotes wraps the single returned object in an array, or returns [] on 404.
+  const [clientNotes, setClientNotes]     = useState([]);
+  const [notesLoading, setNotesLoading]   = useState(false);
+  const [notesError, setNotesError]       = useState(null);
+  const [notesLoaded, setNotesLoaded]     = useState(false);
+  const [newNote, setNewNote]             = useState("");
+  const [noteSaving, setNoteSaving]       = useState(false);
+  const [noteSaveError, setNoteSaveError] = useState(null);
 
   const loadClientNotes = () => {
     if (notesLoaded) return;
@@ -200,9 +193,15 @@ export default function ClientDetailPage() {
     if (!newNote.trim()) return;
     setNoteSaving(true); setNoteSaveError(null);
     try {
-      const saved = await createClientNote(clientId, newNote.trim());
-      setClientNotes(prev => [saved, ...prev]);
+      await upsertClientNote(clientId, newNote.trim());
       setNewNote("");
+      // Re-fetch since PUT upserts and returns void — reset load flag to force reload
+      setNotesLoaded(false);
+      setNotesLoading(true);
+      const data = await getClientNotes(clientId);
+      setClientNotes(data);
+      setNotesLoaded(true);
+      setNotesLoading(false);
     } catch (err) {
       setNoteSaveError(err.message);
     } finally {
@@ -272,7 +271,6 @@ export default function ClientDetailPage() {
               </div>
 
               <div className={styles.heroActions}>
-                {/* Status toggle */}
                 <div className={styles.statusWrapper}>
                   <button
                     className={`${styles.statusBadge} ${client.status === "ACTIVE" ? styles.statusActive : styles.statusTerminated}`}
@@ -283,7 +281,6 @@ export default function ClientDetailPage() {
                     {statusLoading ? <span className={styles.btnSpinnerSm}/> : (client.status === "ACTIVE" ? "● Active" : "● Terminated")}
                   </button>
                 </div>
-                {/* Edit button */}
                 <button className={styles.editBtn} onClick={openEdit}>✏️ Edit</button>
               </div>
             </div>
@@ -343,6 +340,9 @@ export default function ClientDetailPage() {
                   <div className={styles.sessionList}>
                     {sessions.slice().sort((a,b) => new Date(b.startTime) - new Date(a.startTime)).map(s => {
                       const ns = notesState[s.appointmentId] || {};
+                      const mode = modeMap[s.modeId];
+                      const modeIcon = MODE_TYPE_ICON[mode?.modeType] ?? "💬";
+                      const modeLabel = mode?.displayName ?? s.modeId ?? "—";
                       return (
                         <div key={s.appointmentId} className={styles.sessionCard}>
                           <div className={styles.sessionTop}>
@@ -351,7 +351,7 @@ export default function ClientDetailPage() {
                               <span className={styles.sessionTime}>{formatTime(s.startTime)} – {formatTime(s.endTime)}</span>
                             </div>
                             <div className={styles.sessionMeta}>
-                              <span className={styles.sessionType}>{SESSION_ICON[s.sessionType]} {SESSION_TYPE_LABEL[s.sessionType] ?? s.sessionType}</span>
+                              <span className={styles.sessionType}>{modeIcon} {modeLabel}</span>
                               <span className={`${styles.sessionStatus} ${s.status === "CONFIRMED" ? styles.statusConfirmed : styles.statusOther}`}>{s.status}</span>
                             </div>
                           </div>
@@ -394,7 +394,7 @@ export default function ClientDetailPage() {
                       onClick={handleAddNote}
                       disabled={noteSaving || !newNote.trim()}
                     >
-                      {noteSaving ? <span className={styles.btnSpinner}/> : "+ Add Note"}
+                      {noteSaving ? <span className={styles.btnSpinner}/> : "+ Save Note"}
                     </button>
                   </div>
                 </div>
@@ -409,7 +409,7 @@ export default function ClientDetailPage() {
                     {clientNotes.map((n, i) => (
                       <div key={n.noteId || i} className={styles.clientNoteItem}>
                         <p className={styles.clientNoteText}>{n.content}</p>
-                        <span className={styles.clientNoteTime}>{formatDateTime(n.createdAt)}</span>
+                        <span className={styles.clientNoteTime}>{formatDateTime(n.updatedAt || n.createdAt)}</span>
                       </div>
                     ))}
                   </div>

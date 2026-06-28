@@ -22,6 +22,10 @@ public class AppointmentProjection {
 
     private String clientId;
 
+    private String serviceId;
+
+    private String modeId;
+
     private LocalDateTime startTime;
 
     private LocalDateTime endTime;
@@ -32,5 +36,4 @@ public class AppointmentProjection {
 
     private LocalDateTime updatedAt;
     
-    private String modeId;
 }

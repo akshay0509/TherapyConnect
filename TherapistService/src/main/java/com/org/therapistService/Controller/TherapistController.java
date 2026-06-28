@@ -5,6 +5,8 @@ import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -20,6 +22,8 @@ import com.org.therapistService.Dto.BulkAvailabilityOverridesRequest;
 import com.org.therapistService.Dto.ClientDto;
 import com.org.therapistService.Dto.ClientNotesDto;
 import com.org.therapistService.Dto.DashboardStatsDto;
+import com.org.therapistService.Dto.EarningsSessionDto;
+import com.org.therapistService.Dto.EarningsSummaryDto;
 import com.org.therapistService.Dto.PageResponseDto;
 import com.org.therapistService.Dto.SessionDetailsDto;
 import com.org.therapistService.Dto.SessionNotesDto;
@@ -62,6 +66,43 @@ public class TherapistController {
 	public ResponseEntity<DashboardStatsDto> getDashboardStats() {
 		String therapistId = SecurityUtils.getTherapistId();
 		return ResponseEntity.ok(therapistService.getDashboardStats(therapistId));
+	}
+
+	@GetMapping("/earnings/summary")
+	public ResponseEntity<EarningsSummaryDto> getEarningsSummary() {
+		String therapistId = SecurityUtils.getTherapistId();
+		return ResponseEntity.ok(therapistService.getEarningsSummary(therapistId));
+	}
+
+	@GetMapping("/earnings/sessions")
+	public ResponseEntity<List<EarningsSessionDto>> getEarningsSessions(
+			@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
+			@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
+			@RequestParam(required = false) String serviceId,
+			@RequestParam(required = false) String modeId) {
+		if (toDate.isBefore(fromDate)) {
+			return ResponseEntity.badRequest().build();
+		}
+		String therapistId = SecurityUtils.getTherapistId();
+		return ResponseEntity.ok(therapistService.getEarningsSessions(therapistId, fromDate, toDate, serviceId, modeId));
+	}
+
+	@GetMapping("/earnings/export")
+	public ResponseEntity<byte[]> exportEarnings(
+			@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
+			@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
+			@RequestParam(required = false) String serviceId,
+			@RequestParam(required = false) String modeId) {
+		if (toDate.isBefore(fromDate)) {
+			return ResponseEntity.badRequest().build();
+		}
+		String therapistId = SecurityUtils.getTherapistId();
+		byte[] csv = therapistService.exportEarningsCsv(therapistId, fromDate, toDate, serviceId, modeId);
+		String filename = "earnings-" + fromDate + "-to-" + toDate + ".csv";
+		return ResponseEntity.ok()
+				.header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+				.contentType(MediaType.parseMediaType("text/csv"))
+				.body(csv);
 	}
 
 	//get all therapist services

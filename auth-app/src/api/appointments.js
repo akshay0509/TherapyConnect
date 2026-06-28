@@ -12,6 +12,8 @@ export async function getAvailability(fromDate, toDate) {
   }
 }
 
+// Kept for backwards compatibility — note the backend scopes this to today only.
+// Prefer getAvailability with explicit dates for any range-aware UI.
 export async function getAppointments() {
   try {
     const response = await api.get("/appointment/get-appointments");
@@ -22,9 +24,16 @@ export async function getAppointments() {
   }
 }
 
-export async function createAppointment(data) {
+// modeId is required (@NotNull on backend). sessionType is NOT sent.
+export async function createAppointment({ slotId, therapistId, clientId, clientName, modeId }) {
   try {
-    const response = await api.post("/appointment/create-appointment", data);
+    const response = await api.post("/appointment/create-appointment", {
+      slotId,
+      therapistId,
+      clientId,
+      clientName,
+      modeId,
+    });
     return response.data;
   } catch (err) {
     const message = err.response?.data?.message || err.response?.data?.error || "Failed to book appointment.";
