@@ -12,7 +12,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.org.analyticsService.Dto.AnalyticsSummaryDto;
 import com.org.analyticsService.Dto.DailySnapshotDto;
+import com.org.analyticsService.Dto.RetentionSummaryDto;
 import com.org.analyticsService.Dto.ServiceBreakdownDto;
+import com.org.analyticsService.Dto.SessionFrequencyDto;
 import com.org.analyticsService.Services.AnalyticsAggregationService;
 import com.org.analyticsService.Utility.SecurityUtils;
 
@@ -47,5 +49,17 @@ public class AnalyticsController {
 
         String therapistId = SecurityUtils.getTherapistId();
         return ResponseEntity.ok(analyticsAggregationService.getServiceBreakdown(therapistId, from, to));
+    }
+
+    @GetMapping("/retention")
+    public ResponseEntity<RetentionSummaryDto> getRetentionSummary() {
+        String therapistId = SecurityUtils.getTherapistId();
+        return ResponseEntity.ok(analyticsAggregationService.getRetentionSummary(therapistId));
+    }
+
+    @GetMapping("/retention/frequency")
+    public ResponseEntity<List<SessionFrequencyDto>> getSessionFrequency() {
+        String therapistId = SecurityUtils.getTherapistId();
+        return ResponseEntity.ok(analyticsAggregationService.getSessionFrequency(therapistId));
     }
 }

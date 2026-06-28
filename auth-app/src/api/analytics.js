@@ -29,3 +29,23 @@ export async function getAnalyticsServices(from, to) {
     throw new Error(message);
   }
 }
+
+export async function getAnalyticsRetention() {
+  try {
+    const response = await api.get("/analytics/retention");
+    return response.data;
+  } catch (err) {
+    const message = err.response?.data?.message || err.response?.data?.error || "Failed to fetch retention summary.";
+    throw new Error(message);
+  }
+}
+
+export async function getAnalyticsRetentionFrequency() {
+  try {
+    const response = await api.get("/analytics/retention/frequency");
+    return response.data;
+  } catch (err) {
+    const message = err.response?.data?.message || err.response?.data?.error || "Failed to fetch session frequency.";
+    throw new Error(message);
+  }
+}
