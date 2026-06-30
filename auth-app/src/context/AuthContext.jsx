@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useCallback, useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
-import { loginRequest } from "../api/auth";
+import { loginRequest, refreshRequest, logoutRequest } from "../api/auth";
+import { setAccessToken, clearAccessToken } from "../api/client";
 
 const AuthContext = createContext(null);
 
@@ -25,13 +25,11 @@ function getTokenExpiry(token) {
 }
 
 export function AuthProvider({ children }) {
-  const [token, setToken]   = useState(() => localStorage.getItem("jwt_token"));
-  const [user, setUser]     = useState(() => {
-    const stored = localStorage.getItem("user");
-    return stored ? JSON.parse(stored) : null;
-  });
+  // Access token lives only in memory — never in localStorage
+  const [token, setToken]   = useState(null);
+  const [user, setUser]     = useState(null);
   const [error, setError]     = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true); // true on mount while silent refresh runs
   const [showTimeoutWarning, setShowTimeoutWarning] = useState(false);
 
   const role = getRoleFromToken(token);
@@ -39,21 +37,19 @@ export function AuthProvider({ children }) {
   const warningTimerRef = useRef(null);
   const expireTimerRef  = useRef(null);
 
-  // Clear both timers
   const clearTimers = () => {
     if (warningTimerRef.current) clearTimeout(warningTimerRef.current);
     if (expireTimerRef.current)  clearTimeout(expireTimerRef.current);
   };
 
-  const logout = useCallback((expired = false) => {
+  const logout = useCallback(async (expired = false) => {
     clearTimers();
-    localStorage.removeItem("jwt_token");
-    localStorage.removeItem("user");
+    clearAccessToken();
     setToken(null);
     setUser(null);
     setShowTimeoutWarning(false);
+    await logoutRequest(); // Revoke HttpOnly cookie on the server
     if (expired) {
-      // Navigate handled by consumer — pass state via sessionStorage so LoginPage can read it
       sessionStorage.setItem("sessionExpired", "1");
     }
   }, []);
@@ -66,7 +62,7 @@ export function AuthProvider({ children }) {
     const now = Date.now();
     const msToExpiry = expiry - now;
     if (msToExpiry <= 0) { logout(true); return; }
-    const WARNING_BEFORE = 2 * 60 * 1000; // 2 min
+    const WARNING_BEFORE = 2 * 60 * 1000;
     const msToWarning = msToExpiry - WARNING_BEFORE;
 
     if (msToWarning > 0) {
@@ -80,7 +76,35 @@ export function AuthProvider({ children }) {
     }, msToExpiry);
   }, [logout]);
 
-  // Start timer when token changes
+  // Helper to apply a new access token to state + in-memory store + timers
+  const applyToken = useCallback((jwt, userData) => {
+    setAccessToken(jwt);
+    setToken(jwt);
+    setUser(userData);
+    scheduleTimeoutWarning(jwt);
+  }, [scheduleTimeoutWarning]);
+
+  // Silent refresh on mount — restores session from the HttpOnly refresh token cookie.
+  // This replaces the previous localStorage.getItem("jwt_token") initialisation.
+  useEffect(() => {
+    let cancelled = false;
+    refreshRequest()
+      .then((data) => {
+        if (cancelled) return;
+        const jwt = data.token;
+        const claims = decodeJwt(jwt);
+        applyToken(jwt, { username: claims.sub });
+      })
+      .catch(() => {
+        // No valid cookie — user needs to log in
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  // Restart timer when token changes
   useEffect(() => {
     if (token) scheduleTimeoutWarning(token);
     else clearTimers();
@@ -94,10 +118,7 @@ export function AuthProvider({ children }) {
       const jwt = data.token || data.accessToken || data.jwt;
       const claims = decodeJwt(jwt);
       const userData = data.user || { username: claims.sub || username };
-      localStorage.setItem("jwt_token", jwt);
-      localStorage.setItem("user", JSON.stringify(userData));
-      setToken(jwt);
-      setUser(userData);
+      applyToken(jwt, userData);
       sessionStorage.removeItem("sessionExpired");
       return { success: true, role: getRoleFromToken(jwt) };
     } catch (err) {
@@ -106,14 +127,25 @@ export function AuthProvider({ children }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [applyToken]);
 
-  const dismissTimeoutWarning = () => setShowTimeoutWarning(false);
+  // Called by "Stay signed in" button — performs a silent refresh before the access token expires
+  const staySignedIn = useCallback(async () => {
+    setShowTimeoutWarning(false);
+    try {
+      const data = await refreshRequest();
+      const jwt = data.token;
+      const claims = decodeJwt(jwt);
+      applyToken(jwt, { username: claims.sub });
+    } catch {
+      // Refresh token also expired — log out cleanly
+      await logout(true);
+    }
+  }, [applyToken, logout]);
 
   return (
-    <AuthContext.Provider value={{ token, user, role, login, logout, error, loading, showTimeoutWarning, dismissTimeoutWarning }}>
+    <AuthContext.Provider value={{ token, user, role, login, logout, error, loading, showTimeoutWarning, staySignedIn }}>
       {children}
-      {/* Session timeout warning modal */}
       {showTimeoutWarning && (
         <div style={{
           position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 9999,
@@ -133,11 +165,11 @@ export function AuthProvider({ children }) {
               Your session will expire in less than 2 minutes. You will be signed out automatically.
             </p>
             <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-              <button onClick={() => { logout(true); }} style={{
+              <button onClick={() => logout(true)} style={{
                 padding: "9px 18px", background: "transparent", border: "1px solid rgba(255,255,255,0.12)",
                 borderRadius: 9, color: "#64748b", fontSize: "0.875rem", cursor: "pointer",
               }}>Sign out now</button>
-              <button onClick={dismissTimeoutWarning} style={{
+              <button onClick={staySignedIn} style={{
                 padding: "9px 18px", background: "rgba(245,158,11,0.15)", border: "1px solid rgba(245,158,11,0.35)",
                 borderRadius: 9, color: "#fbbf24", fontSize: "0.875rem", fontWeight: 700, cursor: "pointer",
               }}>Stay signed in</button>

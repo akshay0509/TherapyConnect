@@ -1,7 +1,12 @@
 package com.org.gatewayService.Services;
 
+import java.time.LocalDate;
+import java.util.Optional;
+import java.util.UUID;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.org.gatewayService.Entity.RefreshTokens;
 import com.org.gatewayService.Repository.RefreshTokensRepository;
@@ -12,10 +17,34 @@ public class RefreshTokensService {
 	@Autowired
 	private RefreshTokensRepository refreshTokensRepository;
 	
-	private final long refreshTokenDurationSeconds = 7 * 24 * 60 * 60; // 7 days
+	private final long refreshTokenDurationDays = 7;
 	
-	public RefreshTokens createRefreshToken() {
-		
-		return new RefreshTokens();
+	@Transactional
+	public RefreshTokens createRefreshToken(String username, String userId, String therapistId) {
+		refreshTokensRepository.deleteByUsername(username);
+
+		RefreshTokens token = new RefreshTokens();
+		token.setId(UUID.randomUUID().toString());
+		token.setToken(UUID.randomUUID().toString());
+		token.setUsername(username);
+		token.setUserId(userId);
+		token.setTherapistId(therapistId);
+		token.setExpiryDate(LocalDate.now().plusDays(refreshTokenDurationDays));
+		token.setRevoked(false);
+
+		return refreshTokensRepository.save(token);
+	}
+
+	public Optional<RefreshTokens> findByToken(String token) {
+		return refreshTokensRepository.findByToken(token);
+	}
+
+	public boolean isExpiredOrRevoked(RefreshTokens token) {
+		return token.isRevoked() || token.getExpiryDate().isBefore(LocalDate.now());
+	}
+
+	@Transactional
+	public void revokeByUsername(String username) {
+		refreshTokensRepository.deleteByUsername(username);
 	}
 }

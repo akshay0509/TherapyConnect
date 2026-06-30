@@ -1,5 +1,7 @@
 package com.org.userService.Config;
 
+import static org.springframework.security.config.Customizer.withDefaults;
+
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -16,6 +18,10 @@ public class SecurityConfig {
 			.requestMatchers("/**/validate-user").permitAll()
 			.requestMatchers("/create-user").permitAll()
 			.requestMatchers("/forgot-password", "/reset-password").permitAll()
+				.anyRequest().authenticated()
+			)
+			.oauth2ResourceServer(oauth2 -> oauth2
+				.jwt(withDefaults())
 			);
 			
 		return http.build();

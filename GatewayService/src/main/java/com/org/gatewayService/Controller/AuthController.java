@@ -3,8 +3,15 @@ package com.org.gatewayService.Controller;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseCookie;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -14,17 +21,23 @@ import com.org.events.login.LoginFailureEvent;
 import com.org.events.login.LoginSuccessEvent;
 import com.org.gatewayService.Dto.AuthRequest;
 import com.org.gatewayService.Dto.AuthResponse;
+import com.org.gatewayService.Entity.RefreshTokens;
 import com.org.gatewayService.Messaging.LoginEventProducer;
 import com.org.gatewayService.Proxy.TherapistServiceProxy;
 import com.org.gatewayService.Proxy.UserServiceProxy;
+import com.org.gatewayService.Services.RefreshTokensService;
 import com.org.gatewayService.Utility.JwtUtil;
 
+import io.github.resilience4j.ratelimiter.annotation.RateLimiter;
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 
 @RestController
 @RequestMapping("/auth")
 public class AuthController {
-	
+
+	private static final Logger logger = LoggerFactory.getLogger(AuthController.class);
+
 	@Autowired
 	private UserServiceProxy userServiceProxy;
 	
@@ -35,14 +48,16 @@ public class AuthController {
     private JwtUtil jwtUtil;
 	
 	@Autowired
-	LoginEventProducer loginEventProducer;
+	private LoginEventProducer loginEventProducer;
+
+	@Autowired
+	private RefreshTokensService refreshTokensService;
 
 	@PostMapping("/login")
-	public Map<String, String> login(@RequestBody AuthRequest authRequest, HttpServletRequest httpRequest){
-		System.out.println("Calling user service and validating user info..");
-		System.out.println("authRequest= "+authRequest);
+	@RateLimiter(name = "loginRateLimiter", fallbackMethod = "loginRateLimitFallback")
+	public ResponseEntity<Map<String, String>> login(@RequestBody AuthRequest authRequest, HttpServletRequest httpRequest) {
 		AuthResponse authResponse = userServiceProxy.validateUser(authRequest);
-		System.out.println("authResponse= "+authResponse);
+
 		if(!authResponse.isAuthenticated()) {
 			
 			LoginFailureEvent loginFailureEvent = new LoginFailureEvent();
@@ -54,7 +69,7 @@ public class AuthController {
 			loginFailureEvent.setReason(authResponse.getFailureReason().name());
 	        
 			loginEventProducer.publishLoginFailure(loginFailureEvent);
-			return Map.of("Failure Reason", authResponse.getFailureReason().name());
+			return ResponseEntity.status(401).body(Map.of("failureReason", authResponse.getFailureReason().name()));
 		}
 		
 		LoginSuccessEvent loginSuccessEvent = new LoginSuccessEvent();
@@ -66,23 +81,80 @@ public class AuthController {
 
         loginEventProducer.publishLoginSuccess(loginSuccessEvent);
 		
-        String therapistId = null;
-        
-        try {
-        	therapistId = therapistServiceProxy.getTherapistId(authResponse.getUserId());
-        }
-        catch (Exception e) {
-        	System.out.println("No therapist profile found yet for userId=" + authResponse.getUserId());
-        }
-        
-		String token = jwtUtil.generateToken(authRequest.getUsername(),
-											List.of("read", "write"),
-											authResponse.getRoles(),
-											authResponse.getUserId(),
-											therapistId); 
-		return Map.of("token", token);
+		String therapistId = therapistServiceProxy.getTherapistId(authResponse.getUserId());
+
+		String accessToken = jwtUtil.generateToken(
+				authRequest.getUsername(),
+				List.of("read", "write"),
+				authResponse.getRoles(),
+				authResponse.getUserId(),
+				therapistId);
+
+		RefreshTokens refreshToken = refreshTokensService.createRefreshToken(
+				authRequest.getUsername(), authResponse.getUserId(), therapistId);
+
+		return ResponseEntity.ok()
+				.header(HttpHeaders.SET_COOKIE, buildRefreshCookie(refreshToken.getToken()).toString())
+				.body(Map.of("token", accessToken));
 	}
-	
+
+	public ResponseEntity<Map<String, String>> loginRateLimitFallback(
+			AuthRequest authRequest, HttpServletRequest httpRequest, Throwable t) {
+		logger.warn("Login rate limit exceeded from {}", httpRequest.getRemoteAddr());
+		return ResponseEntity.status(429).body(Map.of("error", "Too many login attempts. Please try again later."));
+	}
+
+	@PostMapping("/refresh")
+	public ResponseEntity<Map<String, String>> refresh(HttpServletRequest httpRequest) {
+		String tokenValue = extractRefreshTokenCookie(httpRequest);
+		if (tokenValue == null) {
+			return ResponseEntity.status(401).body(Map.of("error", "No refresh token"));
+		}
+
+		Optional<RefreshTokens> tokenOpt = refreshTokensService.findByToken(tokenValue);
+		if (tokenOpt.isEmpty() || refreshTokensService.isExpiredOrRevoked(tokenOpt.get())) {
+			return ResponseEntity.status(401).body(Map.of("error", "Invalid or expired refresh token"));
+		}
+
+		RefreshTokens stored = tokenOpt.get();
+
+		// Rotate: delete old token, issue new one
+		RefreshTokens newToken = refreshTokensService.createRefreshToken(
+				stored.getUsername(), stored.getUserId(), stored.getTherapistId());
+
+		String accessToken = jwtUtil.generateToken(
+				stored.getUsername(),
+				List.of("read", "write"),
+				Set.of(),  // roles not stored in refresh token row — extend schema if needed
+				stored.getUserId(),
+				stored.getTherapistId());
+
+		return ResponseEntity.ok()
+				.header(HttpHeaders.SET_COOKIE, buildRefreshCookie(newToken.getToken()).toString())
+				.body(Map.of("token", accessToken));
+	}
+
+	@PostMapping("/logout")
+	public ResponseEntity<Void> logout(HttpServletRequest httpRequest) {
+		String tokenValue = extractRefreshTokenCookie(httpRequest);
+		if (tokenValue != null) {
+			refreshTokensService.findByToken(tokenValue)
+					.ifPresent(t -> refreshTokensService.revokeByUsername(t.getUsername()));
+		}
+
+		ResponseCookie expiredCookie = ResponseCookie.from("refresh_token", "")
+				.httpOnly(true)
+				.secure(true)
+				.path("/auth/refresh")
+				.maxAge(0)
+				.sameSite("Strict")
+				.build();
+
+		return ResponseEntity.ok()
+				.header(HttpHeaders.SET_COOKIE, expiredCookie.toString())
+				.build();
+	}
+
 	@PostMapping("/forgot-password")
 	public Map<String, String> forgotPassword(@RequestBody Map<String, String> request) {
 		userServiceProxy.forgotPassword(request);
@@ -93,5 +165,25 @@ public class AuthController {
 	public Map<String, String> resetPassword(@RequestBody Map<String, String> request) {
 		userServiceProxy.resetPassword(request);
 		return Map.of("message", "Password reset successfully.");
+	}
+
+	private ResponseCookie buildRefreshCookie(String tokenValue) {
+		return ResponseCookie.from("refresh_token", tokenValue)
+				.httpOnly(true)
+				.secure(true)
+				.path("/auth/refresh")
+				.maxAge(7 * 24 * 60 * 60)
+				.sameSite("Strict")
+				.build();
+	}
+
+	private String extractRefreshTokenCookie(HttpServletRequest request) {
+		if (request.getCookies() == null) return null;
+		for (Cookie cookie : request.getCookies()) {
+			if ("refresh_token".equals(cookie.getName())) {
+				return cookie.getValue();
+			}
+		}
+		return null;
 	}
 }

@@ -490,11 +490,11 @@ public class TherapistService {
 	public void createNotes(SessionNotesDto sessionNotesDto) {
 		logger.info("inside createNotes..");
 		SessionNotes sessionNotes = therapistAssembler.assembleDtoToEntity(sessionNotesDto);
-		logger.info("therapist id :"+sessionNotes.getTherapistId());
-		logger.info("appointment id :"+sessionNotes.getAppointmentId());
+		logger.info("therapist id :{}", sessionNotes.getTherapistId());
+		logger.info("appointment id :{}", sessionNotes.getAppointmentId());
 		AppointmentProjection appointmentProjection = appointmentProjectionRepository.findByAppointmentIdAndTherapistId(sessionNotes.getAppointmentId(), sessionNotes.getTherapistId());
-		logger.info("clientId id :"+appointmentProjection.getClientId());
-		logger.info("notes :"+sessionNotes.getNoteContent());
+		logger.info("clientId id :{}", appointmentProjection.getClientId());
+		// REMOVED: logger.info("notes :" + sessionNotes.getNoteContent()) — plaintext clinical data must never appear in logs
 		sessionNotes.setClientId(appointmentProjection.getClientId());
 		sessionNotesRepository.save(sessionNotes);
 		logger.info("exiting createNotes..");
@@ -503,7 +503,11 @@ public class TherapistService {
 	public void updateNotes(SessionNotesDto sessionNotesDto) {
 
 		String appointmentId = sessionNotesDto.getAppointmentId();
-		SessionNotes sessionNotes = sessionNotesRepository.findByAppointmentId(appointmentId);
+		String therapistId = sessionNotesDto.getTherapistId();
+		SessionNotes sessionNotes = sessionNotesRepository.findByAppointmentIdAndTherapistId(appointmentId, therapistId);
+		if (sessionNotes == null) {
+			throw new IllegalArgumentException("Session notes not found or do not belong to this therapist.");
+		}
 		sessionNotes.setNoteContent(sessionNotesDto.getSessionNotes());
 		sessionNotes.setUpdatedAt(LocalDateTime.now());
 

@@ -27,13 +27,11 @@ public class RefreshTokens {
 
     @Column(nullable = false)
     private boolean revoked;
-    
-    /*
-    public RefreshTokens(String token, String username, LocalDate expiryDate) {
-        this.token = token;
-        this.username = username;
-        this.expiryDate = expiryDate;
-        this.revoked = false;
-    }
-    */
+
+    // Added: stored at login so the refresh endpoint can reissue full JWT without extra service calls
+    @Column
+    private String userId;
+
+    @Column
+    private String therapistId;
 }

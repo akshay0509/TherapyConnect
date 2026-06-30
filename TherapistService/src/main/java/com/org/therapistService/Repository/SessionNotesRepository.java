@@ -13,6 +13,9 @@ import com.org.therapistService.Entity.SessionNotes;
 public interface SessionNotesRepository extends JpaRepository<SessionNotes, String>{
 
 	SessionNotes findByAppointmentId(String appointmentId);
+
+	SessionNotes findByAppointmentIdAndTherapistId(String appointmentId, String therapistId);
+
 	List<SessionNotes> findByClientIdOrderByCreatedAtDesc(String clientId);
 	
 	@Query("""

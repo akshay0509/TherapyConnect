@@ -19,6 +19,8 @@ import com.org.userService.Dto.UserDto;
 import com.org.userService.Entity.User;
 import com.org.userService.Enum.FailureReason;
 import com.org.userService.Repository.UserRepository;
+import com.org.userService.Utility.SecurityUtils;
+import com.org.userService.Services.EmailService;
 
 @Service
 public class UserService {
@@ -29,6 +31,9 @@ public class UserService {
 	@Autowired
 	PasswordEncoder passwordEncoder;
 	
+	@Autowired
+	EmailService emailService;
+
 	private static final Logger logger = LoggerFactory.getLogger(UserService.class);
 	
 	private UserAssembler userAssembler = new UserAssembler();
@@ -79,11 +84,12 @@ public class UserService {
 			return;
 		}
 
-		user.setResetPasswordToken(UUID.randomUUID().toString());
+		String token = UUID.randomUUID().toString();
+		user.setResetPasswordToken(token);
 		user.setResetPasswordTokenExpiresAt(Instant.now().plus(30, ChronoUnit.MINUTES));
 		userRepository.save(user);
 
-		logger.info("Password reset token generated for userId={}. Email delivery integration pending.", user.getUserId());
+		emailService.sendPasswordResetEmail(email, token);
 	}
 
 	public void resetPassword(String token, String newPassword) {
@@ -99,7 +105,8 @@ public class UserService {
 	}
 
 	public UserDto updateAccount(UpdateAccountRequest request) {
-		String lookupUsername = request.getCurrentUsername() != null ? request.getCurrentUsername() : request.getUsername();
+		// Username resolved from the validated JWT — not from the request body
+		String lookupUsername = SecurityUtils.getUsername();
 		User user = userRepository.findByUsername(lookupUsername);
 		if (user == null) {
 			throw new IllegalArgumentException("User not found.");
