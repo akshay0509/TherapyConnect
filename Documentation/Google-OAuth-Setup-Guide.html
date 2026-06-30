@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Google OAuth Setup — Calendar &amp; Email</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0d1117; color: #e6edf3; padding: 40px 32px; line-height: 1.7; max-width: 900px; }
+
+  h1 { font-size: 1.6rem; font-weight: 700; color: #f0f6fc; margin-bottom: 6px; }
+  .doc-subtitle { color: #8b949e; font-size: 0.92rem; margin-bottom: 36px; }
+
+  h2 { font-size: 1.05rem; font-weight: 700; color: #f0f6fc; margin: 36px 0 16px;
+       padding: 10px 16px; background: #161b22; border-radius: 8px;
+       border-left: 4px solid #1f6feb; display: flex; align-items: center; gap: 10px; }
+  h2 .phase-num { background: #1f6feb; color: #fff; border-radius: 50%;
+       width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;
+       font-size: 0.85rem; font-weight: 700; flex-shrink: 0; }
+
+  .step { display: flex; gap: 16px; margin-bottom: 24px; }
+  .step-num { background: #21262d; border: 2px solid #30363d; color: #79c0ff;
+       border-radius: 50%; width: 32px; height: 32px; min-width: 32px;
+       display: flex; align-items: center; justify-content: center;
+       font-size: 0.85rem; font-weight: 700; margin-top: 2px; }
+  .step-body { flex: 1; }
+  .step-body strong { display: block; font-size: 0.975rem; color: #f0f6fc; margin-bottom: 6px; }
+  .step-body p, .step-body li { font-size: 0.9rem; color: #c9d1d9; }
+  .step-body ol, .step-body ul { padding-left: 20px; margin-top: 6px; }
+  .step-body li { margin-bottom: 6px; }
+
+  code { background: #161b22; border: 1px solid #30363d; border-radius: 4px;
+         padding: 1px 7px; font-size: 0.83rem; color: #79c0ff; font-family: 'Consolas', monospace; }
+  pre  { background: #161b22; border: 1px solid #30363d; border-radius: 8px;
+         padding: 14px 16px; font-size: 0.83rem; overflow-x: auto; color: #e6edf3;
+         margin: 10px 0; font-family: 'Consolas', monospace; line-height: 1.6; }
+
+  .info  { background: #1b2032; border-left: 4px solid #58a6ff; border-radius: 6px;
+           padding: 12px 16px; font-size: 0.875rem; margin: 12px 0; color: #c9d1d9; }
+  .warn  { background: #3d1f00; border-left: 4px solid #f0883e; border-radius: 6px;
+           padding: 12px 16px; font-size: 0.875rem; margin: 12px 0; color: #e6b87a; }
+  .ok    { background: #0d2016; border-left: 4px solid #3fb950; border-radius: 6px;
+           padding: 12px 16px; font-size: 0.875rem; margin: 12px 0; color: #7ee787; }
+  .tip   { background: #271d42; border-left: 4px solid #a371f7; border-radius: 6px;
+           padding: 12px 16px; font-size: 0.875rem; margin: 12px 0; color: #d2a8ff; }
+
+  .nav { background: #161b22; border: 1px solid #30363d; border-radius: 8px;
+         padding: 16px 20px; margin-bottom: 36px; }
+  .nav p { font-size: 0.8rem; color: #8b949e; margin-bottom: 8px; font-weight: 600;
+           text-transform: uppercase; letter-spacing: 0.05em; }
+  .nav ol { padding-left: 18px; }
+  .nav li { font-size: 0.875rem; color: #79c0ff; margin-bottom: 4px; }
+
+  table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.875rem; }
+  th { text-align: left; color: #8b949e; font-weight: 600; padding: 8px 12px;
+       border-bottom: 2px solid #21262d; }
+  td { padding: 10px 12px; border-bottom: 1px solid #21262d; color: #c9d1d9; vertical-align: top; }
+  td code { font-size: 0.8rem; }
+  td.new { color: #3fb950; font-weight: 600; }
+  td.update { color: #f0883e; font-weight: 600; }
+
+  .breadcrumb { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap;
+                background: #161b22; border: 1px solid #30363d; border-radius: 6px;
+                padding: 6px 12px; margin: 8px 0; font-size: 0.83rem; }
+  .breadcrumb span { color: #8b949e; }
+  .breadcrumb b { color: #e6edf3; }
+  .breadcrumb .arrow { color: #30363d; }
+
+  .img-hint { background: #161b22; border: 1px dashed #30363d; border-radius: 6px;
+              padding: 10px 14px; font-size: 0.82rem; color: #8b949e; margin: 8px 0;
+              font-style: italic; }
+
+  .result-box { background: #0d2016; border: 1px solid #238636; border-radius: 6px;
+                padding: 12px 16px; margin: 10px 0; }
+  .result-box p { font-size: 0.875rem; color: #7ee787; font-weight: 600; margin-bottom: 4px; }
+  .result-box span { font-size: 0.83rem; color: #c9d1d9; }
+
+  .scope-pill { display: inline-block; background: #1f3a5f; color: #79c0ff;
+                border-radius: 12px; padding: 3px 12px; font-size: 0.8rem;
+                font-family: 'Consolas', monospace; margin: 3px 2px; }
+
+  hr { border: none; border-top: 1px solid #21262d; margin: 32px 0; }
+  .final-table td:first-child { width: 260px; }
+</style>
+</head>
+<body>
+
+<h1>Google OAuth Setup Guide</h1>
+<p class="doc-subtitle">
+  One-time configuration to enable calendar appointment invites and password reset emails
+  using a single Google account. Estimated time: 20–30 minutes.
+</p>
+
+<div class="nav">
+  <p>Contents</p>
+  <ol>
+    <li>Create a Google Cloud Project</li>
+    <li>Enable the APIs (Calendar + Gmail)</li>
+    <li>Configure the OAuth Consent Screen</li>
+    <li>Create OAuth 2.0 Credentials</li>
+    <li>Get a Refresh Token via OAuth Playground</li>
+    <li>Set Environment Variables</li>
+  </ol>
+</div>
+
+<div class="info">
+  <strong>What you will end up with:</strong> Three values —
+  <code>GOOGLE_CLIENT_ID</code>, <code>GOOGLE_CLIENT_SECRET</code>, and <code>GOOGLE_REFRESH_TOKEN</code> —
+  plus the Gmail address you authorise. These are set as environment variables on the server and never need to be changed
+  unless you revoke access or rotate credentials intentionally.
+</div>
+
+<div class="warn">
+  <strong>Which Google account to use:</strong> Use a dedicated platform account (e.g.
+  <em>yourpractice.noreply@gmail.com</em>), not your personal account.
+  Calendar invites will be sent from this account and so will password reset emails.
+  Clients and therapists will see this address as the sender.
+</div>
+
+<hr>
+
+<!-- PHASE 1 -->
+<h2><span class="phase-num">1</span> Create a Google Cloud Project</h2>
+
+<div class="step">
+  <div class="step-num">1</div>
+  <div class="step-body">
+    <strong>Open Google Cloud Console</strong>
+    <p>Go to <code>console.cloud.google.com</code> and sign in with the Google account
+    that will send emails and calendar invites (the platform account, not your personal one).</p>
+  </div>
+</div>
+
+<div class="step">
+  <div class="step-num">2</div>
+  <div class="step-body">
+    <strong>Create a new project</strong>
+    <ol>
+      <li>Click the project selector at the very top of the page (it shows "Select a project" or an existing project name).</li>
+      <li>In the pop-up, click <strong>New Project</strong> (top right of the dialog).</li>
+      <li>Enter a project name such as <strong>Therapy Platform</strong>.</li>
+      <li>Leave Organisation as-is and click <strong>Create</strong>.</li>
+      <li>Wait a few seconds, then click the notification bell or the project selector again and select your new project.</li>
+    </ol>
+    <div class="img-hint">You should now see "Therapy Platform" in the top bar where the project selector is.</div>
+  </div>
+</div>
+
+<hr>
+
+<!-- PHASE 2 -->
+<h2><span class="phase-num">2</span> Enable the APIs</h2>
+
+<div class="step">
+  <div class="step-num">3</div>
+  <div class="step-body">
+    <strong>Enable the Google Calendar API</strong>
+    <div class="breadcrumb"><b>APIs &amp; Services</b><span class="arrow">›</span><b>Library</b></div>
+    <ol>
+      <li>In the left sidebar, click <strong>APIs &amp; Services</strong>, then <strong>Library</strong>.</li>
+      <li>Search for <strong>Google Calendar API</strong>.</li>
+      <li>Click the result and then click <strong>Enable</strong>.</li>
+    </ol>
+    <div class="ok">The button changes to "Manage" once enabled. That means it worked.</div>
+  </div>
+</div>
+
+<div class="step">
+  <div class="step-num">4</div>
+  <div class="step-body">
+    <strong>Enable the Gmail API</strong>
+    <div class="breadcrumb"><b>APIs &amp; Services</b><span class="arrow">›</span><b>Library</b></div>
+    <ol>
+      <li>Go back to <strong>Library</strong>.</li>
+      <li>Search for <strong>Gmail API</strong>.</li>
+      <li>Click the result and click <strong>Enable</strong>.</li>
+    </ol>
+    <div class="ok">Both APIs are now enabled. You can verify by going to APIs &amp; Services → Enabled APIs &amp; services and confirming both appear in the list.</div>
+  </div>
+</div>
+
+<hr>
+
+<!-- PHASE 3 -->
+<h2><span class="phase-num">3</span> Configure the OAuth Consent Screen</h2>
+
+<p style="font-size:0.9rem;color:#c9d1d9;margin-bottom:16px;">
+  This screen is what users see when they are asked to grant permission to the platform.
+  You will configure it once. Google has recently updated this UI — the steps below match the current layout.
+</p>
+
+<div class="step">
+  <div class="step-num">5</div>
+  <div class="step-body">
+    <strong>Open the OAuth Consent Screen (now called "Google Auth Platform")</strong>
+    <div class="breadcrumb"><b>APIs &amp; Services</b><span class="arrow">›</span><b>OAuth consent screen</b></div>
+    <p>In the left sidebar click <strong>APIs &amp; Services</strong>, then <strong>OAuth consent screen</strong>.
+    You will land on the Google Auth Platform page with a left-side menu showing:
+    Branding, Audience, Clients, Data access, Verification centre, Settings.</p>
+    <div class="info">If you see a "Get started" button instead of the menu, click it and complete the initial setup wizard first.</div>
+  </div>
+</div>
+
+<div class="step">
+  <div class="step-num">6</div>
+  <div class="step-body">
+    <strong>Branding — fill in app details</strong>
+    <div class="breadcrumb"><b>Branding</b></div>
+    <ol>
+      <li>App name: <strong>Therapy Platform</strong></li>
+      <li>User support email: your email address</li>
+      <li>Developer contact email: your email address</li>
+      <li>Click <strong>Save</strong>.</li>
+    </ol>
+    <p>Logo and homepage URL are optional — leave them blank for now.</p>
+  </div>
+</div>
+
+<div class="step">
+  <div class="step-num">7</div>
+  <div class="step-body">
+    <strong>Audience — set user type and add test user</strong>
+    <div class="breadcrumb"><b>Audience</b></div>
+    <ol>
+      <li>Click <strong>Audience</strong> in the left menu.</li>
+      <li>Under "User type", select <strong>External</strong> and save.</li>
+      <li>Scroll down to the <strong>Test users</strong> section.</li>
+      <li>Click <strong>Add users</strong> and add the Gmail address of the platform account
+          (the same account you are signed in with — the one that will send emails and calendar invites).</li>
+      <li>Click <strong>Save</strong>.</li>
+    </ol>
+    <div class="warn">
+      The app stays in "Testing" mode which is fine. Only accounts listed as test users can authorise the app.
+      Since only the platform account needs to authorise it, one test user is all you need.
+      You do NOT need to submit the app for Google verification.
+    </div>
+  </div>
+</div>
+
+<div class="step">
+  <div class="step-num">8</div>
+  <div class="step-body">
+    <strong>Data access — add both OAuth scopes</strong>
+    <div class="breadcrumb"><b>Data access</b></div>
+    <ol>
+      <li>Click <strong>Data access</strong> in the left menu.</li>
+      <li>Click <strong>Add or remove scopes</strong>.</li>
+      <li>In the filter/search box, search for <strong>calendar</strong> and tick:
+          <span class="scope-pill">https://www.googleapis.com/auth/calendar</span></li>
+      <li>Search for <strong>gmail</strong> and tick:
+          <span class="scope-pill">https://www.googleapis.com/auth/gmail.send</span></li>
+      <li>Click <strong>Update</strong>, then <strong>Save</strong>.</li>
+    </ol>
+    <div class="warn">
+      Make sure you add scopes under <strong>Data access</strong>, not anywhere else.
+      The redirect URI for OAuth Playground (added in the next phase) goes under <strong>Clients</strong> — these are two completely different fields.
+    </div>
+    <div class="img-hint">After saving, both scopes should appear in the "Your non-sensitive scopes" or "Your sensitive scopes" list on the Data access page.</div>
+  </div>
+</div>
+
+<hr>
+
+<!-- PHASE 4 -->
+<h2><span class="phase-num">4</span> Create OAuth 2.0 Credentials</h2>
+
+<div class="step">
+  <div class="step-num">9</div>
+  <div class="step-body">
+    <strong>Create a Web Application OAuth client</strong>
+    <div class="breadcrumb"><b>Clients</b></div>
+    <ol>
+      <li>Click <strong>Clients</strong> in the left menu.</li>
+      <li>Click <strong>Create client</strong>.</li>
+      <li>Application type: select <strong>Web application</strong>.
+          <div class="warn" style="margin-top:8px;">
+            Do <strong>not</strong> select "Desktop app". Desktop apps cannot have external redirect URIs,
+            which means you cannot use the OAuth Playground with them.
+          </div>
+      </li>
+      <li>Name: <strong>Therapy Platform Web Client</strong> (any name is fine).</li>
+      <li>Under <strong>Authorised redirect URIs</strong>, click <strong>Add URI</strong> and enter exactly:
+          <pre>https://developers.google.com/oauthplayground</pre>
+      </li>
+      <li>Click <strong>Create</strong>.</li>
+    </ol>
+  </div>
+</div>
+
+<div class="step">
+  <div class="step-num">10</div>
+  <div class="step-body">
+    <strong>Copy your Client ID and Client Secret</strong>
+    <p>After creating the client, a dialog appears showing your credentials. Copy and save both values securely — you will need them in the next phase.</p>
+    <div class="result-box">
+      <p>Values to save now:</p>
+      <span>
+        <strong>Client ID</strong> — looks like: <code>123456789-abcdefg.apps.googleusercontent.com</code><br>
+        <strong>Client Secret</strong> — looks like: <code>GOCSPX-xxxxxxxxxxxxxxxxxxxxxx</code>
+      </span>
+    </div>
+    <div class="tip">
+      You can always retrieve these later by going to Clients, clicking the client name,
+      and scrolling to the "Client secrets" section.
+    </div>
+  </div>
+</div>
+
+<hr>
+
+<!-- PHASE 5 -->
+<h2><span class="phase-num">5</span> Get a Refresh Token via OAuth Playground</h2>
+
+<p style="font-size:0.9rem;color:#c9d1d9;margin-bottom:16px;">
+  The OAuth Playground is a tool provided by Google that lets you generate OAuth tokens without writing any code.
+  You will use it once to get a <strong>refresh token</strong> — a long-lived credential the server uses to
+  send calendar invites and emails on behalf of the platform account.
+</p>
+
+<div class="step">
+  <div class="step-num">11</div>
+  <div class="step-body">
+    <strong>Open OAuth Playground in a private / incognito window</strong>
+    <p>Open a private/incognito browser window and go to:</p>
+    <pre>https://developers.google.com/oauthplayground</pre>
+    <div class="tip">
+      Using an incognito window avoids Google defaulting to the wrong signed-in account.
+      Make sure you sign in as the <strong>platform account</strong> (not your personal Gmail) when prompted.
+    </div>
+  </div>
+</div>
+
+<div class="step">
+  <div class="step-num">12</div>
+  <div class="step-body">
+    <strong>Enter your own OAuth credentials</strong>
+    <ol>
+      <li>Click the <strong>gear icon</strong> (⚙) in the top-right corner of the page.</li>
+      <li>Tick <strong>"Use your own OAuth credentials"</strong>.</li>
+      <li>Enter the <strong>Client ID</strong> and <strong>Client Secret</strong> you copied in step 10.</li>
+      <li>Close the settings panel (click elsewhere or press Escape).</li>
+    </ol>
+    <div class="img-hint">The gear panel should close and your client ID should be visible in the settings area.</div>
+  </div>
+</div>
+
+<div class="step">
+  <div class="step-num">13</div>
+  <div class="step-body">
+    <strong>Select both API scopes</strong>
+    <p>In the left panel under <strong>"Select &amp; authorize APIs"</strong>, find and tick both of the following scopes:</p>
+    <ol>
+      <li>Expand <strong>Google Calendar API v3</strong> and tick:<br>
+          <span class="scope-pill">https://www.googleapis.com/auth/calendar</span>
+      </li>
+      <li>Expand <strong>Gmail API v1</strong> and tick:<br>
+          <span class="scope-pill">https://www.googleapis.com/auth/gmail.send</span>
+      </li>
+    </ol>
+    <div class="info">
+      You can also manually type or paste the scope URLs into the input box at the bottom of the left panel,
+      separated by a space, then press Enter.
+    </div>
+    <div class="warn">
+      You must select <strong>both</strong> scopes. If you only select one, the server will be able to do
+      calendar invites or emails, but not both.
+    </div>
+  </div>
+</div>
+
+<div class="step">
+  <div class="step-num">14</div>
+  <div class="step-body">
+    <strong>Authorise the APIs</strong>
+    <ol>
+      <li>Click <strong>Authorize APIs</strong>.</li>
+      <li>A Google sign-in page opens. Sign in as the <strong>platform account</strong>
+          (the account you added as a test user in step 7).</li>
+      <li>Google will warn that the app is unverified — click <strong>Continue</strong> / <strong>Advanced</strong>
+          → <strong>Go to Therapy Platform (unsafe)</strong>. This is expected for an app in testing mode.</li>
+      <li>Google shows the consent screen listing the Calendar and Gmail permissions being requested.
+          Review them and click <strong>Allow</strong> to grant access.</li>
+    </ol>
+    <div class="img-hint">You will be redirected back to the OAuth Playground. Step 2 in the right panel ("Exchange authorization code for tokens") becomes active.</div>
+  </div>
+</div>
+
+<div class="step">
+  <div class="step-num">15</div>
+  <div class="step-body">
+    <strong>Exchange code for tokens and copy the refresh token</strong>
+    <ol>
+      <li>Click <strong>Exchange authorization code for tokens</strong>.</li>
+      <li>The response panel on the right shows a JSON response containing
+          <code>access_token</code>, <code>refresh_token</code>, and <code>expires_in</code>.</li>
+      <li>Copy the value of <code>"refresh_token"</code> — it starts with <code>1//</code> and is a long string.</li>
+    </ol>
+    <div class="result-box">
+      <p>Value to save now:</p>
+      <span><strong>Refresh Token</strong> — looks like: <code>1//04xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx</code></span>
+    </div>
+    <div class="warn">
+      <strong>Do not close this tab yet.</strong> The refresh token is only shown once in this flow.
+      If you lose it, you can repeat steps 11–15 to get a new one — it does not break anything.
+    </div>
+    <div class="info">
+      There is an "Auto-refresh the token before it expires" checkbox on the page — you can leave it in any state.
+      The server handles token refresh automatically using the refresh token; the access token shown here is not used.
+    </div>
+  </div>
+</div>
+
+<hr>
+
+<!-- PHASE 6 -->
+<h2><span class="phase-num">6</span> Set Environment Variables</h2>
+
+<p style="font-size:0.9rem;color:#c9d1d9;margin-bottom:16px;">
+  Set the following environment variables on the server where the application runs.
+  The exact method depends on your deployment (Docker Compose, system environment, secrets manager, etc.) —
+  ask your developer if unsure where to set them.
+</p>
+
+<table class="final-table">
+  <tr>
+    <th>Environment Variable</th>
+    <th>Status</th>
+    <th>Value</th>
+  </tr>
+  <tr>
+    <td><code>GOOGLE_CLIENT_ID</code></td>
+    <td class="new">New</td>
+    <td>Client ID from step 10<br><small style="color:#8b949e;">e.g. 123456789-abcdefg.apps.googleusercontent.com</small></td>
+  </tr>
+  <tr>
+    <td><code>GOOGLE_CLIENT_SECRET</code></td>
+    <td class="new">New</td>
+    <td>Client Secret from step 10<br><small style="color:#8b949e;">e.g. GOCSPX-xxxxxxxxxxxxxxxxxxxx</small></td>
+  </tr>
+  <tr>
+    <td><code>GOOGLE_REFRESH_TOKEN</code></td>
+    <td class="new">New</td>
+    <td>Refresh token from step 15<br><small style="color:#8b949e;">e.g. 1//04xxxxxxxxxxxxxxxxxxxx</small></td>
+  </tr>
+  <tr>
+    <td><code>THERAPIST_EMAIL</code></td>
+    <td class="new">New</td>
+    <td>The therapist's email address — they will receive calendar appointment invites.<br>
+        <small style="color:#8b949e;">e.g. dr.smith@example.com</small></td>
+  </tr>
+  <tr>
+    <td><code>GMAIL_FROM</code></td>
+    <td class="new">New</td>
+    <td>The platform Gmail address — this appears as the "From" address on password reset emails.<br>
+        Must be the <strong>same account</strong> you signed in as during step 14.<br>
+        <small style="color:#8b949e;">e.g. yourpractice.noreply@gmail.com</small></td>
+  </tr>
+  <tr>
+    <td><code>FRONTEND_URL</code></td>
+    <td class="new">New</td>
+    <td>The base URL of the frontend application — used in the password reset link sent to users.<br>
+        <small style="color:#8b949e;">e.g. https://yourplatform.com &nbsp; or &nbsp; http://localhost:5173 for local dev</small></td>
+  </tr>
+</table>
+
+<div class="ok" style="margin-top:20px;">
+  <strong>Once these six variables are set and both services are restarted, the setup is complete.</strong><br>
+  NotificationService will use <code>GOOGLE_CLIENT_ID</code>, <code>GOOGLE_CLIENT_SECRET</code>, <code>GOOGLE_REFRESH_TOKEN</code>, and <code>THERAPIST_EMAIL</code> for calendar invites.<br>
+  UserService will use the same three <code>GOOGLE_*</code> variables plus <code>GMAIL_FROM</code> and <code>FRONTEND_URL</code> for password reset emails.
+</div>
+
+<hr>
+
+<!-- TROUBLESHOOTING -->
+<h2><span class="phase-num" style="background:#8b949e;">?</span> Troubleshooting</h2>
+
+<div class="step">
+  <div class="step-num" style="color:#f0883e;border-color:#f0883e;">!</div>
+  <div class="step-body">
+    <strong>Error: redirect_uri_mismatch</strong>
+    <p>The redirect URI in your OAuth client does not include the OAuth Playground URL.
+    Go back to step 9, open the client you created, and confirm
+    <code>https://developers.google.com/oauthplayground</code> is listed under
+    <strong>Authorised redirect URIs</strong>. Save and retry step 11.</p>
+  </div>
+</div>
+
+<div class="step">
+  <div class="step-num" style="color:#f0883e;border-color:#f0883e;">!</div>
+  <div class="step-body">
+    <strong>Error: Access blocked — this app's request is invalid</strong>
+    <p>You may have selected "Desktop app" instead of "Web application" when creating the OAuth client.
+    Desktop apps do not support the OAuth Playground redirect URI.
+    Create a new client of type <strong>Web application</strong> (step 9) and use its credentials.</p>
+  </div>
+</div>
+
+<div class="step">
+  <div class="step-num" style="color:#f0883e;border-color:#f0883e;">!</div>
+  <div class="step-body">
+    <strong>Error: This account cannot be used — not a test user</strong>
+    <p>The Google account you signed in with during step 14 is not in the test users list.
+    Go to <strong>Audience</strong> → Test users → Add the account email → Save, then retry step 14.</p>
+  </div>
+</div>
+
+<div class="step">
+  <div class="step-num" style="color:#f0883e;border-color:#f0883e;">!</div>
+  <div class="step-body">
+    <strong>Calendar invites work but password reset emails do not (or vice versa)</strong>
+    <p>The refresh token was generated with only one scope. Repeat steps 11–15, making sure
+    <strong>both</strong> scopes are ticked before clicking "Authorize APIs". The new refresh token replaces
+    the old <code>GOOGLE_REFRESH_TOKEN</code> value.</p>
+  </div>
+</div>
+
+<div class="step">
+  <div class="step-num" style="color:#f0883e;border-color:#f0883e;">!</div>
+  <div class="step-body">
+    <strong>The refresh token stopped working after a long period</strong>
+    <p>Refresh tokens for apps in "Testing" mode expire after <strong>7 days</strong> if the app has not been
+    verified by Google. To avoid this:</p>
+    <ul>
+      <li><strong>Short term:</strong> repeat steps 11–15 to get a new refresh token whenever it expires.</li>
+      <li><strong>Long term:</strong> publish the app (submit for Google verification) to get non-expiring tokens.
+          For an internal platform this is usually not required — ask your developer.</li>
+    </ul>
+    <div class="info">
+      Apps in testing mode that are used by fewer than 100 users can remain in testing indefinitely;
+      only the refresh tokens expire every 7 days. If your developer changes the OAuth client to
+      "Internal" user type (requires a Google Workspace account), tokens do not expire.
+    </div>
+  </div>
+</div>
+
+<div class="step">
+  <div class="step-num" style="color:#f0883e;border-color:#f0883e;">!</div>
+  <div class="step-body">
+    <strong>Gmail scope does not appear in the Data access list</strong>
+    <p>Make sure the Gmail API is enabled (step 4). Google only shows scopes for APIs that are enabled.
+    Enable the Gmail API first, then go back to Data access and add the Gmail scope.</p>
+  </div>
+</div>
+
+<hr>
+
+<div class="info" style="margin-top:8px;">
+  <strong>Security note:</strong> Treat <code>GOOGLE_CLIENT_SECRET</code> and <code>GOOGLE_REFRESH_TOKEN</code>
+  as passwords. Store them in a secrets manager or encrypted environment — never commit them to source control
+  or include them in application config files that are checked into git.
+</div>
+
+</body>
+</html>

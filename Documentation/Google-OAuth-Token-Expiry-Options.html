@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Google OAuth — Fixing the 7-Day Refresh Token Expiry</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0d1117; color: #e6edf3;
+         padding: 40px 32px; line-height: 1.7; max-width: 920px; }
+
+  h1 { font-size: 1.6rem; font-weight: 700; color: #f0f6fc; margin-bottom: 6px; }
+  .doc-subtitle { color: #8b949e; font-size: 0.92rem; margin-bottom: 36px; }
+
+  h2 { font-size: 1.1rem; font-weight: 700; color: #f0f6fc; margin: 32px 0 14px;
+       padding: 12px 18px; border-radius: 8px; display: flex; align-items: center; gap: 12px; }
+  h2.opt1 { background: #0d2016; border-left: 4px solid #3fb950; }
+  h2.opt2 { background: #1b2032; border-left: 4px solid #58a6ff; }
+  h2.compare { background: #161b22; border-left: 4px solid #8b949e; }
+  h2 .badge { font-size: 0.72rem; font-weight: 700; padding: 3px 10px; border-radius: 10px;
+              text-transform: uppercase; letter-spacing: 0.05em; }
+  h2.opt1 .badge { background: #238636; color: #7ee787; }
+  h2.opt2 .badge { background: #1f3a5f; color: #79c0ff; }
+
+  h3 { font-size: 0.95rem; font-weight: 600; color: #c9d1d9; margin: 22px 0 10px; }
+
+  p { font-size: 0.9rem; color: #c9d1d9; margin-bottom: 10px; }
+  ul, ol { padding-left: 20px; font-size: 0.9rem; color: #c9d1d9; }
+  li { margin-bottom: 7px; }
+
+  code { background: #161b22; border: 1px solid #30363d; border-radius: 4px;
+         padding: 1px 7px; font-size: 0.83rem; color: #79c0ff; font-family: 'Consolas', monospace; }
+  pre  { background: #161b22; border: 1px solid #30363d; border-radius: 8px;
+         padding: 14px 16px; font-size: 0.83rem; overflow-x: auto; color: #e6edf3;
+         margin: 10px 0; font-family: 'Consolas', monospace; line-height: 1.6; }
+
+  .info  { background: #1b2032; border-left: 4px solid #58a6ff; border-radius: 6px;
+           padding: 12px 16px; font-size: 0.875rem; margin: 12px 0; color: #c9d1d9; }
+  .warn  { background: #3d1f00; border-left: 4px solid #f0883e; border-radius: 6px;
+           padding: 12px 16px; font-size: 0.875rem; margin: 12px 0; color: #e6b87a; }
+  .ok    { background: #0d2016; border-left: 4px solid #3fb950; border-radius: 6px;
+           padding: 12px 16px; font-size: 0.875rem; margin: 12px 0; color: #7ee787; }
+  .tip   { background: #271d42; border-left: 4px solid #a371f7; border-radius: 6px;
+           padding: 12px 16px; font-size: 0.875rem; margin: 12px 0; color: #d2a8ff; }
+
+  .step  { display: flex; gap: 16px; margin-bottom: 20px; }
+  .step-num { background: #21262d; border: 2px solid #30363d; color: #79c0ff;
+       border-radius: 50%; width: 32px; height: 32px; min-width: 32px;
+       display: flex; align-items: center; justify-content: center;
+       font-size: 0.85rem; font-weight: 700; margin-top: 2px; }
+  .step-num.green { border-color: #238636; color: #3fb950; background: #0d2016; }
+  .step-body { flex: 1; }
+  .step-body strong { display: block; font-size: 0.975rem; color: #f0f6fc; margin-bottom: 6px; }
+
+  .breadcrumb { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap;
+                background: #161b22; border: 1px solid #30363d; border-radius: 6px;
+                padding: 6px 12px; margin: 8px 0; font-size: 0.83rem; }
+  .breadcrumb b { color: #e6edf3; }
+  .breadcrumb .arrow { color: #30363d; }
+
+  .comparison { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0; }
+  .col { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 16px; }
+  .col h4 { font-size: 0.85rem; font-weight: 700; margin-bottom: 12px; padding-bottom: 8px;
+            border-bottom: 1px solid #21262d; }
+  .col h4.green { color: #3fb950; }
+  .col h4.blue  { color: #58a6ff; }
+  .col ul { font-size: 0.85rem; }
+  .col li { margin-bottom: 6px; color: #c9d1d9; }
+  .col li.pro  { color: #7ee787; }
+  .col li.pro::marker  { content: "✓  "; }
+  .col li.con  { color: #ffa198; }
+  .col li.con::marker  { content: "✗  "; }
+
+  table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.875rem; }
+  th { text-align: left; color: #8b949e; font-weight: 600; padding: 8px 14px;
+       border-bottom: 2px solid #21262d; }
+  td { padding: 10px 14px; border-bottom: 1px solid #21262d; color: #c9d1d9; vertical-align: top; }
+  td.yes { color: #3fb950; font-weight: 600; }
+  td.no  { color: #ffa198; font-weight: 600; }
+  td.mid { color: #f0883e; font-weight: 600; }
+  tr.rec td { background: #0d2016; }
+  tr.rec td:first-child { border-left: 3px solid #3fb950; }
+
+  hr { border: none; border-top: 1px solid #21262d; margin: 32px 0; }
+
+  .why-box { background: #161b22; border: 1px solid #30363d; border-radius: 8px;
+             padding: 20px 24px; margin: 16px 0; }
+  .why-box h4 { font-size: 0.85rem; font-weight: 700; color: #8b949e;
+                text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px; }
+  .why-box p { font-size: 0.88rem; color: #c9d1d9; margin-bottom: 0; }
+</style>
+</head>
+<body>
+
+<h1>Fixing the 7-Day Refresh Token Expiry</h1>
+<p class="doc-subtitle">
+  Two permanent options to avoid having to regenerate the Google OAuth refresh token every 7 days.
+</p>
+
+<div class="why-box">
+  <h4>Why does the token expire every 7 days?</h4>
+  <p>
+    Google limits refresh token lifetimes for applications in <strong>Testing</strong> mode that use sensitive
+    scopes (Calendar and Gmail). This is a safety measure — Google wants you to either verify your app with
+    them or confirm it is only for internal use within your own organisation.
+    Until you do one of those two things, every refresh token issued expires after 7 days,
+    after which the server will fail to send calendar invites or password reset emails until the token is replaced.
+  </p>
+</div>
+
+<hr>
+
+<!-- OPTION 1 -->
+<h2 class="opt1">Option 1 — Google Workspace <span class="badge">Recommended</span></h2>
+
+<p>
+  Google Workspace is Google's paid business suite (formerly G Suite). If your practice uses a custom domain
+  (e.g. <code>yourpractice.com</code>), you can create a Workspace account for the platform email address
+  (e.g. <code>appointments@yourpractice.com</code>). Workspace accounts can set the OAuth app to
+  <strong>Internal</strong> user type, which means the app is restricted to your own organisation and
+  Google treats it as pre-trusted — <strong>refresh tokens never expire</strong>.
+</p>
+
+<h3>What it costs</h3>
+<p>
+  Google Workspace Business Starter starts at approximately <strong>$6 USD per user per month</strong>
+  (pricing varies by region and billing cycle). You only need one account — the platform sending account.
+  You do not need Workspace accounts for your therapists or clients.
+</p>
+
+<h3>What changes</h3>
+<ul style="margin-bottom:16px;">
+  <li>The platform email becomes <code>appointments@yourpractice.com</code> instead of a Gmail address.</li>
+  <li>Calendar invites and password reset emails come from your own domain — more professional for clients.</li>
+  <li>The OAuth app user type is switched from <strong>External</strong> to <strong>Internal</strong>.</li>
+  <li>Refresh tokens issued to Internal apps never expire (unless you revoke them manually).</li>
+</ul>
+
+<h3>Step-by-step setup</h3>
+
+<div class="step">
+  <div class="step-num green">1</div>
+  <div class="step-body">
+    <strong>Sign up for Google Workspace</strong>
+    <p>Go to <code>workspace.google.com</code> and sign up. During setup you will be asked to verify
+    ownership of your domain — Google will guide you through adding a DNS TXT record with your domain registrar.
+    This typically takes 15–30 minutes.</p>
+    <p>Create a user account for the platform email address, e.g. <code>appointments@yourpractice.com</code>.</p>
+  </div>
+</div>
+
+<div class="step">
+  <div class="step-num green">2</div>
+  <div class="step-body">
+    <strong>Sign in to Google Cloud Console with the new Workspace account</strong>
+    <p>Go to <code>console.cloud.google.com</code> and sign in as <code>appointments@yourpractice.com</code>.
+    You can either create a new project here or transfer your existing project to this account.</p>
+    <div class="tip">
+      If you want to reuse your existing project, go to IAM &amp; Admin → Settings in the Cloud Console
+      and add the Workspace account as an owner, then switch to that account.
+    </div>
+  </div>
+</div>
+
+<div class="step">
+  <div class="step-num green">3</div>
+  <div class="step-body">
+    <strong>Switch the OAuth consent screen user type to Internal</strong>
+    <div class="breadcrumb"><b>APIs &amp; Services</b><span class="arrow">›</span><b>OAuth consent screen</b><span class="arrow">›</span><b>Audience</b></div>
+    <ol>
+      <li>Open <strong>OAuth consent screen</strong> → <strong>Audience</strong>.</li>
+      <li>Under User type, change <strong>External</strong> to <strong>Internal</strong>.</li>
+      <li>Save.</li>
+    </ol>
+    <div class="ok">
+      Internal apps do not require Google verification and their refresh tokens never expire.
+      The option to switch to Internal only appears when you are signed in with a Google Workspace account.
+      It is not available for personal Gmail accounts.
+    </div>
+  </div>
+</div>
+
+<div class="step">
+  <div class="step-num green">4</div>
+  <div class="step-body">
+    <strong>Regenerate the refresh token once using the new account</strong>
+    <p>Follow steps 11–15 from the main setup guide, signing in as <code>appointments@yourpractice.com</code>
+    this time. The new refresh token will not expire.</p>
+    <p>Update the <code>GOOGLE_REFRESH_TOKEN</code> and <code>GMAIL_FROM</code> environment variables
+    with the new values and restart both services.</p>
+  </div>
+</div>
+
+<div class="ok">
+  <strong>After this setup:</strong> the refresh token is permanent. No action is needed unless
+  you intentionally revoke it or rotate credentials. Calendar invites and password reset emails
+  will come from <code>appointments@yourpractice.com</code>.
+</div>
+
+<hr>
+
+<!-- OPTION 2 -->
+<h2 class="opt2">Option 2 — Google OAuth App Verification</h2>
+
+<p>
+  Google allows any app — including those using a personal Gmail account — to have non-expiring refresh tokens
+  once the app has been formally reviewed and verified by Google. This is a manual review process where
+  Google checks that your app is legitimate and handles user data responsibly.
+</p>
+
+<div class="warn">
+  <strong>This is a more involved process.</strong> Google typically takes 4–6 weeks to complete verification
+  and requires specific documentation. It is the right path only if you do not want to pay for
+  Google Workspace or already have a strong reason to keep using a personal Gmail address.
+</div>
+
+<h3>What is required before you can apply</h3>
+
+<ul style="margin-bottom:16px;">
+  <li><strong>A publicly accessible homepage</strong> for the platform — a website that describes what the app does.</li>
+  <li><strong>A Privacy Policy page</strong> on your domain that explains what data is collected and how it is used.
+      This is mandatory for any app that accesses Gmail or Calendar on behalf of users.</li>
+  <li><strong>Domain ownership verification</strong> — the homepage and privacy policy must be on a domain
+      you own, verified in Google Search Console.</li>
+  <li><strong>A clear description</strong> of why your app needs Calendar and Gmail access,
+      written for Google's review team.</li>
+  <li>For Gmail send scope: Google may also require a <strong>YouTube video</strong> demonstrating your app
+      using the Gmail permission (this is required for sensitive scopes).</li>
+</ul>
+
+<h3>Step-by-step process</h3>
+
+<div class="step">
+  <div class="step-num">1</div>
+  <div class="step-body">
+    <strong>Set up your domain and public pages</strong>
+    <p>You need a live website with at minimum:</p>
+    <ul>
+      <li>A homepage (e.g. <code>https://yourpractice.com</code>) describing the platform.</li>
+      <li>A Privacy Policy page (e.g. <code>https://yourpractice.com/privacy</code>) that mentions
+          Google Calendar and Gmail access specifically. Free privacy policy generators such as
+          Termly or PrivacyPolicies.com can help produce a compliant template.</li>
+    </ul>
+  </div>
+</div>
+
+<div class="step">
+  <div class="step-num">2</div>
+  <div class="step-body">
+    <strong>Verify domain ownership in Google Search Console</strong>
+    <ol>
+      <li>Go to <code>search.google.com/search-console</code>.</li>
+      <li>Add your domain and follow the verification steps (usually adding a TXT record to DNS).</li>
+      <li>Once verified, go back to the Cloud Console → OAuth consent screen → Branding and
+          add the verified domain under <strong>Authorised domains</strong>.</li>
+    </ol>
+  </div>
+</div>
+
+<div class="step">
+  <div class="step-num">3</div>
+  <div class="step-body">
+    <strong>Fill in all Branding fields</strong>
+    <div class="breadcrumb"><b>Branding</b></div>
+    <p>In the OAuth consent screen Branding section, complete <strong>all</strong> fields — Google requires
+    these to be filled before you can submit for verification:</p>
+    <ul>
+      <li>App name</li>
+      <li>App logo (a 120×120px image)</li>
+      <li>App homepage link</li>
+      <li>App privacy policy link</li>
+      <li>App terms of service link (optional but recommended)</li>
+      <li>Authorised domain (your verified domain from step 2)</li>
+    </ul>
+  </div>
+</div>
+
+<div class="step">
+  <div class="step-num">4</div>
+  <div class="step-body">
+    <strong>Record a demonstration video (for Gmail scope)</strong>
+    <p>Google requires a video for apps requesting sensitive scopes like <code>gmail.send</code>.
+    The video must show:</p>
+    <ul>
+      <li>A working demo of the app using the Gmail permission (e.g. sending a password reset email).</li>
+      <li>Where the app asks the user for permission (the OAuth consent screen).</li>
+      <li>How the app uses the data (what the sent email looks like).</li>
+    </ul>
+    <p>Upload the video to YouTube (unlisted is fine) and have the URL ready for the submission form.</p>
+  </div>
+</div>
+
+<div class="step">
+  <div class="step-num">5</div>
+  <div class="step-body">
+    <strong>Submit for verification</strong>
+    <div class="breadcrumb"><b>Verification centre</b></div>
+    <ol>
+      <li>In the OAuth consent screen left menu, click <strong>Verification centre</strong>.</li>
+      <li>Click <strong>Prepare for verification</strong> or <strong>Submit for verification</strong>.</li>
+      <li>Fill in the form — you will be asked to explain why each scope is needed.
+          Be specific: for Calendar, explain that you create appointment events on behalf of the platform;
+          for Gmail, explain that you send password reset emails to registered users.</li>
+      <li>Paste your YouTube demo video URL where asked.</li>
+      <li>Submit.</li>
+    </ol>
+  </div>
+</div>
+
+<div class="step">
+  <div class="step-num">6</div>
+  <div class="step-body">
+    <strong>Wait for Google's review</strong>
+    <p>Google typically takes <strong>4–6 weeks</strong> to complete the review. They may email you
+    with questions or requests for additional information. Once approved, the app status changes
+    from "Testing" to "In production" and refresh tokens no longer expire.</p>
+    <div class="info">
+      During the review period, continue regenerating the refresh token every 7 days as normal.
+      Nothing changes on the server side — only the token expiry behaviour changes after approval.
+    </div>
+  </div>
+</div>
+
+<div class="ok">
+  <strong>After verification:</strong> the app moves to "In production" status. Refresh tokens
+  issued from this point forward do not expire. You can also remove test users — any Google
+  account can now authorise the app.
+</div>
+
+<hr>
+
+<!-- COMPARISON -->
+<h2 class="compare">Side-by-side comparison</h2>
+
+<table>
+  <tr>
+    <th style="width:200px;"></th>
+    <th>Option 1 — Google Workspace</th>
+    <th>Option 2 — App Verification</th>
+  </tr>
+  <tr>
+    <td><strong>Token expiry</strong></td>
+    <td class="yes">Never expires</td>
+    <td class="yes">Never expires</td>
+  </tr>
+  <tr>
+    <td><strong>Cost</strong></td>
+    <td class="mid">~$6/month (1 Workspace seat)</td>
+    <td class="yes">Free</td>
+  </tr>
+  <tr>
+    <td><strong>Time to complete</strong></td>
+    <td class="yes">1–2 hours</td>
+    <td class="no">4–6 weeks</td>
+  </tr>
+  <tr>
+    <td><strong>Domain required</strong></td>
+    <td class="yes">Yes (for Workspace)</td>
+    <td class="yes">Yes (for privacy policy)</td>
+  </tr>
+  <tr>
+    <td><strong>Privacy policy required</strong></td>
+    <td class="yes">No</td>
+    <td class="no">Yes</td>
+  </tr>
+  <tr>
+    <td><strong>Demo video required</strong></td>
+    <td class="yes">No</td>
+    <td class="no">Yes (for Gmail scope)</td>
+  </tr>
+  <tr>
+    <td><strong>Sender email address</strong></td>
+    <td class="yes">Your own domain<br><small style="color:#8b949e;">e.g. appointments@yourpractice.com</small></td>
+    <td class="mid">Gmail address<br><small style="color:#8b949e;">e.g. yourplatform@gmail.com</small></td>
+  </tr>
+  <tr>
+    <td><strong>Google review required</strong></td>
+    <td class="yes">No</td>
+    <td class="no">Yes</td>
+  </tr>
+  <tr class="rec">
+    <td><strong>Recommended for</strong></td>
+    <td><strong>Production therapy platform</strong> — you already have (or plan to get) a domain,
+        and a professional sender email address is important for client trust.</td>
+    <td>Platforms that already have a public website with a privacy policy and do not want an ongoing subscription.</td>
+  </tr>
+</table>
+
+<hr>
+
+<div class="comparison">
+  <div class="col">
+    <h4 class="green">Option 1 pros and cons</h4>
+    <ul>
+      <li class="pro">Done in hours, not weeks</li>
+      <li class="pro">Professional sender domain</li>
+      <li class="pro">No Google review process</li>
+      <li class="pro">Includes a proper business email</li>
+      <li class="con">Ongoing cost (~$6/month)</li>
+      <li class="con">Requires a custom domain</li>
+    </ul>
+  </div>
+  <div class="col">
+    <h4 class="blue">Option 2 pros and cons</h4>
+    <ul>
+      <li class="pro">No subscription cost</li>
+      <li class="pro">Works with any Gmail address</li>
+      <li class="con">4–6 week wait for review</li>
+      <li class="con">Requires privacy policy, homepage, video</li>
+      <li class="con">Google can reject the application</li>
+      <li class="con">Sender is still a Gmail address</li>
+    </ul>
+  </div>
+</div>
+
+<hr>
+
+<div class="tip">
+  <strong>Practical recommendation:</strong> For a clinical platform handling patient appointments,
+  Option 1 is the right call. A custom domain email (<code>appointments@yourpractice.com</code>) is
+  significantly more trustworthy to patients than a Gmail address, and the $6/month cost is negligible
+  compared to the time and effort of Option 2. Most professional therapy practices already have
+  or are planning to have a domain-based email for general correspondence anyway.
+</div>
+
+</body>
+</html>
