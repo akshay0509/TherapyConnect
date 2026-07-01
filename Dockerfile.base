@@ -1,0 +1,11 @@
+FROM ubuntu:24.04
+
+RUN apt-get update && apt-get install -y wget curl && \
+    wget -q https://aka.ms/download-jdk/microsoft-jdk-25-linux-aarch64.tar.gz -O /tmp/jdk25.tar.gz && \
+    mkdir -p /opt/jdk-25 && \
+    tar -xzf /tmp/jdk25.tar.gz --strip-components=1 -C /opt/jdk-25 && \
+    rm /tmp/jdk25.tar.gz && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
+ENV JAVA_HOME=/opt/jdk-25
+ENV PATH=$JAVA_HOME/bin:$PATH

@@ -40,13 +40,13 @@ public class AuthController {
 
 	@Autowired
 	private UserServiceProxy userServiceProxy;
-	
+
 	@Autowired
 	private TherapistServiceProxy therapistServiceProxy;
-	
+
 	@Autowired
     private JwtUtil jwtUtil;
-	
+
 	@Autowired
 	private LoginEventProducer loginEventProducer;
 
@@ -59,7 +59,7 @@ public class AuthController {
 		AuthResponse authResponse = userServiceProxy.validateUser(authRequest);
 
 		if(!authResponse.isAuthenticated()) {
-			
+
 			LoginFailureEvent loginFailureEvent = new LoginFailureEvent();
 			loginFailureEvent.setUserId(authResponse.getUserId());
 			loginFailureEvent.setUsername(authRequest.getUsername());
@@ -67,11 +67,11 @@ public class AuthController {
 			loginFailureEvent.setUserAgent(httpRequest.getHeader("User-Agent"));
 			loginFailureEvent.setTimestamp(Instant.now());
 			loginFailureEvent.setReason(authResponse.getFailureReason().name());
-	        
+
 			loginEventProducer.publishLoginFailure(loginFailureEvent);
 			return ResponseEntity.status(401).body(Map.of("failureReason", authResponse.getFailureReason().name()));
 		}
-		
+
 		LoginSuccessEvent loginSuccessEvent = new LoginSuccessEvent();
 		loginSuccessEvent.setUserId(authResponse.getUserId());
 		loginSuccessEvent.setUsername(authRequest.getUsername());
@@ -80,7 +80,7 @@ public class AuthController {
 		loginSuccessEvent.setTimestamp(Instant.now());
 
         loginEventProducer.publishLoginSuccess(loginSuccessEvent);
-		
+
 		String therapistId = therapistServiceProxy.getTherapistId(authResponse.getUserId());
 
 		String accessToken = jwtUtil.generateToken(
@@ -91,7 +91,7 @@ public class AuthController {
 				therapistId);
 
 		RefreshTokens refreshToken = refreshTokensService.createRefreshToken(
-				authRequest.getUsername(), authResponse.getUserId(), therapistId);
+				authRequest.getUsername(), authResponse.getUserId(), therapistId, authResponse.getRoles());
 
 		return ResponseEntity.ok()
 				.header(HttpHeaders.SET_COOKIE, buildRefreshCookie(refreshToken.getToken()).toString())
@@ -117,15 +117,16 @@ public class AuthController {
 		}
 
 		RefreshTokens stored = tokenOpt.get();
+		Set<String> roles = refreshTokensService.getRoles(stored);
 
-		// Rotate: delete old token, issue new one
+		// Rotate: delete old token, issue new one preserving roles
 		RefreshTokens newToken = refreshTokensService.createRefreshToken(
-				stored.getUsername(), stored.getUserId(), stored.getTherapistId());
+				stored.getUsername(), stored.getUserId(), stored.getTherapistId(), roles);
 
 		String accessToken = jwtUtil.generateToken(
 				stored.getUsername(),
 				List.of("read", "write"),
-				Set.of(),  // roles not stored in refresh token row — extend schema if needed
+				roles,
 				stored.getUserId(),
 				stored.getTherapistId());
 

@@ -1,0 +1,282 @@
+version: '3.8'
+
+services:
+
+  # ── Infrastructure ────────────────────────────────────────────────────────
+
+  postgres:
+    image: postgres:16
+    container_name: tc-postgres
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - therapy-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME} -d postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  kafka:
+    image: bitnami/kafka:3.9
+    container_name: tc-kafka
+    environment:
+      KAFKA_CFG_NODE_ID: 0
+      KAFKA_CFG_PROCESS_ROLES: controller,broker
+      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 0@kafka:9093
+      KAFKA_CFG_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: "true"
+    volumes:
+      - kafka_data:/bitnami/kafka
+    networks:
+      - therapy-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/bitnami/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # ── Discovery (Eureka) ────────────────────────────────────────────────────
+
+  discovery:
+    build:
+      context: ./DiscoveryService
+      dockerfile: Dockerfile
+    container_name: tc-discovery
+    image: therapy-discovery:latest
+    ports:
+      - "8761:8761"
+    networks:
+      - therapy-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8761/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # ── API Gateway ───────────────────────────────────────────────────────────
+
+  gateway:
+    build:
+      context: ./GatewayService
+      dockerfile: Dockerfile
+    container_name: tc-gateway
+    image: therapy-gateway:latest
+    ports:
+      - "8091:8091"
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/postgres
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery:8761/eureka/
+      JWT_PUBLIC_KEY: file:/app/keys/gateway-public.pem
+      JWT_PRIVATE_KEY: file:/app/keys/gateway-private.pem
+    volumes:
+      - ./keys:/app/keys:ro
+    networks:
+      - therapy-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      discovery:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ── User Service ──────────────────────────────────────────────────────────
+
+  user:
+    build:
+      context: ./UserService
+      dockerfile: Dockerfile
+    container_name: tc-user
+    image: therapy-user:latest
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/postgres
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery:8761/eureka/
+      JWT_PUBLIC_KEY: file:/app/keys/gateway-public.pem
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      GOOGLE_REFRESH_TOKEN: ${GOOGLE_REFRESH_TOKEN}
+      GMAIL_FROM: ${GMAIL_FROM}
+      FRONTEND_URL: ${FRONTEND_URL}
+    volumes:
+      - ./keys:/app/keys:ro
+    networks:
+      - therapy-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      discovery:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ── Therapist Service ─────────────────────────────────────────────────────
+
+  therapist:
+    build:
+      context: ./TherapistService
+      dockerfile: Dockerfile
+    container_name: tc-therapist
+    image: therapy-therapist:latest
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/postgres
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery:8761/eureka/
+      JWT_PUBLIC_KEY: file:/app/keys/gateway-public.pem
+      APP_ENCRYPTION_SECRET: ${APP_ENCRYPTION_SECRET}
+    volumes:
+      - ./keys:/app/keys:ro
+    networks:
+      - therapy-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      discovery:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ── Client Service ────────────────────────────────────────────────────────
+
+  client:
+    build:
+      context: ./ClientService
+      dockerfile: Dockerfile
+    container_name: tc-client
+    image: therapy-client:latest
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/postgres
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery:8761/eureka/
+      JWT_PUBLIC_KEY: file:/app/keys/gateway-public.pem
+    volumes:
+      - ./keys:/app/keys:ro
+    networks:
+      - therapy-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      discovery:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ── Appointment Service ───────────────────────────────────────────────────
+
+  appointment:
+    build:
+      context: ./AppointmentService
+      dockerfile: Dockerfile
+    container_name: tc-appointment
+    image: therapy-appointment:latest
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/postgres
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery:8761/eureka/
+      JWT_PUBLIC_KEY: file:/app/keys/gateway-public.pem
+    volumes:
+      - ./keys:/app/keys:ro
+    networks:
+      - therapy-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      discovery:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ── Notification Service ──────────────────────────────────────────────────
+
+  notification:
+    build:
+      context: ./NotificationService
+      dockerfile: Dockerfile
+    container_name: tc-notification
+    image: therapy-notification:latest
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/postgres
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery:8761/eureka/
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      GOOGLE_REFRESH_TOKEN: ${GOOGLE_REFRESH_TOKEN}
+      THERAPIST_EMAIL: ${THERAPIST_EMAIL}
+    networks:
+      - therapy-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      discovery:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ── Analytics Service ─────────────────────────────────────────────────────
+
+  analytics:
+    build:
+      context: ./AnalyticsService
+      dockerfile: Dockerfile
+    container_name: tc-analytics
+    image: therapy-analytics:latest
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/postgres
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery:8761/eureka/
+      JWT_PUBLIC_KEY: file:/app/keys/gateway-public.pem
+    volumes:
+      - ./keys:/app/keys:ro
+    networks:
+      - therapy-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      discovery:
+        condition: service_healthy
+    restart: unless-stopped
+
+networks:
+  therapy-net:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  kafka_data:

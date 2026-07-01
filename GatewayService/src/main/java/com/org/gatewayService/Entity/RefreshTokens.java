@@ -28,10 +28,13 @@ public class RefreshTokens {
     @Column(nullable = false)
     private boolean revoked;
 
-    // Added: stored at login so the refresh endpoint can reissue full JWT without extra service calls
     @Column
     private String userId;
 
     @Column
     private String therapistId;
+
+    // Comma-separated role names stored so refresh can reissue a JWT with the same authorities
+    @Column
+    private String roles;
 }

@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TherapyConnect — Docker Deployment Guide</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; background: #0f1117; color: #e2e8f0; line-height: 1.6; }
+  .page { max-width: 960px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 2rem; color: #f8fafc; margin-bottom: 6px; }
+  .subtitle { color: #64748b; font-size: 0.95rem; margin-bottom: 40px; }
+  h2 { font-size: 1.15rem; color: #38bdf8; margin: 36px 0 12px; letter-spacing: 0.03em; }
+  h3 { font-size: 0.95rem; color: #94a3b8; margin: 20px 0 8px; text-transform: uppercase; letter-spacing: 0.06em; }
+  p { margin-bottom: 12px; color: #cbd5e1; font-size: 0.95rem; }
+  ul, ol { padding-left: 22px; margin-bottom: 12px; }
+  li { color: #cbd5e1; font-size: 0.95rem; margin-bottom: 4px; }
+  code { background: #1e2330; color: #7dd3fc; padding: 2px 6px; border-radius: 4px; font-family: 'Consolas', monospace; font-size: 0.88rem; }
+  pre { background: #1e2330; border: 1px solid #2d3748; border-radius: 8px; padding: 16px 18px; margin: 10px 0 16px; overflow-x: auto; }
+  pre code { background: none; padding: 0; color: #e2e8f0; font-size: 0.87rem; line-height: 1.7; }
+  .step { background: #161b27; border: 1px solid #1e293b; border-radius: 10px; padding: 20px 24px; margin-bottom: 24px; }
+  .step-header { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
+  .step-num { background: #0284c7; color: #fff; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.95rem; flex-shrink: 0; }
+  .step-title { font-size: 1.05rem; color: #f1f5f9; font-weight: 600; }
+  .note { background: #1a2744; border-left: 3px solid #3b82f6; padding: 12px 16px; border-radius: 4px; margin: 12px 0; font-size: 0.9rem; color: #93c5fd; }
+  .warn { background: #2d1b00; border-left: 3px solid #f59e0b; padding: 12px 16px; border-radius: 4px; margin: 12px 0; font-size: 0.9rem; color: #fbbf24; }
+  .ok { background: #0f2d1a; border-left: 3px solid #22c55e; padding: 12px 16px; border-radius: 4px; margin: 12px 0; font-size: 0.9rem; color: #86efac; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0 16px; font-size: 0.88rem; }
+  th { background: #1e2330; color: #94a3b8; text-align: left; padding: 8px 12px; border-bottom: 1px solid #2d3748; }
+  td { padding: 8px 12px; border-bottom: 1px solid #1e293b; color: #cbd5e1; }
+  td code { font-size: 0.82rem; }
+  .tag { display: inline-block; background: #0e3a52; color: #38bdf8; padding: 2px 8px; border-radius: 12px; font-size: 0.78rem; font-weight: 600; margin-left: 8px; vertical-align: middle; }
+  .section-intro { color: #94a3b8; font-size: 0.92rem; margin-bottom: 20px; border-bottom: 1px solid #1e293b; padding-bottom: 10px; }
+  hr { border: none; border-top: 1px solid #1e293b; margin: 40px 0; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <h1>TherapyConnect — Docker Deployment Guide</h1>
+  <p class="subtitle">Oracle Cloud VM.Standard.A1.Flex (ARM64) · Ubuntu 24.04 · Java 25 · Docker Compose</p>
+
+  <!-- ── Overview ─────────────────────────────────────────────────────── -->
+  <h2>Overview</h2>
+  <p class="section-intro">
+    The stack runs entirely on a single Oracle Free Tier instance via Docker Compose.
+    Nginx on the host forwards port 80 → Gateway container on 8091.
+    All service containers share a private <code>therapy-net</code> bridge network.
+  </p>
+
+  <table>
+    <tr><th>Container</th><th>Image</th><th>Port</th><th>Role</th></tr>
+    <tr><td>tc-postgres</td><td>postgres:16</td><td>internal</td><td>Shared database</td></tr>
+    <tr><td>tc-kafka</td><td>bitnami/kafka:3.9</td><td>internal</td><td>Message broker (KRaft)</td></tr>
+    <tr><td>tc-discovery</td><td>therapy-discovery</td><td>8761</td><td>Eureka server</td></tr>
+    <tr><td>tc-gateway</td><td>therapy-gateway</td><td>8091</td><td>API Gateway (Nginx target)</td></tr>
+    <tr><td>tc-user</td><td>therapy-user</td><td>5003</td><td>User service</td></tr>
+    <tr><td>tc-therapist</td><td>therapy-therapist</td><td>5002</td><td>Therapist service</td></tr>
+    <tr><td>tc-client</td><td>therapy-client</td><td>5001</td><td>Client service</td></tr>
+    <tr><td>tc-appointment</td><td>therapy-appointment</td><td>5005</td><td>Appointment service</td></tr>
+    <tr><td>tc-notification</td><td>therapy-notification</td><td>5004</td><td>Notification service</td></tr>
+    <tr><td>tc-analytics</td><td>therapy-analytics</td><td>5006</td><td>Analytics service</td></tr>
+  </table>
+
+  <hr>
+
+  <!-- ── Phase 1: Local Windows machine ─────────────────────────────── -->
+  <h2>Phase 1 — Local Windows Machine</h2>
+  <p class="section-intro">Apply all proposed changes and push to GitHub before touching the server.</p>
+
+  <div class="step">
+    <div class="step-header"><div class="step-num">1</div><div class="step-title">Apply proposed code changes to the repo</div></div>
+    <p>Copy all files from <code>D:\Claude\ProposedChanges\</code> into <code>D:\GIT\repository\</code>, preserving the folder structure. This applies the technical debt fixes (roles-on-refresh, DLQ, logging, etc.).</p>
+    <p>Files that already exist get overwritten. New files (Dockerfiles, docker-compose.yml, KafkaConsumerConfig.java) get created.</p>
+  </div>
+
+  <div class="step">
+    <div class="step-header"><div class="step-num">2</div><div class="step-title">Add a root .gitignore entry for the keys folder</div></div>
+    <p>Open <code>D:\GIT\repository\.gitignore</code> (create it if it doesn't exist) and add:</p>
+    <pre><code>keys/</code></pre>
+    <p>This prevents the PEM keys from ever being committed to GitHub.</p>
+  </div>
+
+  <div class="step">
+    <div class="step-header"><div class="step-num">3</div><div class="step-title">Push everything to GitHub</div></div>
+    <pre><code>cd D:\GIT\repository
+git add .
+git commit -m "Add Docker files and apply proposed changes"
+git push</code></pre>
+  </div>
+
+  <hr>
+
+  <!-- ── Phase 2: Oracle server ──────────────────────────────────────── -->
+  <h2>Phase 2 — Oracle Server (SSH session)</h2>
+  <p class="section-intro">Run all remaining commands as the <code>ubuntu</code> user inside <code>/home/ubuntu/TherapyConnect</code>.</p>
+
+  <div class="step">
+    <div class="step-header"><div class="step-num">4</div><div class="step-title">Pull the latest code</div></div>
+    <pre><code>cd /home/ubuntu/TherapyConnect
+git pull</code></pre>
+    <p>This brings in the Dockerfiles, docker-compose.yml, and the proposed code changes.</p>
+  </div>
+
+  <div class="step">
+    <div class="step-header"><div class="step-num">5</div><div class="step-title">Rebuild all JARs</div></div>
+    <p>Required because the ProposedChanges modified Java source files and pom.xml files.</p>
+    <pre><code>export JAVA_HOME=/opt/jdk-25
+export PATH=$JAVA_HOME/bin:$PATH
+mvn clean package -DskipTests</code></pre>
+    <p>This takes 3–5 minutes. All 8 service JARs will be in their respective <code>target/</code> directories.</p>
+  </div>
+
+  <div class="step">
+    <div class="step-header"><div class="step-num">6</div><div class="step-title">Build the JDK 25 base Docker image</div></div>
+    <p>This is a one-time step. It downloads Microsoft JDK 25 (~200 MB) and creates a local image called <code>therapy-jdk25</code>. All service images will be based on this.</p>
+    <pre><code>docker build -t therapy-jdk25 -f Dockerfile.base .</code></pre>
+    <p>Takes 3–5 minutes (downloads JDK). Subsequent rebuilds use the Docker layer cache and are instant.</p>
+  </div>
+
+  <div class="step">
+    <div class="step-header"><div class="step-num">7</div><div class="step-title">Copy the PEM keys to the server</div></div>
+    <p>Open a <strong>new terminal on your Windows machine</strong> (keep the SSH session open). Run these SCP commands, replacing <code>&lt;server-ip&gt;</code> and <code>&lt;path-to-ssh-key&gt;</code>:</p>
+    <pre><code># On Windows PowerShell
+$SERVER = "&lt;your-oracle-public-ip&gt;"
+$SSH_KEY = "C:\Users\ASUS\path-to-your-oracle-ssh-key.key"
+
+# Create the keys directory on the server first
+ssh -i $SSH_KEY ubuntu@$SERVER "mkdir -p /home/ubuntu/TherapyConnect/keys"
+
+# Copy both PEM files
+scp -i $SSH_KEY "D:\GIT\repository\GatewayService\src\main\resources\keys\gateway-private.pem" ubuntu@${SERVER}:/home/ubuntu/TherapyConnect/keys/
+scp -i $SSH_KEY "D:\GIT\repository\GatewayService\src\main\resources\keys\gateway-public.pem"  ubuntu@${SERVER}:/home/ubuntu/TherapyConnect/keys/</code></pre>
+    <div class="warn">
+      <strong>Important:</strong> Never commit PEM keys to git. They are already gitignored at the repo root after Step 2.
+    </div>
+    <p>Back in the SSH session, verify the keys arrived:</p>
+    <pre><code>ls /home/ubuntu/TherapyConnect/keys/
+# Expected: gateway-private.pem  gateway-public.pem</code></pre>
+  </div>
+
+  <div class="step">
+    <div class="step-header"><div class="step-num">8</div><div class="step-title">Create the .env file with your secrets</div></div>
+    <pre><code>cd /home/ubuntu/TherapyConnect
+cp .env.example .env
+nano .env</code></pre>
+    <p>Fill in all blank values:</p>
+    <table>
+      <tr><th>Variable</th><th>Where to get it</th></tr>
+      <tr><td><code>DB_PASSWORD</code></td><td>Choose any strong password — Postgres will be initialised with it</td></tr>
+      <tr><td><code>GOOGLE_CLIENT_ID</code></td><td>Google Cloud Console → Credentials → OAuth 2.0 Client ID</td></tr>
+      <tr><td><code>GOOGLE_CLIENT_SECRET</code></td><td>Same credential</td></tr>
+      <tr><td><code>GOOGLE_REFRESH_TOKEN</code></td><td>OAuth Playground or your existing token</td></tr>
+      <tr><td><code>THERAPIST_EMAIL</code></td><td>The therapist's Google calendar email</td></tr>
+      <tr><td><code>GMAIL_FROM</code></td><td>The Gmail address used to send emails</td></tr>
+      <tr><td><code>APP_ENCRYPTION_SECRET</code></td><td>Generate: <code>openssl rand -base64 32</code></td></tr>
+      <tr><td><code>FRONTEND_URL</code></td><td>Your Vercel app URL once deployed (or leave default for now)</td></tr>
+    </table>
+    <div class="note">
+      <code>DB_USERNAME</code> defaults to <code>postgres</code> — keep it unless you have a reason to change it.
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-header"><div class="step-num">9</div><div class="step-title">Build all service Docker images</div></div>
+    <pre><code>cd /home/ubuntu/TherapyConnect
+docker compose build</code></pre>
+    <p>This copies each pre-built JAR into its image. Fast — about 30–60 seconds total since JDK 25 is already in the base layer cache.</p>
+  </div>
+
+  <div class="step">
+    <div class="step-header"><div class="step-num">10</div><div class="step-title">Start everything</div></div>
+    <pre><code>docker compose up -d</code></pre>
+    <p>Docker Compose starts services in dependency order:</p>
+    <ol>
+      <li>Postgres and Kafka start simultaneously</li>
+      <li>Discovery (Eureka) starts once infra is healthy</li>
+      <li>All 7 business services start once Eureka is healthy</li>
+    </ol>
+    <p>First startup takes 3–4 minutes. Eureka typically takes 60 seconds to be ready.</p>
+  </div>
+
+  <hr>
+
+  <!-- ── Verification ────────────────────────────────────────────────── -->
+  <h2>Verification</h2>
+
+  <div class="step">
+    <div class="step-header"><div class="step-num">11</div><div class="step-title">Check all containers are running</div></div>
+    <pre><code>docker compose ps</code></pre>
+    <p>All 10 containers should show <code>Up</code> status. If any show <code>Restarting</code>, check its logs:</p>
+    <pre><code>docker compose logs --tail=50 gateway
+docker compose logs --tail=50 user</code></pre>
+  </div>
+
+  <div class="step">
+    <div class="step-header"><div class="step-num">12</div><div class="step-title">Check Eureka dashboard</div></div>
+    <p>In a browser, open:</p>
+    <pre><code>http://&lt;your-oracle-public-ip&gt;:8761</code></pre>
+    <div class="note">Port 8761 is exposed from the discovery container directly to the host. Make sure it's allowed in the Oracle Security List — add it the same way you added port 80 and 8091 earlier.</div>
+    <p>You should see all 7 services registered: GATEWAY-SERVICE, USER-SERVICE, THERAPIST-SERVICE, CLIENT-SERVICE, APPOINTMENT-SERVICE, NOTIFICATION-SERVICE, ANALYTICS-SERVICE.</p>
+  </div>
+
+  <div class="step">
+    <div class="step-header"><div class="step-num">13</div><div class="step-title">Test the API through Nginx</div></div>
+    <pre><code># Health check through gateway
+curl http://&lt;your-oracle-public-ip&gt;/actuator/health
+
+# Or just verify the gateway responds
+curl -I http://&lt;your-oracle-public-ip&gt;/</code></pre>
+    <div class="ok">
+      <strong>Expected:</strong> A response (even 401 Unauthorized) means the full chain is working: Browser → Nginx → Gateway container → Eureka → Target service.
+    </div>
+  </div>
+
+  <hr>
+
+  <!-- ── Common issues ───────────────────────────────────────────────── -->
+  <h2>Common Issues</h2>
+
+  <h3>Service keeps restarting</h3>
+  <pre><code>docker compose logs --tail=100 &lt;service-name&gt;</code></pre>
+  <p>Most likely causes: wrong .env value, missing key file, or Eureka not yet ready (the service will retry automatically — wait 2 minutes).</p>
+
+  <h3>Kafka health check failing</h3>
+  <p>Kafka takes 30–60 seconds to initialise. Dependent services will wait due to <code>condition: service_healthy</code>. If it stays unhealthy after 2 minutes:</p>
+  <pre><code>docker compose logs kafka</code></pre>
+
+  <h3>Services not appearing in Eureka</h3>
+  <p>Services register with Eureka 30 seconds after startup (default heartbeat). If they never appear:</p>
+  <pre><code>docker compose logs user | grep -i eureka</code></pre>
+  <p>Look for <code>Registered instance</code> or connection errors.</p>
+
+  <h3>JWT key not found error</h3>
+  <p>Verify the keys are in the right place and readable:</p>
+  <pre><code>ls -la /home/ubuntu/TherapyConnect/keys/
+# Both files must exist with read permission</code></pre>
+
+  <h3>Rebuilding after a code change</h3>
+  <pre><code># 1. Build new JARs
+mvn clean package -DskipTests
+
+# 2. Rebuild and restart only the changed service (e.g., gateway)
+docker compose build gateway
+docker compose up -d gateway</code></pre>
+
+  <hr>
+
+  <!-- ── Useful commands ────────────────────────────────────────────── -->
+  <h2>Useful Commands</h2>
+  <table>
+    <tr><th>Command</th><th>What it does</th></tr>
+    <tr><td><code>docker compose ps</code></td><td>List all containers and their status</td></tr>
+    <tr><td><code>docker compose logs -f gateway</code></td><td>Stream logs for the gateway service</td></tr>
+    <tr><td><code>docker compose stop</code></td><td>Stop all containers (data is preserved)</td></tr>
+    <tr><td><code>docker compose start</code></td><td>Start all stopped containers</td></tr>
+    <tr><td><code>docker compose down</code></td><td>Stop and remove containers (data volumes preserved)</td></tr>
+    <tr><td><code>docker compose down -v</code></td><td>Stop, remove containers AND delete all data volumes</td></tr>
+    <tr><td><code>docker compose restart gateway</code></td><td>Restart a single service</td></tr>
+    <tr><td><code>docker exec -it tc-postgres psql -U postgres</code></td><td>Open a Postgres shell</td></tr>
+  </table>
+
+</div>
+</body>
+</html>
