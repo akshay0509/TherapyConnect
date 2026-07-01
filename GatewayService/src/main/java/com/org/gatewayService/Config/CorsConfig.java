@@ -1,6 +1,8 @@
 package com.org.gatewayService.Config;
+
 import java.util.List;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.cors.CorsConfiguration;
@@ -10,19 +12,26 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 @Configuration
 public class CorsConfig {
 
-	@Bean
-	public CorsConfigurationSource corsConfigurationSource() {
+    @Value("${app.frontend-url:http://localhost:5173}")
+    private String frontendUrl;
 
-	    CorsConfiguration config = new CorsConfiguration();
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
 
-	    config.setAllowedOrigins(List.of("http://localhost:5173", "http://localhost:3000")); // frontend
-	    config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
-	    config.setAllowedHeaders(List.of("*"));
-	    config.setAllowCredentials(true);
+        CorsConfiguration config = new CorsConfiguration();
 
-	    UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-	    source.registerCorsConfiguration("/**", config);
+        config.setAllowedOriginPatterns(List.of(
+            frontendUrl,
+            "http://localhost:3000",
+            "https://*.vercel.app"
+        ));
+        config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
+        config.setAllowedHeaders(List.of("*"));
+        config.setAllowCredentials(true);
 
-	    return source;
-	}
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", config);
+
+        return source;
+    }
 }
