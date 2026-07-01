@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Business Workflows — TherapyConnect Docs</title>
+  <link rel="stylesheet" href="assets/style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script defer src="assets/script.js"></script>
+</head>
+<body>
+  <div class="layout">
+    <main class="main">
+      <article class="content">
+
+        <h1>Business Workflows</h1>
+        <p class="subtitle">End-to-end traces of the core processes, showing the synchronous calls, events, projections and side effects involved in each.</p>
+
+        <h2 id="login">1 · Login &amp; token issuance</h2>
+        <p>Validates credentials, records the attempt asynchronously, and mints a scoped JWT.</p>
+        <div class="mermaid">
+sequenceDiagram
+    autonumber
+    participant B as Browser
+    participant GW as Gateway
+    participant US as User
+    participant TS as Therapist
+    participant K as Kafka
+    B->>GW: POST /auth/login
+    GW->>US: POST /validate-user (circuit-broken)
+    US-->>GW: AuthResponse(authenticated, roles, userId)
+    alt not authenticated
+        GW->>K: publish auth-login-failure
+        GW-->>B: 401 { failureReason }
+    else authenticated
+        GW->>K: publish auth-login-success
+        GW->>TS: GET /internal/therapist/user/{userId}
+        TS-->>GW: therapistId
+        GW->>GW: sign JWT (15m) + create refresh token
+        GW-->>B: 200 { token } + refresh cookie
+    end
+    K-->>US: login event consumed → audit + lockout/reset
+        </div>
+        <p><strong>Async aftermath:</strong> the User service's consumers write <code>USER_LOGIN_AUDIT</code>, update last-login fields on success (resetting <code>failedAttempts</code>), and on failure increment the counter — <strong>locking the account at 5</strong>.</p>
+
+        <h2 id="slotgen">2 · Availability → slot generation</h2>
+        <p>The therapist defines weekly rules and date overrides, then generates concrete bookable slots. Generation is the bridge between TherapistService (owner) and AppointmentService (booking engine).</p>
+        <div class="mermaid">
+sequenceDiagram
+    autonumber
+    participant T as Therapist (UI)
+    participant TS as TherapistService
+    participant DB as TS DB
+    participant K as Kafka
+    participant AS as AppointmentService
+    T->>TS: POST /generate-slots?start&end
+    TS->>TS: reject if active appointments overlap
+    TS->>DB: delete existing slots in range
+    TS->>DB: expand active rules × services → slots<br/>(chop into service-duration blocks, 30-min step)
+    TS->>DB: apply "available" overrides
+    TS->>DB: save slots + outbox(AvailabilitySlotsGenerated)
+    Note over TS,DB: one transaction
+    K-->>AS: AvailabilitySlotsGenerated
+    AS->>AS: refuse if BOOKED slots in range<br/>else replace AVAILABLE projection rows
+        </div>
+        <div class="callout info"><p style="margin:0"><strong>Slot math:</strong> for each active service, the rule's time block is chopped into slots of the service's <code>duration</code>, advancing in fixed <strong>30-minute</strong> steps; a slot that would run past the block end is dropped. Each slot carries its <code>serviceId</code> and <code>sessionFee</code>. Overrides are single-day windows.</p></div>
+
+        <h2 id="booking">3 · Booking an appointment</h2>
+        <p>The most important transaction in the system. AppointmentService validates against its <em>local</em> availability and delivery-mode projections, then books atomically.</p>
+        <div class="mermaid">
+sequenceDiagram
+    autonumber
+    participant T as Therapist (UI)
+    participant AS as AppointmentService
+    participant DB as AS DB
+    participant K as Kafka
+    participant TS as Therapist
+    participant NS as Notification
+    participant AN as Analytics
+    T->>AS: POST /create-appointment {slotId, modeId, client}
+    AS->>DB: find slot (else SlotNotAvailable)
+    AS->>DB: check no unavailable override covers it
+    AS->>DB: find active delivery mode → price
+    AS->>DB: markSlotAsBooked(slotId) [affected rows]
+    alt rows == 0
+        AS-->>T: SlotAlreadyBooked
+    else booked
+        AS->>DB: insert appointment + outbox(AppointmentCreated)
+        AS-->>T: 200 appointmentId
+        K-->>TS: AppointmentCreated → AppointmentProjection(SCHEDULED)
+        K-->>AN: (ignored until Completed)
+    end
+        </div>
+        <p><strong>Race safety:</strong> <code>markSlotAsBooked</code> is a conditional UPDATE returning the affected-row count; a return of 0 means another booking won the slot, yielding <code>SlotAlreadyBookedException</code> instead of a double-book. Pricing comes from the delivery mode (<code>findByModeIdAndTherapistIdAndServiceIdAndIsActiveTrue</code>), not the slot.</p>
+
+        <h2 id="states">4 · Appointment state machine</h2>
+        <p>Status transitions enforced by <code>AppointmentService</code>. Manual targets are limited to CONFIRMED/COMPLETED/CANCELLED/ABANDONED; terminal states cannot change.</p>
+        <div class="mermaid">
+stateDiagram-v2
+    [*] --> SCHEDULED: AppointmentCreated
+    SCHEDULED --> CONFIRMED: confirm
+    SCHEDULED --> RESCHEDULED: reschedule
+    CONFIRMED --> RESCHEDULED: reschedule
+    RESCHEDULED --> CONFIRMED: confirm
+    CONFIRMED --> COMPLETED: complete
+    SCHEDULED --> CANCELLED: cancel (releases slot)
+    CONFIRMED --> CANCELLED: cancel (releases slot)
+    SCHEDULED --> ABANDONED: abandon
+    CONFIRMED --> ABANDONED: abandon
+    COMPLETED --> [*]
+    CANCELLED --> [*]
+    ABANDONED --> [*]
+        </div>
+        <ul>
+          <li><strong>CANCELLED</strong> releases the booked slot (<code>markSlotAsAvailable</code>); failing to release throws.</li>
+          <li><strong>RESCHEDULED</strong> books a new slot, releases the old, re-prices by mode, and emits <code>AppointmentRescheduled</code> with old/new slot + times.</li>
+          <li>Terminal states (COMPLETED/CANCELLED/ABANDONED) reject further transitions and reschedules.</li>
+        </ul>
+
+        <h2 id="calendar">5 · Calendar sync (Notification)</h2>
+        <p>Notification reacts to appointment events to manage Google Calendar invites — including a Google Meet link for online sessions.</p>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Event</th><th>Action in Google Calendar</th></tr></thead>
+          <tbody>
+            <tr><td><code>AppointmentConfirmed</code></td><td>Create event with therapist+client attendees; Meet conference if ONLINE, location if OFFLINE; store mapping (idempotent — skips if mapping exists or client email unknown).</td></tr>
+            <tr><td><code>AppointmentRescheduled</code></td><td>Update the existing event's times/mode (skips if no prior invite).</td></tr>
+            <tr><td><code>AppointmentCancelled</code></td><td>Delete the event (<code>sendUpdates=all</code>) and remove the mapping.</td></tr>
+            <tr><td><code>CalendarBlockCreated/Deleted</code></td><td>Create/delete a "blocked time" calendar event when <code>syncToGoogleCalendar</code> is true.</td></tr>
+          </tbody>
+        </table></div>
+
+        <h2 id="analytics-flow">6 · Analytics rollups</h2>
+        <p>Analytics consumes appointment events and maintains daily aggregates + retention projections. Only certain event types affect counters:</p>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Event</th><th>Effect</th></tr></thead>
+          <tbody>
+            <tr><td><code>AppointmentCompleted</code></td><td>+completed; earnings += fee (or 0 if client is DSF); paid/dsf &amp; online/offline counters; per-service rollup; bump client engagement (lastSession, totalSessions).</td></tr>
+            <tr><td><code>AppointmentCancelled</code></td><td>+cancelled on the session's day.</td></tr>
+            <tr><td><code>AppointmentAbandoned</code></td><td>+abandoned.</td></tr>
+            <tr><td><code>AppointmentRescheduled</code></td><td>+rescheduled (counted against the original date).</td></tr>
+          </tbody>
+        </table></div>
+        <p>Retention queries derive retained (&gt;1 session), churned (no session in 30 days), retention rate, average sessions/client, and a session-frequency histogram (1, 2-3, 4-6, 7-10, 10+).</p>
+
+        <h2 id="client-create">7 · Creating a client (cross-service)</h2>
+        <div class="mermaid">
+sequenceDiagram
+    autonumber
+    participant T as Therapist (UI)
+    participant TS as TherapistService
+    participant CS as ClientService
+    participant K as Kafka
+    participant NS as Notification
+    participant AN as Analytics
+    T->>TS: POST /create-client
+    TS->>CS: POST /create-client (JWT propagated)
+    CS->>CS: save Client + outbox(ClientCreated)
+    CS-->>TS: clientId
+    TS->>TS: add to THERAPIST_CLIENTS roster
+    TS-->>T: 200 clientId
+    K-->>NS: ClientCreated → ClientProjection (email)
+    K-->>AN: ClientCreated → DSF projection
+        </div>
+
+        <h2 id="password">8 · Password reset</h2>
+        <p>Gateway → User. User issues a 30-minute token and emails a link via the Gmail API; reset consumes the token. Always returns a generic response to avoid account enumeration. Email-send failures are logged (token stays valid for retry), not surfaced to the caller.</p>
+
+      </article>
+    </main>
+  </div>
+</body>
+</html>

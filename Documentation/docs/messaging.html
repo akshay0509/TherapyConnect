@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Messaging &amp; Events — TherapyConnect Docs</title>
+  <link rel="stylesheet" href="assets/style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script defer src="assets/script.js"></script>
+</head>
+<body>
+  <div class="layout">
+    <main class="main">
+      <article class="content">
+
+        <h1>Messaging &amp; Events</h1>
+        <p class="subtitle">Kafka is the primary integration fabric. This page documents the topics, event schemas, who produces and consumes each, and how the outbox publishes them.</p>
+
+        <h2 id="topics">Topics</h2>
+        <p>All topics are declared by the Gateway's <code>TopicsConfig</code> as <strong>3 partitions / 1 replica</strong> (dev settings). Messages are JSON-serialized with Spring's <code>JsonSerializer</code>; type headers are added by producers, and consumers either trust the headers or deserialize generically into a <code>JsonNode</code> and branch on an <code>eventType</code> field.</p>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Topic</th><th>Producer(s)</th><th>Consumer(s)</th><th>Carries</th></tr></thead>
+          <tbody>
+            <tr><td><code>auth-login-success</code></td><td>Gateway</td><td>User</td><td>LoginSuccessEvent</td></tr>
+            <tr><td><code>auth-login-failure</code></td><td>Gateway</td><td>User</td><td>LoginFailureEvent</td></tr>
+            <tr><td><code>client-events</code></td><td>Client</td><td>Therapist, Notification, Analytics</td><td>ClientEvent</td></tr>
+            <tr><td><code>therapist-availability-events</code></td><td>Therapist</td><td>Appointment, Notification</td><td>AvailabilityEvent, AvailabilitySlots*Event, CalendarBlockEvent, DeliveryModeEvent</td></tr>
+            <tr><td><code>therapist-appointment-events</code></td><td>Appointment</td><td>Therapist, Notification, Analytics</td><td>AppointmentEvent</td></tr>
+            <tr><td><code>email-reminder-events</code></td><td>Therapist*</td><td>(reminder pipeline)</td><td>EmailReminderEvent</td></tr>
+          </tbody>
+        </table></div>
+        <p style="font-size:13px;color:var(--text-muted)">*Topic declared and a producer exists (<code>EmailReminderProducer</code>); the consuming reminder flow is minimal in the current tree.</p>
+
+        <h2 id="flow">End-to-end event flow</h2>
+        <div class="mermaid">
+flowchart LR
+    subgraph prod[Producers]
+      GWp[Gateway]
+      CSp[Client]
+      TSp[Therapist]
+      ASp[Appointment]
+    end
+    GWp -->|login-success/failure| T1{{auth-login-*}}
+    CSp -->|outbox| T2{{client-events}}
+    TSp -->|outbox| T3{{therapist-availability-events}}
+    ASp -->|outbox| T4{{therapist-appointment-events}}
+
+    T1 --> US[User]
+    T2 --> TS[Therapist]
+    T2 --> NS[Notification]
+    T2 --> AN[Analytics]
+    T3 --> AS[Appointment]
+    T3 --> NS
+    T4 --> TS
+    T4 --> NS
+    T4 --> AN
+        </div>
+
+        <h2 id="consumer-groups">Consumer groups</h2>
+        <p>Each consuming service uses its own group id so every service gets its own copy of the stream. Notable groups:</p>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Service</th><th>Group id</th><th>Topic</th></tr></thead>
+          <tbody>
+            <tr><td>User</td><td><code>user-service-login-events</code></td><td>auth-login-*</td></tr>
+            <tr><td>Therapist</td><td><code>therapist-service-appointment-events</code></td><td>appointment + client events</td></tr>
+            <tr><td>Appointment</td><td><code>appointment-service-availability-events</code> / <code>appointment-availability-slot-projection-group</code></td><td>availability events</td></tr>
+            <tr><td>Notification</td><td><code>notification-service-events</code></td><td>appointment + availability + client</td></tr>
+            <tr><td>Analytics</td><td><code>analytics-service-events</code></td><td>appointment + client</td></tr>
+          </tbody>
+        </table></div>
+        <p>Consumers use <code>ErrorHandlingDeserializer</code> wrapping the JSON/String delegates so a poison message can't kill the listener. <code>auto-offset-reset=earliest</code> means a new consumer replays history.</p>
+
+        <h2 id="schemas">Event schemas</h2>
+        <p>All event classes live in the shared <code>com.org.events</code> library. The <code>eventType</code> string field is the discriminator consumers switch on.</p>
+
+        <details class="collapse" open><summary><code>AppointmentEvent</code> — topic <code>therapist-appointment-events</code></summary>
+          <div class="collapse-body">
+            <p>Event types: <code>AppointmentCreated</code>, <code>AppointmentConfirmed</code>, <code>AppointmentCompleted</code>, <code>AppointmentCancelled</code>, <code>AppointmentAbandoned</code>, <code>AppointmentRescheduled</code>.</p>
+            <pre><span class="pre-label">fields</span><code>eventId, eventType, appointmentId, slotId, serviceId, modeId,
+modeType, address, sessionFee, therapistId, clientId,
+startTime, endTime, bookingSource,
+oldSlotId, newSlotId, oldStartTime, oldEndTime,   // reschedule
+updatedAt, cancelledBy, reason</code></pre>
+            <p><strong>Consumed by:</strong> Therapist (builds <code>AppointmentProjection</code>), Notification (Google Calendar invite on Confirmed/Rescheduled/Cancelled), Analytics (rollups on Completed/Cancelled/Abandoned/Rescheduled).</p>
+          </div>
+        </details>
+
+        <details class="collapse"><summary><code>AvailabilityEvent</code> &amp; batch events — topic <code>therapist-availability-events</code></summary>
+          <div class="collapse-body">
+            <p>Single-slot <code>AvailabilityEvent</code> types: <code>AvailabilitySlotCreated</code>, <code>AvailabilitySlotRemoved</code> (fields: slotId, therapistId, serviceId, sessionFee, start/end, generationId). Batch variants: <code>AvailabilitySlotsGeneratedEvent</code> (range + list of <code>Slot</code>) and <code>AvailabilitySlotsDeletedEvent</code> (range). Also on this topic: <code>CalendarBlockEvent</code> (CalendarBlockCreated/Deleted, with <code>syncToGoogleCalendar</code>) and <code>DeliveryModeEvent</code>.</p>
+            <p><strong>Consumed by:</strong> Appointment (materializes/clears its slot projection; refuses to wipe BOOKED slots), Notification (Google Calendar block events).</p>
+          </div>
+        </details>
+
+        <details class="collapse"><summary><code>ClientEvent</code> — topic <code>client-events</code></summary>
+          <div class="collapse-body">
+            <p>Types: <code>ClientCreated</code>, <code>ClientUpdated</code>, <code>ClientStatusUpdated</code>. Fields: eventId, eventType, occurredAt, clientId, therapistId, email, firstName, lastName, <code>status</code> (ACTIVE/TERMINATED), <code>dsf</code>.</p>
+            <p><strong>Consumed by:</strong> Therapist (updates <code>THERAPIST_CLIENTS</code> name/status), Notification (<code>ClientProjection</code> email), Analytics (DSF projection).</p>
+          </div>
+        </details>
+
+        <details class="collapse"><summary><code>LoginSuccessEvent</code> / <code>LoginFailureEvent</code> — topics <code>auth-login-*</code></summary>
+          <div class="collapse-body">
+            <p>Carry userId, username, ipAddress, userAgent, timestamp (failure adds <code>reason</code>). <strong>Consumed by:</strong> User — writes <code>USER_LOGIN_AUDIT</code>, updates last-login fields, and increments/locks on failures (5 → locked) or resets the counter on success.</p>
+            <p>These are the only events published <em>without</em> the outbox — the gateway sends them directly via <code>KafkaTemplate</code> for low latency on the auth path.</p>
+          </div>
+        </details>
+
+        <h2 id="outbox-loop">Outbox publication loop</h2>
+        <p>For domain events (client/availability/appointment), production goes through the outbox so the event and the state change commit together. The publisher is a per-service scheduled job:</p>
+        <pre><span class="pre-label">OutboxEventScheduler</span><code>@Scheduled(fixedDelay = 2000)
+@Transactional
+public void publishPendingEvents() {
+    var events = repo.findTop100ByPublishedFalseOrderByCreatedAtAsc();
+    for (OutboxEvent e : events) {
+        try {
+            producer.sendMessage(e.getAggregateId(), e.getPayload()); // blocking .get()
+            e.setPublished(true);
+            repo.save(e);
+        } catch (Exception ex) {
+            log.error("Failed to publish {}", e.getOutboxEventId(), ex);
+            break;   // stop the batch, preserve ordering, retry next tick
+        }
+    }
+}</code></pre>
+        <p>The producer publishes the raw <code>jsonb</code> payload keyed by <code>aggregateId</code>, so all events for one therapist/appointment land on the same partition and stay ordered. The Kafka send is awaited (<code>.get()</code>) so a failure is caught and the row stays unpublished.</p>
+
+        <div class="callout warn">
+          <div class="callout-title">⚠️ Delivery semantics &amp; DLQ</div>
+          <p>Delivery is <strong>at-least-once</strong>: a crash after Kafka ack but before the <code>published=true</code> commit will republish. Consumers are written to be idempotent (existence checks before applying). A dedicated dead-letter topic/DLT is referenced in Analytics' Kafka config but a full DLQ + retry policy is not yet implemented platform-wide — see <a href="technical-debt.html">Technical Debt</a>.</p>
+        </div>
+
+        <h2 id="idempotency">Idempotency patterns in consumers</h2>
+        <ul>
+          <li><strong>Appointment availability consumer</strong> — <code>existsBySlotId</code> before insert; never deletes a <code>BOOKED</code> slot (throws <code>AvailabilityProjectionConflictException</code> on a destructive sync that would hit booked slots).</li>
+          <li><strong>Notification</strong> — checks for an existing <code>AppointmentCalendarEvent</code> mapping before creating a Google event; skips reschedule if no prior invite.</li>
+          <li><strong>Therapist appointment consumer</strong> — upserts the projection by appointmentId; warns and no-ops if a status/reschedule event arrives for an unknown appointment.</li>
+        </ul>
+
+      </article>
+    </main>
+  </div>
+</body>
+</html>

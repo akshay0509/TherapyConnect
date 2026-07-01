@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Security — TherapyConnect Docs</title>
+  <link rel="stylesheet" href="assets/style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script defer src="assets/script.js"></script>
+</head>
+<body>
+  <div class="layout">
+    <main class="main">
+      <article class="content">
+
+        <h1>Security</h1>
+        <p class="subtitle">Authentication, authorization, token lifecycle, abuse protection and data-at-rest encryption.</p>
+
+        <h2 id="model">Trust model</h2>
+        <p>The system uses <strong>asymmetric JWT</strong>. The Gateway is the sole token <em>issuer</em> and holds the RSA <strong>private key</strong>; every backend service is a stateless OAuth2 <em>resource server</em> that holds only the matching <strong>public key</strong> and verifies signatures locally. No service can mint tokens; no shared session store exists.</p>
+        <div class="mermaid">
+sequenceDiagram
+    participant B as Browser
+    participant GW as Gateway (private key)
+    participant US as User Service
+    participant TS as Therapist Service
+    B->>GW: POST /auth/login {username,password}
+    GW->>US: POST /validate-user
+    US-->>GW: AuthResponse(authenticated, roles, userId)
+    GW->>TS: GET /internal/therapist/user/{userId}
+    TS-->>GW: therapistId
+    GW->>GW: sign RS256 JWT (15 min) + create refresh token
+    GW-->>B: { token } + Set-Cookie refresh_token (httpOnly)
+    B->>GW: GET /appointment/... (Bearer token)
+    GW->>AS: forward (resource server verifies sig w/ public key)
+        </div>
+
+        <h2 id="jwt">Access tokens (JWT)</h2>
+        <p>Issued by <code>JwtUtil</code> using <code>jjwt</code>, signed <strong>RS256</strong>. TTL is <strong>15 minutes</strong>.</p>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Claim</th><th>Value</th><th>Used by</th></tr></thead>
+          <tbody>
+            <tr><td><code>iss</code></td><td><code>gateway-auth</code></td><td>—</td></tr>
+            <tr><td><code>sub</code></td><td>username</td><td><code>SecurityUtils.getUsername()</code></td></tr>
+            <tr><td><code>aud</code></td><td><code>therapist-service</code></td><td>—</td></tr>
+            <tr><td><code>scope</code></td><td><code>["read","write"]</code></td><td>—</td></tr>
+            <tr><td><code>authorities</code></td><td>roles set</td><td>(present at login; empty on refresh)</td></tr>
+            <tr><td><code>userId</code></td><td><code>USR…</code></td><td><code>SecurityUtils.getUserId()</code></td></tr>
+            <tr><td><code>therapistId</code></td><td><code>THP…</code></td><td><code>SecurityUtils.getTherapistId()</code> — drives all tenant scoping</td></tr>
+          </tbody>
+        </table></div>
+        <p>Every backend builds a <code>JwtDecoder</code> from the public key (<code>NimbusJwtDecoder.withPublicKey(...)</code>) and enables <code>oauth2ResourceServer().jwt()</code>. Controllers never trust client-supplied identity — they call <code>SecurityUtils.getTherapistId()</code> which reads the verified JWT from the security context. This is the core multi-tenant isolation mechanism.</p>
+
+        <div class="callout info">
+          <div class="callout-title">JWT propagation between services</div>
+          <p>When TherapistService calls ClientService, <code>JwtPropagationInterceptor</code> re-attaches the caller's bearer token so the downstream resource server can authenticate the same principal. There is no separate service-account credential.</p>
+        </div>
+
+        <h2 id="refresh">Refresh tokens</h2>
+        <p>Opaque UUID tokens stored in <code>REFRESH_TOKENS</code> (not JWTs), delivered as a hardened cookie and <strong>rotated on every use</strong>.</p>
+        <ul>
+          <li><strong>Cookie:</strong> <code>httpOnly</code>, <code>secure</code>, <code>SameSite=Strict</code>, path scoped to <code>/auth/refresh</code>, 7-day max-age.</li>
+          <li><strong>Rotation:</strong> <code>/auth/refresh</code> deletes the presented token and issues a new one (creating a token deletes any prior tokens for the username — single active session per user).</li>
+          <li><strong>Revocation:</strong> <code>/auth/logout</code> deletes the user's tokens and expires the cookie.</li>
+          <li><strong>Expiry check:</strong> <code>isExpiredOrRevoked</code> rejects revoked or past-<code>expiryDate</code> tokens.</li>
+        </ul>
+        <div class="callout warn"><p style="margin:0">Because roles aren't persisted on the refresh row, JWTs minted by <code>/auth/refresh</code> carry an <strong>empty authorities</strong> claim. Any future role-based authorization must account for this (extend the schema or re-fetch roles).</p></div>
+
+        <h2 id="filterchains">Public vs protected routes</h2>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Service</th><th>Public (permitAll)</th><th>Everything else</th></tr></thead>
+          <tbody>
+            <tr><td>Gateway</td><td><code>/auth/**</code>, <code>/user/create-user</code></td><td>authenticated (JWT)</td></tr>
+            <tr><td>User</td><td><code>**/validate-user</code>, <code>/create-user</code>, <code>/forgot-password</code>, <code>/reset-password</code></td><td>authenticated</td></tr>
+            <tr><td>Therapist / Client / Appointment / Analytics</td><td>—</td><td>all authenticated</td></tr>
+          </tbody>
+        </table></div>
+        <p>CSRF is disabled across services (stateless API; tokens are bearer/JWT, refresh cookie is <code>SameSite=Strict</code>). CORS is configured at the gateway (<code>CorsConfig</code>) for the SPA origin.</p>
+
+        <h2 id="abuse">Abuse &amp; failure protection</h2>
+        <div class="grid cols-2">
+          <div class="card">
+            <h4>🚦 Login rate limiting</h4>
+            <p style="font-size:13.5px;color:var(--text-muted)">Resilience4j <code>@RateLimiter("loginRateLimiter")</code>: 10 requests/min, 0s wait → fast <strong>429</strong> via <code>loginRateLimitFallback</code>.</p>
+          </div>
+          <div class="card">
+            <h4>🔒 Account lockout</h4>
+            <p style="font-size:13.5px;color:var(--text-muted)">5 failed attempts (counted by the login-failure consumer) sets <code>isAccountLocked=true</code>; a success resets the counter to 0.</p>
+          </div>
+          <div class="card">
+            <h4>⚡ Circuit breakers</h4>
+            <p style="font-size:13.5px;color:var(--text-muted)"><code>userService</code> &amp; <code>therapistService</code> breakers (50% failure over 10 calls, 30s open). On open, login fails closed with <code>SERVICE_UNAVAILABLE</code>.</p>
+          </div>
+          <div class="card">
+            <h4>🕵️ Login auditing</h4>
+            <p style="font-size:13.5px;color:var(--text-muted)">Every attempt (success/failure, IP, UA, reason) recorded in <code>USER_LOGIN_AUDIT</code>.</p>
+          </div>
+        </div>
+
+        <h2 id="enum">Account-enumeration resistance</h2>
+        <p>Forgot-password always returns a generic "if the email exists…" message, and the User service silently no-ops for unknown emails. Email-send failures are logged but not surfaced. Login failures return a coarse <code>failureReason</code> enum rather than field-specific errors.</p>
+
+        <h2 id="encryption">Encryption at rest</h2>
+        <p>Clinical <strong>session notes</strong> are encrypted at the field level before persistence:</p>
+        <pre><span class="pre-label">EncryptionService</span><code>AES/GCM/NoPadding
+IV       : 12 random bytes (SecureRandom), prepended to ciphertext
+Tag      : 128-bit
+Key      : Base64-decoded from ${app.encryption.secret}
+Storage  : Base64(IV || ciphertext) in SESSION_NOTES.noteContent (TEXT)
+Wiring   : JPA @Convert(SessionNotesEncryptor) — transparent on read/write</code></pre>
+        <p>This protects notes if the database is dumped, provided the key (an env secret) is not also compromised.</p>
+
+        <h2 id="secrets">Secrets &amp; keys</h2>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Secret</th><th>Where</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td>RSA private key</td><td>Gateway <code>classpath:keys/gateway-private.pem</code></td><td>Token signing. Keep out of VCS in prod.</td></tr>
+            <tr><td>RSA public key</td><td>All services <code>classpath:keys/gateway-public.pem</code></td><td>Token verification.</td></tr>
+            <tr><td>DB credentials</td><td><code>DB_URL/USERNAME/PASSWORD</code> env</td><td>Shared across services.</td></tr>
+            <tr><td>Notes key</td><td><code>APP_ENCRYPTION_SECRET</code> env</td><td>AES key (Base64).</td></tr>
+            <tr><td>Google OAuth</td><td><code>GOOGLE_CLIENT_ID/SECRET/REFRESH_TOKEN</code> env</td><td>Calendar + Gmail.</td></tr>
+          </tbody>
+        </table></div>
+        <div class="callout danger">
+          <div class="callout-title">Hardening checklist (pre-production)</div>
+          <p>Move the signing key to a KMS/secret manager (not the JAR classpath); narrow Kafka <code>trusted.packages</code> from <code>*</code>; restrict <code>/user/validate-user</code> to gateway-only network paths; add per-service DB credentials; consider short-lived service tokens instead of propagating the user JWT. Tracked in <a href="technical-debt.html">Technical Debt</a>.</p>
+        </div>
+
+      </article>
+    </main>
+  </div>
+</body>
+</html>

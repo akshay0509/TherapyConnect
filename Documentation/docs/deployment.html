@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Deployment — TherapyConnect Docs</title>
+  <link rel="stylesheet" href="assets/style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script defer src="assets/script.js"></script>
+</head>
+<body>
+  <div class="layout">
+    <main class="main">
+      <article class="content">
+
+        <h1>Deployment</h1>
+        <p class="subtitle">Build tooling, required infrastructure, startup ordering and how to run the platform locally.</p>
+
+        <h2 id="build">Build</h2>
+        <p>A multi-module Maven build rooted at the parent POM (<code>com.org:therapy-platform-parent:1.0.0-SNAPSHOT</code>, packaging <code>pom</code>). Modules: <code>Events</code>, <code>DiscoveryService</code>, <code>GatewayService</code>, <code>UserService</code>, <code>TherapistService</code>, <code>ClientService</code>, <code>AppointmentService</code>, <code>NotificationService</code>, <code>AnalyticsService</code>. The React <code>auth-app</code> is built separately with Vite.</p>
+        <pre><span class="pre-label">build all backend modules</span><code># from repo root (Events must install first as a dependency)
+mvn clean install
+
+# or build a single service (uses the wrapper)
+cd AppointmentService
+./mvnw clean package        # mvnw.cmd on Windows</code></pre>
+        <div class="callout info"><p style="margin:0"><strong>Build order matters:</strong> <code>Events</code> is a dependency of every service, so it must be installed to the local Maven repo before (or as part of) building the others. A root <code>mvn install</code> handles this via the reactor.</p></div>
+
+        <h2 id="infra">Required infrastructure</h2>
+        <div class="grid cols-3">
+          <div class="card"><h4>🐘 PostgreSQL</h4><p style="font-size:13.5px;color:var(--text-muted)">Reachable at <code>DB_URL</code>. Schema auto-created by Hibernate on first boot.</p></div>
+          <div class="card"><h4>🔀 Apache Kafka</h4><p style="font-size:13.5px;color:var(--text-muted)">Brokers at <code>KAFKA_BOOTSTRAP_SERVERS</code>. Topics auto-created by the gateway.</p></div>
+          <div class="card"><h4>🔎 Eureka</h4><p style="font-size:13.5px;color:var(--text-muted)">The DiscoveryService itself — start it before the others.</p></div>
+        </div>
+
+        <h2 id="order">Startup order</h2>
+        <p>Because services register with Eureka and the gateway routes via discovery, bring components up in this order:</p>
+        <div class="mermaid">
+flowchart LR
+    A["1 · PostgreSQL + Kafka"] --> B["2 · DiscoveryService :8761"]
+    B --> C["3 · Domain services<br/>User, Therapist, Client,<br/>Appointment, Notification, Analytics"]
+    C --> D["4 · GatewayService :8091<br/>(creates Kafka topics)"]
+    D --> E["5 · auth-app (Vite) :5173"]
+        </div>
+        <ol>
+          <li><strong>Infra</strong> — PostgreSQL and Kafka must be up first.</li>
+          <li><strong>Discovery</strong> — Eureka registry on 8761.</li>
+          <li><strong>Domain services</strong> — start in any order; they register with Eureka and begin consuming Kafka. (Therapist should be available for the gateway's login therapistId lookup.)</li>
+          <li><strong>Gateway</strong> — declares topics and starts routing/auth.</li>
+          <li><strong>Frontend</strong> — <code>npm run dev</code> in <code>auth-app</code>.</li>
+        </ol>
+        <div class="callout success"><p style="margin:0">The system is <strong>resilient to partial startup</strong>: circuit breakers on the gateway return <code>SERVICE_UNAVAILABLE</code> rather than hanging, and Kafka consumers with <code>auto-offset-reset=earliest</code> catch up on events emitted while they were down.</p></div>
+
+        <h2 id="run">Running a service</h2>
+        <pre><span class="pre-label">run locally</span><code># Discovery first
+cd DiscoveryService && ./mvnw spring-boot:run
+
+# then each domain service (ensure its .env is populated)
+cd UserService && ./mvnw spring-boot:run
+cd TherapistService && ./mvnw spring-boot:run
+# ... Client, Appointment, Notification, Analytics ...
+
+# gateway last
+cd GatewayService && ./mvnw spring-boot:run
+
+# frontend
+cd auth-app && npm install && npm run dev</code></pre>
+
+        <h2 id="frontend">Frontend build</h2>
+        <pre><span class="pre-label">auth-app</span><code>npm run dev       # Vite dev server on :5173
+npm run build     # production bundle to dist/
+npm run preview   # serve the built bundle</code></pre>
+        <p>Configure the API base (gateway <code>http://&lt;host&gt;:8091</code>) via the app's <code>.env</code> (see <code>.env.example</code>). The SPA calls only the gateway.</p>
+
+        <h2 id="containers">Containerization &amp; CI/CD</h2>
+        <div class="callout warn">
+          <div class="callout-title">⚠️ Not yet present</div>
+          <p>The repository currently has <strong>no Dockerfiles, Docker Compose, Kubernetes manifests or CI pipeline</strong>. Each service is a self-contained Spring Boot fat JAR (built by <code>spring-boot-maven-plugin</code>) and can be containerized with a standard JRE base image. Recommended next steps: a <code>docker-compose.yml</code> for Postgres + Kafka + Eureka + services for local parity, then per-service images and a CI build that runs <code>mvn verify</code>.</p>
+        </div>
+
+        <h2 id="prod-notes">Production considerations</h2>
+        <ul>
+          <li>Switch <code>spring.jpa.hibernate.ddl-auto</code> from <code>update</code> to <code>validate</code> and introduce versioned migrations (Flyway/Liquibase).</li>
+          <li>Externalize the RSA signing key and all secrets to a secret manager; stop shipping keys on the classpath.</li>
+          <li>Set Kafka topic replication &gt; 1 and tune partitions for throughput (currently 3/1).</li>
+          <li>Disable <code>show-sql</code> and raise log levels for production.</li>
+          <li>Add health/readiness probes (Spring Boot Actuator is not currently wired) before orchestration.</li>
+        </ul>
+
+      </article>
+    </main>
+  </div>
+</body>
+</html>

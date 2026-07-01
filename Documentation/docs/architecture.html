@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Architecture — TherapyConnect Docs</title>
+  <link rel="stylesheet" href="assets/style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script defer src="assets/script.js"></script>
+</head>
+<body>
+  <div class="layout">
+    <main class="main">
+      <article class="content">
+
+        <h1>Architecture</h1>
+        <p class="subtitle">How the services fit together, the patterns that hold them together, and how data flows through the system.</p>
+
+        <h2 id="style">Architectural style</h2>
+        <p>TherapyConnect is a <strong>domain-partitioned microservices system</strong> with <strong>event-driven choreography</strong>. There is no central orchestrator: services collaborate by publishing and consuming Kafka events, and each service owns its data. Synchronous REST is used only at the edges — the gateway calling the User and Therapist services during login, and the Therapist service calling the Client service to create a client.</p>
+        <p>Three patterns recur throughout and are worth internalizing before reading any single service:</p>
+        <div class="grid cols-3">
+          <div class="card">
+            <h4>🗃️ Transactional Outbox</h4>
+            <p style="font-size:13.5px;color:var(--text-muted)">State change and the event describing it are written in one DB transaction to an <code>OUTBOX_EVENT</code> table. A scheduler polls and publishes to Kafka, guaranteeing at-least-once delivery without dual-write loss.</p>
+          </div>
+          <div class="card">
+            <h4>📐 CQRS read-model projections</h4>
+            <p style="font-size:13.5px;color:var(--text-muted)">Services keep local read-only copies (<em>projections</em>) of data they don't own, built from events — e.g. AppointmentService projects availability slots; TherapistService projects appointments.</p>
+          </div>
+          <div class="card">
+            <h4>🔑 Stateless JWT trust</h4>
+            <p style="font-size:13.5px;color:var(--text-muted)">The gateway is the single token issuer (RS256). Every downstream service independently verifies the signature with a shared public key — no session store, no per-request auth callback.</p>
+          </div>
+        </div>
+
+        <h2 id="topology">System topology</h2>
+        <p>The browser only ever talks to the <strong>Gateway</strong> (port 8091). The gateway authenticates, then routes to backend services discovered through <strong>Eureka</strong> (port 8761). Backend services talk to PostgreSQL and exchange events through Kafka.</p>
+
+        <div class="mermaid">
+flowchart TB
+    UI["🖥️ React SPA<br/>(auth-app · Vite)"]
+    subgraph edge["Edge"]
+      GW["Gateway Service<br/>:8091<br/>routing · JWT issuer · rate limit"]
+    end
+    subgraph infra["Platform"]
+      EUR["Discovery / Eureka<br/>:8761"]
+      KAFKA[("Apache Kafka")]
+      PG[("PostgreSQL")]
+    end
+    subgraph core["Domain services"]
+      US["User Service<br/>:5003"]
+      TS["Therapist Service<br/>:5002"]
+      CS["Client Service<br/>:5001"]
+      AS["Appointment Service<br/>:5005"]
+      NS["Notification Service<br/>:5004"]
+      AN["Analytics Service<br/>:5006"]
+    end
+    GOOG["Google Calendar / Gmail"]
+
+    UI -->|HTTPS| GW
+    GW -.register/discover.-> EUR
+    US & TS & CS & AS & NS & AN -.register.-> EUR
+    GW -->|REST lb://| US
+    GW -->|REST lb://| TS
+    GW -->|route /client,/appointment,/analytics| CS & AS & AN
+    TS -->|REST lb://CLIENT-SERVICE| CS
+    US & TS & CS & AS & NS & AN --- PG
+    GW & US & TS & CS & AS & NS & AN --- KAFKA
+    NS --> GOOG
+    US --> GOOG
+        </div>
+
+        <div class="callout info">
+          <div class="callout-title">Reading the diagram</div>
+          <p>Solid arrows are synchronous REST; <code>lb://</code> means client-side load balancing via Eureka. Dotted lines are Eureka registration/discovery. The <strong>KAFKA</strong> bus connects to every service — that is where the bulk of cross-service communication actually happens (see <a href="messaging.html">Messaging</a>).</p>
+        </div>
+
+        <h2 id="layers">Layered design within a service</h2>
+        <p>Every domain service follows the same package layering. Learn it once and you can navigate all of them. Package names are PascalCase by convention in this codebase (<code>Controller</code>, <code>Services</code>, <code>Repository</code>, …).</p>
+
+        <div class="mermaid">
+flowchart LR
+    C["Controller<br/>REST endpoints"] --> S["Services<br/>business logic + @Transactional"]
+    S --> R["Repository<br/>Spring Data JPA"]
+    R --> DB[("PostgreSQL")]
+    S --> OB["OutboxService<br/>writes OUTBOX_EVENT"]
+    OB --> R
+    SCH["Scheduler<br/>@Scheduled poller"] --> R
+    SCH --> P["Producer<br/>KafkaTemplate"]
+    P --> K[("Kafka")]
+    K --> CON["Consumer<br/>@KafkaListener"]
+    CON --> S
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Layer</th><th>Package</th><th>Responsibility</th></tr></thead>
+            <tbody>
+              <tr><td>Web</td><td><code>Controller</code></td><td>HTTP mapping, request validation, resolves identity from JWT via <code>SecurityUtils</code>. Thin.</td></tr>
+              <tr><td>Domain</td><td><code>Services</code></td><td>Business rules, transactions, writes domain changes + outbox events atomically.</td></tr>
+              <tr><td>Persistence</td><td><code>Repository</code></td><td>Spring Data JPA interfaces; custom queries via derived names and <code>@Query</code>.</td></tr>
+              <tr><td>Domain types</td><td><code>Entity</code>, <code>Enums</code>, <code>Dto</code></td><td>JPA-mapped tables, value enums, request/response transfer objects.</td></tr>
+              <tr><td>Messaging</td><td><code>Messaging</code>, <code>Scheduler</code></td><td>Kafka producers/consumers; outbox polling publisher.</td></tr>
+              <tr><td>Config</td><td><code>Config</code>, <code>Utility</code></td><td>Security filter chain, JWT decoder, Kafka config; static helpers.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h2 id="outbox">The transactional outbox in detail</h2>
+        <p>This is the backbone of reliable eventing. AppointmentService, ClientService and TherapistService all implement it identically:</p>
+        <ol>
+          <li>A <code>@Transactional</code> service method mutates domain tables (e.g. marks a slot booked, inserts an appointment).</li>
+          <li>In the <em>same</em> transaction it calls <code>OutboxService.saveOutboxEvent(...)</code>, which serializes the event to a <code>jsonb</code> payload and inserts a row into <code>OUTBOX_EVENT</code> with <code>published=false</code>.</li>
+          <li>A separate <code>OutboxEventScheduler</code> runs every <strong>2 seconds</strong> (<code>@Scheduled(fixedDelay = 2000)</code>), selects up to 100 unpublished rows oldest-first, and publishes each to Kafka.</li>
+          <li>On successful publish the row is flipped to <code>published=true</code>. On failure the loop <code>break</code>s, preserving ordering and leaving the row for the next tick (at-least-once).</li>
+        </ol>
+
+        <div class="mermaid">
+sequenceDiagram
+    participant API as Controller
+    participant SVC as Service @Transactional
+    participant DB as PostgreSQL
+    participant SCH as OutboxScheduler (2s)
+    participant K as Kafka
+    API->>SVC: bookAppointment(...)
+    SVC->>DB: INSERT appointment + UPDATE slot
+    SVC->>DB: INSERT outbox_event (published=false)
+    Note over SVC,DB: single ACID transaction commits
+    SCH->>DB: SELECT top 100 WHERE published=false
+    SCH->>K: send(payload)
+    K-->>SCH: ack
+    SCH->>DB: UPDATE outbox_event SET published=true
+        </div>
+
+        <div class="callout warn">
+          <div class="callout-title">⚠️ Consumer idempotency matters</div>
+          <p>Because delivery is at-least-once, every consumer must tolerate duplicates. The codebase does this with existence checks (<code>existsBySlotId</code>, <code>findById(...).isPresent()</code>) before applying an event. The Gateway's login events bypass the outbox and publish directly — a deliberate trade-off for the auth hot path.</p>
+        </div>
+
+        <h2 id="cqrs">Read-model projections (CQRS)</h2>
+        <p>No service queries another service's database. Instead, each service materializes exactly the slice of foreign data it needs, kept current by Kafka consumers. This decouples runtime availability (a down service doesn't block reads) at the cost of eventual consistency.</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Projection (owner)</th><th>Source of truth</th><th>Built from event</th><th>Used for</th></tr></thead>
+            <tbody>
+              <tr><td><code>TherapistAvailability</code> (Appointment)</td><td>TherapistService slots</td><td><code>therapist-availability-events</code></td><td>Booking against valid, available slots.</td></tr>
+              <tr><td><code>TherapyDeliveryMode</code> (Appointment)</td><td>TherapistService modes</td><td><code>therapist-availability-events</code></td><td>Pricing &amp; mode validation at booking time.</td></tr>
+              <tr><td><code>AppointmentProjection</code> (Therapist)</td><td>AppointmentService</td><td><code>therapist-appointment-events</code></td><td>Dashboards, earnings, session history, slot-conflict checks.</td></tr>
+              <tr><td><code>TherapistClients</code> (Therapist)</td><td>ClientService</td><td><code>client-events</code></td><td>Therapist's client roster &amp; names/status.</td></tr>
+              <tr><td><code>ClientProjection</code> (Notification)</td><td>ClientService</td><td><code>client-events</code></td><td>Client email for calendar invites.</td></tr>
+              <tr><td><code>Analytics*Projection</code> (Analytics)</td><td>Appointment/Client</td><td>appointment + client events</td><td>Daily rollups, DSF/earnings, retention.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h2 id="depgraph">Dependency graph</h2>
+        <p>Synchronous (REST) vs asynchronous (Kafka) coupling. Notice that the <em>only</em> synchronous backend-to-backend dependencies are Gateway→User, Gateway→Therapist and Therapist→Client. Everything else is async — which is what keeps the system loosely coupled.</p>
+
+        <div class="mermaid">
+flowchart LR
+    classDef sync stroke:#dc2626,stroke-width:2px;
+    GW[Gateway] -->|REST| US[User]
+    GW -->|REST| TS[Therapist]
+    TS -->|REST| CS[Client]
+    CS -. client-events .-> TS
+    CS -. client-events .-> NS[Notification]
+    CS -. client-events .-> AN[Analytics]
+    TS -. availability-events .-> AS[Appointment]
+    AS -. appointment-events .-> TS
+    AS -. appointment-events .-> NS
+    AS -. appointment-events .-> AN
+    GW -. login-events .-> US
+    linkStyle 0,1,2 stroke:#dc2626,stroke-width:2px;
+        </div>
+
+        <h2 id="shared">Shared <code>events</code> library</h2>
+        <p>The <code>Events</code> Maven module (<code>com.org:events</code>) is a dependency of every service and contains <em>only</em> the event POJOs and their enums (<code>AppointmentEvent</code>, <code>ClientEvent</code>, <code>AvailabilityEvent</code>, <code>LoginSuccessEvent</code>, status enums, …). This gives producers and consumers a single shared contract and is the one piece of code intentionally coupled across the whole system. Changing a class here ripples to every service — treat it as a versioned API.</p>
+
+        <div class="callout danger">
+          <div class="callout-title">Architectural risk to know</div>
+          <p>All services share one set of datasource credentials (<code>DB_URL</code>/<code>DB_USERNAME</code>/<code>DB_PASSWORD</code> env vars). "Database per service" is logical, not physical — there is no enforced isolation preventing one service from reading another's tables. See <a href="technical-debt.html">Technical Debt</a>.</p>
+        </div>
+
+      </article>
+    </main>
+  </div>
+</body>
+</html>

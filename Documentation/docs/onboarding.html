@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Onboarding — TherapyConnect Docs</title>
+  <link rel="stylesheet" href="assets/style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script defer src="assets/script.js"></script>
+</head>
+<body>
+  <div class="layout">
+    <main class="main">
+      <article class="content">
+
+        <h1>Onboarding</h1>
+        <p class="subtitle">A guided path for a new engineer: get it running, learn the conventions, and make a safe first change.</p>
+
+        <h2 id="mental-model">Build the mental model first</h2>
+        <p>Before touching code, internalize three things from the <a href="architecture.html">Architecture</a> page:</p>
+        <ol>
+          <li><strong>The gateway is the only door.</strong> The SPA never calls a backend service directly. Auth happens once, at the gateway, and produces a JWT carrying <code>therapistId</code>.</li>
+          <li><strong>Services own their data and talk via Kafka.</strong> If service A needs B's data, it keeps a <em>projection</em> updated from B's events — it doesn't query B's tables.</li>
+          <li><strong>Writes use the outbox.</strong> A domain change and its event commit together; a 2-second scheduler publishes them.</li>
+        </ol>
+
+        <h2 id="setup">Local setup</h2>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Need</th><th>Why</th></tr></thead>
+          <tbody>
+            <tr><td>JDK 25</td><td><code>java.version=25</code> in the parent POM.</td></tr>
+            <tr><td>Maven (or the bundled <code>mvnw</code>)</td><td>Multi-module reactor build.</td></tr>
+            <tr><td>PostgreSQL</td><td>All persistence; schema auto-created.</td></tr>
+            <tr><td>Apache Kafka</td><td>Inter-service events.</td></tr>
+            <tr><td>Node 18+ / npm</td><td>Frontend (<code>auth-app</code>, Vite).</td></tr>
+            <tr><td>Google Cloud OAuth creds</td><td>Only if exercising Calendar/email flows.</td></tr>
+          </tbody>
+        </table></div>
+        <ol>
+          <li>Start PostgreSQL and Kafka.</li>
+          <li>Populate each service's <code>.env</code> (<code>DB_URL</code>, <code>DB_USERNAME</code>, <code>DB_PASSWORD</code>, <code>KAFKA_BOOTSTRAP_SERVERS</code>, plus <code>APP_ENCRYPTION_SECRET</code> for Therapist and Google vars for Notification/User). Generate an RSA key pair into each service's <code>resources/keys/</code> (private only in the gateway).</li>
+          <li><code>mvn clean install</code> at the root (installs <code>Events</code> first).</li>
+          <li>Run in order: Discovery → domain services → Gateway → frontend (see <a href="deployment.html">Deployment</a>).</li>
+          <li>Create a user via <code>POST /user/create-user</code>, then log in at <code>POST /auth/login</code>.</li>
+        </ol>
+        <div class="callout info"><p style="margin:0">Need an AES key for notes? Any Base64-encoded 16/24/32-byte value works for <code>APP_ENCRYPTION_SECRET</code> in dev. Lose it and existing encrypted notes become unreadable.</p></div>
+
+        <h2 id="conventions">Code conventions</h2>
+        <ul>
+          <li><strong>Package layout</strong> is identical across services: <code>Controller</code>, <code>Services</code>, <code>Repository</code>, <code>Entity</code>, <code>Dto</code>, <code>Enums</code>, <code>Messaging</code>, <code>Config</code>, <code>Utility</code> (PascalCase package names).</li>
+          <li><strong>Identity</strong> always comes from the JWT via <code>SecurityUtils.getTherapistId()/getUserId()</code> — never from request bodies.</li>
+          <li><strong>Lombok <code>@Data</code></strong> on entities/DTOs/events; don't hand-write getters/setters.</li>
+          <li><strong>IDs</strong> are prefixed UUID strings generated in <code>@PrePersist</code> (<code>THP</code>, <code>CLT</code>, <code>SLT</code>, …).</li>
+          <li><strong>Events</strong> live only in the shared <code>com.org.events</code> module and branch on a string <code>eventType</code>.</li>
+          <li><strong>Writes that others must hear about</strong> go through <code>OutboxService.saveOutboxEvent(...)</code> inside the same <code>@Transactional</code> method.</li>
+        </ul>
+
+        <h2 id="navigate">Where things live</h2>
+        <div class="table-wrap"><table>
+          <thead><tr><th>To change…</th><th>Look in…</th></tr></thead>
+          <tbody>
+            <tr><td>An endpoint's behavior</td><td>That service's <code>Controller</code> → <code>Services</code>.</td></tr>
+            <tr><td>What a booking does</td><td><code>AppointmentService.bookAppointment</code> (appointment-service).</td></tr>
+            <tr><td>How slots are generated</td><td><code>AvailabilitySlotService</code> (therapist-service).</td></tr>
+            <tr><td>A new cross-service field</td><td>The event POJO in <code>Events</code>, then producer + every consumer.</td></tr>
+            <tr><td>Auth / tokens</td><td><code>AuthController</code>, <code>JwtUtil</code>, <code>RefreshTokensService</code> (gateway).</td></tr>
+            <tr><td>Calendar behavior</td><td><code>GoogleCalendarService</code> + consumers (notification-service).</td></tr>
+            <tr><td>A dashboard metric</td><td><code>AnalyticsAggregationService</code> (analytics-service).</td></tr>
+          </tbody>
+        </table></div>
+
+        <h2 id="first-change">A safe first change (worked example)</h2>
+        <p><em>"Add a <code>notes</code> field to a client."</em> Because client data crosses services via events, this touches more than one place — a perfect lesson in the architecture:</p>
+        <ol>
+          <li>Add the column to <code>Client</code> (client-service) and the <code>ClientDto</code> + assembler.</li>
+          <li>If other services need it, add it to <code>ClientEvent</code> in the <strong>Events</strong> module and set it in <code>ClientService.publishClientEvent</code>.</li>
+          <li>Update consumers that should store it (e.g. Therapist's <code>THERAPIST_CLIENTS</code> projection) — and keep them idempotent.</li>
+          <li>Expose it through the relevant controller. Test the full path: create client → observe the event → confirm the projection updated.</li>
+        </ol>
+        <div class="callout warn"><p style="margin:0">Golden rule: <strong>never</strong> reach into another service's tables to "just read" a value. Add it to the event and project it. That's what keeps the services independently deployable.</p></div>
+
+        <h2 id="debugging">Debugging tips</h2>
+        <ul>
+          <li><strong>Event not arriving?</strong> Check the producer's <code>OUTBOX_EVENT</code> table — is the row <code>published=true</code>? If not, the scheduler or Kafka is the problem.</li>
+          <li><strong>Consumer stuck?</strong> <code>ErrorHandlingDeserializer</code> isolates poison messages; check logs for deserialization errors. <code>auto-offset-reset=earliest</code> means a fresh group replays everything.</li>
+          <li><strong>403/401 on a backend call?</strong> The JWT may lack the expected claim (e.g. <code>therapistId</code> absent → <code>SecurityUtils</code> throws). Tokens from <code>/auth/refresh</code> have empty authorities.</li>
+          <li><strong>Trace a request</strong> in therapist-service via the MDC trace id added by <code>MdcFilter</code>.</li>
+          <li><strong>Booking conflicts?</strong> Remember <code>markSlotAsBooked</code>/<code>markSlotAsAvailable</code> are conditional updates — a 0-row result is the signal a race or terminal state was hit.</li>
+        </ul>
+
+      </article>
+    </main>
+  </div>
+</body>
+</html>

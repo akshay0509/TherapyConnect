@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Services — TherapyConnect Docs</title>
+  <link rel="stylesheet" href="assets/style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script defer src="assets/script.js"></script>
+</head>
+<body>
+  <div class="layout">
+    <main class="main">
+      <article class="content">
+
+        <h1>Services</h1>
+        <p class="subtitle">The nine Maven modules: two are infrastructure/shared, seven are runtime Spring Boot applications. Each is documented with its port, responsibilities, owned data, and events.</p>
+
+        <h2 id="ports">Port &amp; role map</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Module</th><th>Port</th><th><code>spring.application.name</code></th><th>Role</th></tr></thead>
+            <tbody>
+              <tr><td><a href="#discovery">DiscoveryService</a></td><td><code>8761</code></td><td>DiscoveryService</td><td>Eureka service registry</td></tr>
+              <tr><td><a href="#gateway">GatewayService</a></td><td><code>8091</code></td><td>gateway-service</td><td>API gateway, auth, token issuer</td></tr>
+              <tr><td><a href="#client">ClientService</a></td><td><code>5001</code></td><td>client-service</td><td>Client records</td></tr>
+              <tr><td><a href="#therapist">TherapistService</a></td><td><code>5002</code></td><td>therapist-service</td><td>Therapist, services, availability, notes</td></tr>
+              <tr><td><a href="#user">UserService</a></td><td><code>5003</code></td><td>user-service</td><td>Accounts, credentials, login audit</td></tr>
+              <tr><td><a href="#notification">NotificationService</a></td><td><code>5004</code></td><td>notification-service</td><td>Google Calendar sync</td></tr>
+              <tr><td><a href="#appointment">AppointmentService</a></td><td><code>5005</code></td><td>appointment-service</td><td>Booking engine, slot state</td></tr>
+              <tr><td><a href="#analytics">AnalyticsService</a></td><td><code>5006</code></td><td>analytics-service</td><td>Business rollups &amp; retention</td></tr>
+              <tr><td><a href="#events">Events</a></td><td>—</td><td>(library)</td><td>Shared event contracts</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- DISCOVERY -->
+        <h2 id="discovery">DiscoveryService <span class="badge neutral">:8761</span></h2>
+        <p>A bare Netflix Eureka server (<code>@EnableEurekaServer</code>). It registers nothing itself (<code>register-with-eureka=false</code>, <code>fetch-registry=false</code>) and holds no business logic — it is the registry every other service joins so the gateway can route via <code>lb://SERVICE-NAME</code>. Start it first.</p>
+
+        <!-- GATEWAY -->
+        <h2 id="gateway">GatewayService <span class="badge neutral">:8091</span></h2>
+        <p>The single entry point for the SPA. Combines Spring Cloud Gateway (MVC) routing with custom authentication endpoints.</p>
+        <h4>Responsibilities</h4>
+        <ul>
+          <li><strong>Routing</strong> — path-prefix routes to backend services, stripping the prefix. The therapist route also injects the <code>X-Therapist-ID</code> header from the path.</li>
+          <li><strong>Authentication</strong> — <code>AuthController</code> (<code>/auth/**</code>) handles login, refresh, logout, forgot/reset password.</li>
+          <li><strong>Token issuance</strong> — <code>JwtUtil</code> signs RS256 access tokens (15-min TTL); <code>RefreshTokensService</code> manages rotating 7-day refresh tokens in an httpOnly cookie.</li>
+          <li><strong>Resilience</strong> — Resilience4j rate limiter on login (10/min) and circuit breakers around the User and Therapist proxy calls.</li>
+          <li><strong>Login eventing</strong> — publishes <code>auth-login-success</code>/<code>auth-login-failure</code> directly to Kafka (no outbox). Declares all Kafka topics via <code>TopicsConfig</code>.</li>
+        </ul>
+        <div class="kv">
+          <dt>Routes</dt><dd><code>/therapist/{tid}/**</code>, <code>/therapist/**</code>, <code>/client/**</code>, <code>/user/**</code>, <code>/appointment/**</code>, <code>/analytics/**</code></dd>
+          <dt>Owns (DB)</dt><dd><code>REFRESH_TOKENS</code></dd>
+          <dt>Calls (REST)</dt><dd><code>user-service</code> (validate/forgot/reset), <code>therapist-service</code> (resolve therapistId)</dd>
+          <dt>Produces</dt><dd><code>auth-login-success</code>, <code>auth-login-failure</code></dd>
+          <dt>Key classes</dt><dd><code>AuthController</code>, <code>JwtUtil</code>, <code>RefreshTokensService</code>, <code>UserServiceProxy</code>, <code>TherapistServiceProxy</code>, <code>ResilienceConfig</code></dd>
+        </div>
+
+        <!-- USER -->
+        <h2 id="user">UserService <span class="badge neutral">:5003</span></h2>
+        <p>System of record for accounts and credentials. The gateway delegates credential validation here during login but issues the token itself.</p>
+        <h4>Responsibilities</h4>
+        <ul>
+          <li>Create users (BCrypt password hashing via <code>PasswordConfig</code>).</li>
+          <li>Validate credentials — returns a structured <code>AuthResponse</code> with success/failure reason (invalid credentials, disabled, locked).</li>
+          <li>Password reset — issue a 30-minute reset token and email a link via Gmail API (<code>EmailService</code>).</li>
+          <li>Update account (email/username) — identity taken from the JWT, not the body.</li>
+          <li>Consume login events to maintain audit trail &amp; lockout: <strong>5 failed attempts locks the account</strong>; success resets the counter.</li>
+        </ul>
+        <div class="kv">
+          <dt>Owns (DB)</dt><dd><code>USERS</code>, <code>USER_ROLES</code>, <code>ROLES</code>, <code>USER_LOGIN_AUDIT</code></dd>
+          <dt>Consumes</dt><dd><code>auth-login-success</code>, <code>auth-login-failure</code></dd>
+          <dt>External</dt><dd>Gmail API (password-reset email)</dd>
+          <dt>Key classes</dt><dd><code>UserService</code>, <code>EmailService</code>, <code>LoginSuccessConsumer</code>, <code>LoginFailureConsumer</code></dd>
+        </div>
+
+        <!-- THERAPIST -->
+        <h2 id="therapist">TherapistService <span class="badge neutral">:5002</span></h2>
+        <p>The largest and most central domain service. Owns the therapist profile and everything the therapist configures, plus read models for clients and appointments that power the dashboard.</p>
+        <h4>Responsibilities</h4>
+        <ul>
+          <li>Therapist profile CRUD; resolve <code>therapistId</code> from <code>userId</code> (the gateway calls this during login).</li>
+          <li><strong>Services</strong> (e.g. duration, price) and <strong>delivery modes</strong> (online/offline, address, price).</li>
+          <li><strong>Availability rules</strong> (weekly recurring) and <strong>overrides</strong> (date-specific add/remove); expands them into concrete slots via <code>AvailabilitySlotService</code>.</li>
+          <li>Dashboard stats, earnings summary/sessions, and <strong>CSV export</strong> of earnings.</li>
+          <li>Client roster (projection) and creating clients (delegates to ClientService over REST).</li>
+          <li><strong>Encrypted session notes</strong> (<code>EncryptionService</code> AES-GCM + JPA <code>@Convert</code>) and per-client notes.</li>
+          <li>Propagates the caller's JWT on outbound REST calls (<code>JwtPropagationInterceptor</code>) and adds trace IDs to logs (<code>MdcFilter</code>/<code>TraceIdInterceptor</code>).</li>
+        </ul>
+        <div class="kv">
+          <dt>Owns (DB)</dt><dd><code>THERAPIST</code>, <code>THERAPIST_SERVICES</code>, <code>THERAPY_DELIVERY_MODE</code>, <code>THERAPIST_AVAILABILITY_RULES</code>, <code>THERAPIST_AVAILABILITY_OVERRIDES</code>, <code>THERAPIST_AVAILABILITY</code>, <code>SESSION_NOTES</code>, <code>CLIENT_NOTES</code>, <code>OUTBOX_EVENT</code></dd>
+          <dt>Projections</dt><dd><code>THERAPIST_CLIENTS</code>, <code>AppointmentProjection</code></dd>
+          <dt>Produces</dt><dd><code>therapist-availability-events</code>, <code>email-reminder-events</code></dd>
+          <dt>Consumes</dt><dd><code>therapist-appointment-events</code>, <code>client-events</code></dd>
+          <dt>Calls (REST)</dt><dd><code>client-service</code> (create client)</dd>
+        </div>
+
+        <!-- CLIENT -->
+        <h2 id="client">ClientService <span class="badge neutral">:5001</span></h2>
+        <p>System of record for client (patient) records. Small and focused; emits client events so therapist/notification/analytics read models stay current.</p>
+        <div class="kv">
+          <dt>Responsibilities</dt><dd>Create / update / get client, update status (ACTIVE / TERMINATED), DSF flag.</dd>
+          <dt>Owns (DB)</dt><dd><code>CLIENT</code>, <code>OUTBOX_EVENT</code></dd>
+          <dt>Produces</dt><dd><code>client-events</code> (ClientCreated / ClientUpdated / ClientStatusUpdated)</dd>
+          <dt>Key classes</dt><dd><code>ClientService</code>, <code>OutboxService</code>, <code>OutboxEventScheduler</code></dd>
+        </div>
+
+        <!-- APPOINTMENT -->
+        <h2 id="appointment">AppointmentService <span class="badge neutral">:5005</span></h2>
+        <p>The booking engine and authority on appointment state. It books against a <em>local projection</em> of availability slots (kept by consuming availability events) and emits appointment events that everyone else reacts to.</p>
+        <h4>Responsibilities</h4>
+        <ul>
+          <li>Book an appointment — validate slot availability &amp; delivery mode, atomically mark the slot booked (optimistic <code>markSlotAsBooked</code> returning affected-rows to detect races), persist the appointment, emit <code>AppointmentCreated</code>.</li>
+          <li>Status transitions — confirm / complete / cancel / abandon with a guarded state machine (terminal states are immutable; cancel releases the slot).</li>
+          <li>Reschedule — move to a new slot, release the old one, re-price by mode.</li>
+          <li>Read APIs — today's appointments, availability-with-appointments, an editor calendar view, and search.</li>
+          <li>Maintains projections of availability slots and delivery modes; refuses destructive availability syncs that would clobber booked slots.</li>
+        </ul>
+        <div class="kv">
+          <dt>Owns (DB)</dt><dd><code>THERAPIST_APPOINTMENTS</code>, <code>OUTBOX_EVENT</code></dd>
+          <dt>Projections</dt><dd><code>THERAPIST_AVAILABILITY</code>, <code>THERAPIST_AVAILABILITY_OVERRIDE</code>, <code>THERAPY_DELIVERY_MODE</code></dd>
+          <dt>Produces</dt><dd><code>therapist-appointment-events</code></dd>
+          <dt>Consumes</dt><dd><code>therapist-availability-events</code> (slots, overrides, delivery modes)</dd>
+          <dt>Key classes</dt><dd><code>AppointmentService</code>, <code>TherapistAvailabilityConsumer</code>, <code>OutboxEventScheduler</code></dd>
+        </div>
+
+        <!-- NOTIFICATION -->
+        <h2 id="notification">NotificationService <span class="badge neutral">:5004</span></h2>
+        <p>Purely reactive — it has no REST API. It consumes appointment and availability-block events and reflects them into Google Calendar (invites with Google Meet links for online sessions, location for offline; blocked-time events for unavailability).</p>
+        <div class="kv">
+          <dt>Owns (DB)</dt><dd><code>AppointmentCalendarEvent</code>, <code>AvailabilityBlockCalendarEvent</code> (mappings to Google event IDs)</dd>
+          <dt>Projections</dt><dd><code>ClientProjection</code> (email lookup)</dd>
+          <dt>Consumes</dt><dd><code>therapist-appointment-events</code>, <code>therapist-availability-events</code>, <code>client-events</code></dd>
+          <dt>External</dt><dd>Google Calendar API</dd>
+          <dt>Key classes</dt><dd><code>GoogleCalendarService</code>, <code>AppointmentEventConsumer</code>, <code>CalendarBlockEventConsumer</code>, <code>ClientConsumer</code></dd>
+        </div>
+
+        <!-- ANALYTICS -->
+        <h2 id="analytics">AnalyticsService <span class="badge neutral">:5006</span></h2>
+        <p>Builds business intelligence from the event stream. It maintains daily rollup tables and per-client engagement projections, then serves aggregated read APIs for the therapist's dashboards.</p>
+        <div class="kv">
+          <dt>Responsibilities</dt><dd>Daily snapshots, summary KPIs (completion/cancellation rate, earnings, DSF vs paid, online vs offline), per-service breakdown, retention &amp; session-frequency.</dd>
+          <dt>Owns (DB)</dt><dd><code>ANALYTICS_DAILY</code>, <code>ANALYTICS_SERVICE_DAILY</code>, <code>ClientEngagementProjection</code>, <code>ClientDsfProjection</code></dd>
+          <dt>Consumes</dt><dd><code>therapist-appointment-events</code>, <code>client-events</code></dd>
+          <dt>Key classes</dt><dd><code>AnalyticsAggregationService</code>, <code>AppointmentEventConsumer</code>, <code>ClientEventConsumer</code></dd>
+        </div>
+
+        <!-- EVENTS -->
+        <h2 id="events">Events <span class="badge neutral">library</span></h2>
+        <p>Not a runtime service — a shared JAR (<code>com.org:events</code>) holding the event POJOs and enums every service serializes/deserializes. It is the cross-service contract; see <a href="messaging.html">Messaging &amp; Events</a> for the schemas.</p>
+
+        <div class="callout info">
+          <div class="callout-title">Frontend</div>
+          <p><code>auth-app/</code> is a React 18 + Vite SPA (React Router, Axios, Recharts for charts, Lucide icons). It is the only client and talks exclusively to the gateway. It is not a backend module and is excluded from the parent POM build.</p>
+        </div>
+
+      </article>
+    </main>
+  </div>
+</body>
+</html>

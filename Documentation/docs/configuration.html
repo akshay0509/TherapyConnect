@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Configuration — TherapyConnect Docs</title>
+  <link rel="stylesheet" href="assets/style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script defer src="assets/script.js"></script>
+</head>
+<body>
+  <div class="layout">
+    <main class="main">
+      <article class="content">
+
+        <h1>Configuration</h1>
+        <p class="subtitle">Environment variables, application properties, key infrastructure settings and the startup process.</p>
+
+        <h2 id="env">Environment variables</h2>
+        <p>Each backend service reads secrets/infra from the environment (supplied via a per-service <code>.env</code> file in development). Properties reference them with <code>${VAR}</code> placeholders.</p>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Variable</th><th>Used by</th><th>Purpose</th></tr></thead>
+          <tbody>
+            <tr><td><code>DB_URL</code></td><td>all DB services</td><td>JDBC URL (PostgreSQL).</td></tr>
+            <tr><td><code>DB_USERNAME</code> / <code>DB_PASSWORD</code></td><td>all DB services</td><td>Datasource credentials.</td></tr>
+            <tr><td><code>KAFKA_BOOTSTRAP_SERVERS</code></td><td>all (except Discovery)</td><td>Kafka brokers.</td></tr>
+            <tr><td><code>APP_ENCRYPTION_SECRET</code></td><td>Therapist</td><td>Base64 AES key for session-notes encryption.</td></tr>
+            <tr><td><code>GOOGLE_CLIENT_ID</code> / <code>GOOGLE_CLIENT_SECRET</code> / <code>GOOGLE_REFRESH_TOKEN</code></td><td>Notification, User</td><td>OAuth creds for Calendar &amp; Gmail.</td></tr>
+            <tr><td><code>THERAPIST_EMAIL</code></td><td>Notification</td><td>Calendar owner / attendee.</td></tr>
+            <tr><td><code>GMAIL_FROM</code></td><td>User</td><td>Sender address for reset emails.</td></tr>
+            <tr><td><code>FRONTEND_URL</code></td><td>User</td><td>Base URL in reset links (default <code>http://localhost:5173</code>).</td></tr>
+          </tbody>
+        </table></div>
+
+        <h2 id="ports">Service ports</h2>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Service</th><th>Port</th><th>Service</th><th>Port</th></tr></thead>
+          <tbody>
+            <tr><td>Discovery (Eureka)</td><td><code>8761</code></td><td>Notification</td><td><code>5004</code></td></tr>
+            <tr><td>Gateway</td><td><code>8091</code></td><td>Appointment</td><td><code>5005</code></td></tr>
+            <tr><td>Client</td><td><code>5001</code></td><td>Analytics</td><td><code>5006</code></td></tr>
+            <tr><td>Therapist</td><td><code>5002</code></td><td>Frontend (Vite)</td><td><code>5173</code></td></tr>
+            <tr><td>User</td><td><code>5003</code></td><td>—</td><td>—</td></tr>
+          </tbody>
+        </table></div>
+
+        <h2 id="common">Common Spring properties</h2>
+        <p>Shared patterns across services' <code>application.properties</code>:</p>
+        <pre><span class="pre-label">application.properties (shared shape)</span><code>spring.application.name=&lt;service&gt;-service
+server.port=&lt;port&gt;
+eureka.instance.prefer-ip-address=true
+
+# JPA / PostgreSQL
+spring.datasource.url=${DB_URL}
+spring.datasource.username=${DB_USERNAME}
+spring.datasource.password=${DB_PASSWORD}
+spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.PostgreSQLDialect
+spring.jpa.hibernate.ddl-auto=update
+spring.jpa.show-sql=true
+
+# Kafka
+spring.kafka.bootstrap-servers=${KAFKA_BOOTSTRAP_SERVERS}
+
+# JWT verification (resource servers)
+jwt.public-key=classpath:keys/gateway-public.pem
+
+# Logging
+logging.config=classpath:log4j2.xml
+logging.level.root=ERROR</code></pre>
+
+        <h2 id="kafka-cfg">Kafka serialization config</h2>
+        <p>Producers use <code>StringSerializer</code> keys + <code>JsonSerializer</code> values with type headers enabled. Consumers wrap delegates in <code>ErrorHandlingDeserializer</code> and set <code>auto-offset-reset=earliest</code>. Trusted packages are typically <code>*</code> (User narrows to <code>com.org.events.login</code>).</p>
+        <div class="callout warn"><p style="margin:0"><code>spring.json.trusted.packages=*</code> trusts all types during deserialization — fine for a closed internal bus, but should be narrowed before exposure. Analytics also sets <code>spring.jackson.serialization.write-dates-as-timestamps=false</code> for ISO date output.</p></div>
+
+        <h2 id="gateway-cfg">Gateway routing &amp; resilience config</h2>
+        <pre><span class="pre-label">gateway application.properties (excerpt)</span><code># Route table (prefix → service, StripPrefix=1)
+routes[0] /therapist/{tid}/**  → lb://THERAPIST-SERVICE  (+ X-Therapist-ID header)
+routes[1] /client/**          → lb://CLIENT-SERVICE
+routes[2] /therapist/**       → lb://THERAPIST-SERVICE
+routes[3] /user/**            → lb://USER-SERVICE
+routes[4] /appointment/**     → lb://APPOINTMENT-SERVICE
+routes[5] /analytics/**       → lb://ANALYTICS-SERVICE
+
+# Rate limiter
+resilience4j.ratelimiter.instances.loginRateLimiter.limitForPeriod=10
+resilience4j.ratelimiter.instances.loginRateLimiter.limitRefreshPeriod=1m
+
+# Circuit breakers (userService, therapistService)
+failureRateThreshold=50  slidingWindowSize=10  waitDurationInOpenState=30s</code></pre>
+
+        <h2 id="profiles">Profiles, feature flags &amp; logging</h2>
+        <ul>
+          <li><strong>Profiles:</strong> none are defined — configuration is single-environment driven entirely by env vars. Introducing <code>application-prod.properties</code> is a recommended next step.</li>
+          <li><strong>Feature flags:</strong> no flag framework; behavior toggles are code-level (e.g. <code>syncToGoogleCalendar</code> on a calendar-block event, <code>isActive</code> on services/modes).</li>
+          <li><strong>Logging:</strong> Log4j2 via <code>classpath:log4j2.xml</code>, root at <code>ERROR</code>, each app's own package at <code>INFO</code>. TherapistService adds MDC trace IDs (<code>MdcFilter</code> + <code>TraceIdInterceptor</code>).</li>
+        </ul>
+
+        <h2 id="startup">Startup process</h2>
+        <p>Each app is a standard Spring Boot main class (<code>@SpringBootApplication</code>). On boot a service: registers with Eureka, runs Hibernate DDL update, connects to Kafka (starting listeners), and starts its outbox scheduler if present. The Gateway additionally creates Kafka topics via <code>TopicsConfig</code> and loads the RSA key pair. See <a href="deployment.html">Deployment</a> for ordering.</p>
+
+      </article>
+    </main>
+  </div>
+</body>
+</html>

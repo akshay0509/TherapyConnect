@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>API Reference — TherapyConnect Docs</title>
+  <link rel="stylesheet" href="assets/style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script defer src="assets/script.js"></script>
+</head>
+<body>
+  <div class="layout">
+    <main class="main">
+      <article class="content">
+
+        <h1>API Reference</h1>
+        <p class="subtitle">Every REST endpoint, grouped by service. Paths shown are the <strong>external</strong> gateway paths the SPA calls; the gateway strips the leading prefix before forwarding. Expand any endpoint for request/response detail and side effects.</p>
+
+        <div class="callout info">
+          <div class="callout-title">Conventions</div>
+          <p>All paths except <code>/auth/**</code> and <code>/user/create-user</code> require <code>Authorization: Bearer &lt;jwt&gt;</code>. The <code>therapistId</code> / <code>userId</code> are read from JWT claims server-side via <code>SecurityUtils</code> — clients never send them in the body (a field marked <em>“from JWT”</em> below is populated by the server and ignored if sent). The gateway routes by prefix: <code>/therapist/*</code> → therapist-service, <code>/appointment/*</code> → appointment-service, <code>/client/*</code> → client-service, <code>/user/*</code> → user-service, <code>/analytics/*</code> → analytics-service.</p>
+        </div>
+
+        <!-- ============================ AUTH ============================ -->
+        <h2 id="auth">Authentication <span class="badge neutral">gateway · /auth</span></h2>
+
+        <details class="endpoint" open>
+          <summary><span class="badge post">POST</span><span class="path">/auth/login</span><span class="ep-desc">Authenticate &amp; issue tokens</span></summary>
+          <div class="ep-body">
+            <p><strong>Auth:</strong> public · rate-limited to <strong>10 req/min</strong> (HTTP 429 via <code>loginRateLimitFallback</code>).</p>
+            <p><strong>Request</strong></p>
+            <pre><span class="pre-label">AuthRequest</span><code>{ "username": "jdoe", "password": "••••••••" }</code></pre>
+            <p><strong>Responses</strong></p>
+            <ul>
+              <li><code>200</code> — <code>{ "token": "&lt;jwt&gt;" }</code> plus <code>Set-Cookie: refresh_token</code> (httpOnly, Secure, SameSite=Strict, path <code>/auth/refresh</code>, 7-day).</li>
+              <li><code>401</code> — <code>{ "failureReason": "INVALID_CREDENTIALS | ACCOUNT_LOCKED | ACCOUNT_DISABLED | SERVICE_UNAVAILABLE" }</code></li>
+              <li><code>429</code> — <code>{ "error": "Too many login attempts…" }</code></li>
+            </ul>
+            <p><strong>Flow &amp; side effects:</strong> validates via <code>UserServiceProxy.validateUser</code> (circuit-broken); publishes <code>auth-login-success</code>/<code>auth-login-failure</code> to Kafka; resolves <code>therapistId</code> from TherapistService; signs a 15-min RS256 JWT; persists a <code>REFRESH_TOKENS</code> row (deleting any prior tokens for the user).</p>
+          </div>
+        </details>
+
+        <details class="endpoint">
+          <summary><span class="badge post">POST</span><span class="path">/auth/refresh</span><span class="ep-desc">Rotate refresh token, issue new access token</span></summary>
+          <div class="ep-body">
+            <p><strong>Auth:</strong> <code>refresh_token</code> cookie · <strong>Request:</strong> none (cookie only).</p>
+            <p><strong>Responses:</strong> <code>200</code> <code>{ "token": "&lt;jwt&gt;" }</code> + new rotated cookie · <code>401</code> <code>{ "error": "No refresh token" | "Invalid or expired refresh token" }</code>.</p>
+            <p><strong>Side effects:</strong> deletes the presented token and issues a fresh one (rotation).</p>
+            <div class="callout warn" style="margin:10px 0 0"><p style="margin:0">Known gap: roles aren’t stored on the refresh-token row, so tokens minted here carry an <strong>empty authorities</strong> claim. See <a href="technical-debt.html">Technical Debt</a>.</p></div>
+          </div>
+        </details>
+
+        <details class="endpoint">
+          <summary><span class="badge post">POST</span><span class="path">/auth/logout</span><span class="ep-desc">Revoke refresh token</span></summary>
+          <div class="ep-body">
+            <p><strong>Auth:</strong> refresh cookie (optional) · <strong>Response:</strong> <code>200</code> always, with a cleared cookie (<code>maxAge=0</code>).</p>
+            <p><strong>Side effects:</strong> deletes the user’s refresh tokens (revocation) if the cookie is present.</p>
+          </div>
+        </details>
+
+        <details class="endpoint">
+          <summary><span class="badge post">POST</span><span class="path">/auth/forgot-password</span><span class="ep-desc">Request a reset email</span></summary>
+          <div class="ep-body">
+            <p><strong>Auth:</strong> public · <strong>Request:</strong> <code>{ "email": "user@example.com" }</code></p>
+            <p><strong>Response:</strong> <code>200</code> <code>{ "message": "If the email exists, reset instructions will be sent." }</code> — generic by design (no account enumeration). Proxies to UserService.</p>
+          </div>
+        </details>
+
+        <details class="endpoint">
+          <summary><span class="badge post">POST</span><span class="path">/auth/reset-password</span><span class="ep-desc">Complete a password reset</span></summary>
+          <div class="ep-body">
+            <p><strong>Auth:</strong> public (token-scoped) · <strong>Request:</strong> <code>{ "token": "…", "newPassword": "…" }</code></p>
+            <p><strong>Response:</strong> <code>200</code> <code>{ "message": "Password reset successfully." }</code>. Token must be unused and within its 30-minute window. Proxies to UserService.</p>
+          </div>
+        </details>
+
+        <!-- ============================ USER ============================ -->
+        <h2 id="user-api">User <span class="badge neutral">user-service · /user</span></h2>
+
+        <details class="endpoint">
+          <summary><span class="badge post">POST</span><span class="path">/user/create-user</span><span class="ep-desc">Register a user</span></summary>
+          <div class="ep-body">
+            <p><strong>Auth:</strong> public · <strong>Request</strong></p>
+            <pre><span class="pre-label">UserDto</span><code>{ "username": "jdoe", "email": "jdoe@x.com",
+  "password": "••••••••", "userRole": "THERAPIST" }</code></pre>
+            <p><strong>Response:</strong> <code>200</code> (empty body). BCrypt-hashes the password; generates a <code>USR…</code> id.</p>
+          </div>
+        </details>
+
+        <details class="endpoint">
+          <summary><span class="badge post">POST</span><span class="path">/user/validate-user</span><span class="ep-desc">Credential check (gateway-internal)</span></summary>
+          <div class="ep-body">
+            <p><strong>Auth:</strong> permitAll (intended for gateway use only) · <strong>Request:</strong> <code>{ "username", "password" }</code>.</p>
+            <p><strong>Response</strong></p>
+            <pre><span class="pre-label">AuthResponse</span><code>{ "authenticated": true, "userId": "USR…", "username": "jdoe",
+  "roles": ["THERAPIST"], "accountStatus": { "enabled": true, "locked": false },
+  "failureReason": null }</code></pre>
+            <p>On failure: <code>authenticated=false</code> and <code>failureReason</code> = <code>INVALID_CREDENTIALS | ACCOUNT_DISABLED | ACCOUNT_LOCKED</code>.</p>
+          </div>
+        </details>
+
+        <details class="endpoint">
+          <summary><span class="badge post">POST</span><span class="path">/user/forgot-password</span><span class="ep-desc">Issue reset token + email</span></summary>
+          <div class="ep-body">
+            <p><strong>Auth:</strong> public · <strong>Request:</strong> <code>{ "email": "…" }</code> · <strong>Response:</strong> <code>200</code> generic message.</p>
+            <p><strong>Side effects:</strong> for a known email, stores a 30-min <code>resetPasswordToken</code> and sends a link via the Gmail API (<code>EmailService</code>); silently no-ops for unknown emails.</p>
+          </div>
+        </details>
+
+        <details class="endpoint">
+          <summary><span class="badge post">POST</span><span class="path">/user/reset-password</span><span class="ep-desc">Set new password from token</span></summary>
+          <div class="ep-body">
+            <p><strong>Auth:</strong> public · <strong>Request:</strong> <code>{ "token": "…", "newPassword": "…" }</code> · <strong>Response:</strong> <code>200</code>. Rejects invalid/expired tokens (<code>IllegalArgumentException</code> → handled by <code>GlobalExceptionHandler</code>). Clears the token on success.</p>
+          </div>
+        </details>
+
+        <details class="endpoint">
+          <summary><span class="badge put">PUT</span><span class="path">/user/update-account</span><span class="ep-desc">Update email/username</span></summary>
+          <div class="ep-body">
+            <p><strong>Auth:</strong> JWT (username resolved from token, not body) · <strong>Request</strong></p>
+            <pre><span class="pre-label">UpdateAccountRequest</span><code>{ "username": "newname", "email": "new@x.com", "currentPassword": "••••" }</code></pre>
+            <p><strong>Response:</strong> <code>200</code> updated <code>UserDto</code>. Requires the correct <code>currentPassword</code>; blank fields are ignored.</p>
+          </div>
+        </details>
+
+        <!-- ============================ THERAPIST ============================ -->
+        <h2 id="therapist-api">Therapist <span class="badge neutral">therapist-service · /therapist</span></h2>
+
+        <h3 id="t-profile">Profile</h3>
+        <details class="endpoint">
+          <summary><span class="badge get">GET</span><span class="path">/therapist/therapists</span><span class="ep-desc">List all therapists</span></summary>
+          <div class="ep-body"><p><strong>Auth:</strong> JWT · <strong>Response:</strong> <code>List&lt;TherapistDto&gt;</code> (id, name, dob, phone, email, gender, yearsOfExperience, userId).</p></div>
+        </details>
+        <details class="endpoint">
+          <summary><span class="badge get">GET</span><span class="path">/therapist/therapistProfile</span><span class="ep-desc">Current therapist profile</span></summary>
+          <div class="ep-body"><p><strong>Auth:</strong> JWT (<code>therapistId</code> from token) · <strong>Response:</strong> <code>TherapistDto</code>.</p></div>
+        </details>
+        <details class="endpoint">
+          <summary><span class="badge post">POST</span><span class="path">/therapist/create-therapist</span><span class="ep-desc">Create profile for current user</span></summary>
+          <div class="ep-body">
+            <p><strong>Auth:</strong> JWT (<code>userId</code> from token) · <strong>Request:</strong> <code>TherapistDto</code> (firstName, lastName, dob, phoneNumber, email, gender, yearsOfExperience).</p>
+            <p><strong>Response:</strong> <code>200</code>. Links the new <code>THP…</code> record to the JWT’s userId (unique).</p>
+          </div>
+        </details>
+
+        <h3 id="t-services">Services &amp; delivery modes</h3>
+        <details class="endpoint">
+          <summary><span class="badge get">GET</span><span class="path">/therapist/therapist-services</span><span class="ep-desc">List services (paged optional)</span></summary>
+          <div class="ep-body"><p><strong>Auth:</strong> JWT · <strong>Query:</strong> optional <code>?page&amp;size</code> → returns a <code>PageResponseDto</code> instead of a list · <strong>Response item:</strong> <code>TherapistServicesDto</code> (serviceId, serviceType, duration, price, isActive).</p></div>
+        </details>
+        <details class="endpoint">
+          <summary><span class="badge get">GET</span><span class="path">/therapist/{therapistId}/therapist-services</span><span class="ep-desc">List a given therapist’s services</span></summary>
+          <div class="ep-body"><p><strong>Auth:</strong> JWT · <strong>Path:</strong> <code>therapistId</code> · <strong>Response:</strong> <code>List&lt;TherapistServicesDto&gt;</code>.</p></div>
+        </details>
+        <details class="endpoint">
+          <summary><span class="badge post">POST</span><span class="path">/therapist/create-service</span><span class="ep-desc">Create a service</span></summary>
+          <div class="ep-body">
+            <p><strong>Auth:</strong> JWT · <strong>Request</strong></p>
+            <pre><span class="pre-label">TherapistServicesDto</span><code>{ "serviceType": "INDIVIDUAL_THERAPY", "duration": 60,
+  "price": 120.00, "isActive": true }   // therapistId from JWT</code></pre>
+            <p><strong>Response:</strong> <code>200</code>. <code>serviceType</code> ∈ {<code>INDIVIDUAL_THERAPY</code>, <code>COUPLES_THERAPY</code>}. <code>duration</code> drives slot length during generation.</p>
+          </div>
+        </details>
+        <details class="endpoint">
+          <summary><span class="badge put">PUT</span><span class="path">/therapist/update-service/{serviceId}</span><span class="ep-desc">Update a service</span></summary>
+          <div class="ep-body"><p><strong>Auth:</strong> JWT · <strong>Path:</strong> <code>serviceId</code> · <strong>Request:</strong> <code>TherapistServicesDto</code> · <strong>Response:</strong> updated dto.</p></div>
+        </details>
+        <details class="endpoint">
+          <summary><span class="badge delete">DELETE</span><span class="path">/therapist/delete-service/{serviceId}</span><span class="ep-desc">Delete a service</span></summary>
+          <div class="ep-body"><p><strong>Auth:</strong> JWT · <strong>Response:</strong> <code>200</code> "Therapist service deleted successfully."</p></div>
+        </details>
+        <details class="endpoint">
+          <summary><span class="badge get">GET</span><span class="path">/therapist/delivery-modes</span><span class="ep-desc">List delivery modes</span></summary>
+          <div class="ep-body"><p><strong>Auth:</strong> JWT · <strong>Query:</strong> optional <code>?serviceId</code> to filter · <strong>Response:</strong> <code>List&lt;TherapyDeliveryModeDto&gt;</code>.</p></div>
+        </details>
+        <details class="endpoint">
+          <summary><span class="badge post">POST</span><span class="path">/therapist/delivery-modes</span><span class="ep-desc">Create a delivery mode</span></summary>
+          <div class="ep-body">
+            <p><strong>Auth:</strong> JWT · <strong>Request</strong></p>
+            <pre><span class="pre-label">TherapyDeliveryModeDto</span><code>{ "serviceId": "…", "modeType": "ONLINE",   // ONLINE | OFFLINE
+  "displayName": "Video call", "address": null, "price": 120.00, "isActive": true }</code></pre>
+            <p><strong>Response:</strong> <code>200</code> created dto. Pricing/mode here is what AppointmentService validates against at booking. Emits a delivery-mode event so AppointmentService updates its projection.</p>
+          </div>
+        </details>
+        <details class="endpoint">
+          <summary><span class="badge put">PUT</span><span class="path">/therapist/delivery-modes/{modeId}</span><span class="ep-desc">Update a delivery mode</span></summary>
+          <div class="ep-body"><p><strong>Auth:</strong> JWT · <strong>Request:</strong> <code>TherapyDeliveryModeDto</code> · <strong>Response:</strong> updated dto.</p></div>
+        </details>
+        <details class="endpoint">
+          <summary><span class="badge delete">DELETE</span><span class="path">/therapist/delivery-modes/{modeId}</span><span class="ep-desc">Delete a delivery mode</span></summary>
+          <div class="ep-body"><p><strong>Auth:</strong> JWT · <strong>Response:</strong> <code>200</code> "Delivery mode deleted successfully."</p></div>
+        </details>
+
+        <h3 id="t-availability">Availability</h3>
+        <details class="endpoint">
+          <summary><span class="badge get">GET</span><span class="path">/therapist/availability-rules</span><span class="ep-desc">List weekly rules</span></summary>
+          <div class="ep-body"><p><strong>Auth:</strong> JWT · <strong>Query:</strong> optional <code>?page&amp;size</code> · <strong>Response item:</strong> <code>TherapistAvailabilityRulesDto</code> (ruleId, dayOfWeek 1–7, startTime, endTime, isActive).</p></div>
+        </details>
+        <details class="endpoint">
+          <summary><span class="badge post">POST</span><span class="path">/therapist/create-availability-rules</span><span class="ep-desc">Create weekly rules (bulk)</span></summary>
+          <div class="ep-body">
+            <p><strong>Auth:</strong> JWT · <strong>Request:</strong> a <em>list</em> of rules</p>
+            <pre><span class="pre-label">List&lt;TherapistAvailabilityRulesDto&gt;</span><code>[ { "dayOfWeek": 1, "startTime": "09:00", "endTime": "17:00", "isActive": true } ]</code></pre>
+            <p><strong>Response:</strong> <code>200</code>. <code>therapistId</code> is stamped on each from the JWT.</p>
+          </div>
+        </details>
+        <details class="endpoint">
+          <summary><span class="badge put">PUT</span><span class="path">/therapist/availability-rules/{ruleId}</span><span class="ep-desc">Update a rule</span></summary>
+          <div class="ep-body"><p><strong>Auth:</strong> JWT · <strong>Request:</strong> <code>TherapistAvailabilityRulesDto</code> · <strong>Response:</strong> updated dto.</p></div>
+        </details>
+        <details class="endpoint">
+          <summary><span class="badge delete">DELETE</span><span class="path">/therapist/availability-rules/{ruleId}</span><span class="ep-desc">Delete a rule</span></summary>
+          <div class="ep-body"><p><strong>Auth:</strong> JWT · <strong>Response:</strong> <code>200</code> "Availability rule deleted successfully."</p></div>
+        </details>
+        <details class="endpoint">
+          <summary><span class="badge post">POST</span><span class="path">/therapist/create-availability-overrides</span><span class="ep-desc">Single date-specific override</span></summary>
+          <div class="ep-body">
+            <p><strong>Auth:</strong> JWT · <strong>Request</strong></p>
+            <pre><span class="pre-label">TherapistAvailabilityOverridesDto</span><code>{ "startTime": "2026-07-10T09:00:00", "endTime": "2026-07-10T12:00:00",
+  "isAvailable": false, "reason": "Conference", "syncToGoogleCalendar": true }</code></pre>
+            <p><strong>Response:</strong> <code>200</code>. Same-day windows only. An unavailable override blocks bookings; an available one adds slots. May emit a <code>CalendarBlockEvent</code> when <code>syncToGoogleCalendar</code> is set.</p>
+          </div>
+        </details>
+        <details class="endpoint">
+          <summary><span class="badge post">POST</span><span class="path">/therapist/bulk-availability-overrides</span><span class="ep-desc">Bulk overrides over a date range</span></summary>
+          <div class="ep-body">
+            <p><strong>Auth:</strong> JWT · <strong>Request</strong></p>
+            <pre><span class="pre-label">BulkAvailabilityOverridesRequest</span><code>{ "startDate": "2026-07-10", "endDate": "2026-07-14",
+  "isAvailable": false, "reason": "Leave", "syncToGoogleCalendar": false }</code></pre>
+            <p><strong>Response:</strong> <code>200</code> "Bulk availability overrides created successfully."</p>
+          </div>
+        </details>
+        <details class="endpoint">
+          <summary><span class="badge get">GET</span><span class="path">/therapist/availability-overrides</span><span class="ep-desc">List overrides</span></summary>
+          <div class="ep-body"><p><strong>Auth:</strong> JWT · <strong>Response:</strong> <code>List&lt;TherapistAvailabilityOverridesDto&gt;</code>.</p></div>
+        </details>
+        <details class="endpoint">
+          <summary><span class="badge delete">DELETE</span><span class="path">/therapist/availability-overrides/{overrideId}</span><span class="ep-desc">Delete an override</span></summary>
+          <div class="ep-body"><p><strong>Auth:</strong> JWT · <strong>Response:</strong> <code>200</code> "Availability override deleted successfully."</p></div>
+        </details>
+        <details class="endpoint">
+          <summary><span class="badge post">POST</span><span class="path">/therapist/generate-slots</span><span class="ep-desc">Expand rules+overrides into slots</span></summary>
+          <div class="ep-body">
+            <p><strong>Auth:</strong> JWT · <strong>Query:</strong> <code>startDate</code>, <code>endDate</code> (ISO date) · <strong>Response:</strong> <code>200</code> "Successfully generated slots" (or <code>400</code> if <code>endDate &lt; startDate</code> / overlaps active appointments).</p>
+            <p><strong>Side effects:</strong> deletes existing slots in range, regenerates from active rules × services (30-min step), applies available overrides, and emits <code>AvailabilitySlotsGenerated</code> → AppointmentService projection.</p>
+          </div>
+        </details>
+        <details class="endpoint">
+          <summary><span class="badge delete">DELETE</span><span class="path">/therapist/delete-slots</span><span class="ep-desc">Delete slots in a range</span></summary>
+          <div class="ep-body"><p><strong>Auth:</strong> JWT · <strong>Query:</strong> <code>startDate</code>, <code>endDate</code> · <strong>Response:</strong> <code>200</code>/<code>400</code>. Refuses if active appointments overlap; emits <code>AvailabilitySlotsDeleted</code>.</p></div>
+        </details>
+
+        <h3 id="t-clients">Clients, notes, dashboard &amp; earnings</h3>
+        <details class="endpoint">
+          <summary><span class="badge post">POST</span><span class="path">/therapist/create-client</span><span class="ep-desc">Create a client &amp; add to roster</span></summary>
+          <div class="ep-body">
+            <p><strong>Auth:</strong> JWT · <strong>Request:</strong> <code>ClientDto</code> (firstName, lastName, dob, phoneNumber, emergencyPhoneNumber, email, pronouns, gender, dsf).</p>
+            <p><strong>Response:</strong> <code>200</code> <code>clientId</code> (plain string). <strong>Side effects:</strong> delegates to ClientService over REST (JWT propagated), which emits <code>ClientCreated</code>; then adds the client to <code>THERAPIST_CLIENTS</code>.</p>
+          </div>
+        </details>
+        <details class="endpoint">
+          <summary><span class="badge get">GET</span><span class="path">/therapist/clients</span><span class="ep-desc">Client roster</span></summary>
+          <div class="ep-body"><p><strong>Auth:</strong> JWT · <strong>Query:</strong> optional <code>?page&amp;size</code> · <strong>Response:</strong> <code>List&lt;TherapistClientsDto&gt;</code> (clientId, clientName, status, dsf) from the local projection.</p></div>
+        </details>
+        <details class="endpoint">
+          <summary><span class="badge post">POST</span><span class="path">/therapist/{clientId}/create-notes</span><span class="ep-desc">Create session notes (encrypted)</span></summary>
+          <div class="ep-body">
+            <p><strong>Auth:</strong> JWT · <strong>Path:</strong> <code>clientId</code> · <strong>Request</strong></p>
+            <pre><span class="pre-label">SessionNotesDto</span><code>{ "appointmentId": "…", "clientId": "CLT…", "sessionNotes": "…" }</code></pre>
+            <p><strong>Response:</strong> <code>200</code>. Content is AES-GCM encrypted at rest via <code>SessionNotesEncryptor</code>. One note per appointment (unique).</p>
+          </div>
+        </details>
+        <details class="endpoint">
+          <summary><span class="badge put">PUT</span><span class="path">/therapist/{clientId}/update-notes</span><span class="ep-desc">Update session notes</span></summary>
+          <div class="ep-body"><p><strong>Auth:</strong> JWT · <strong>Request:</strong> <code>SessionNotesDto</code> · <strong>Response:</strong> <code>200</code>.</p></div>
+        </details>
+        <details class="endpoint">
+          <summary><span class="badge get">GET</span><span class="path">/therapist/{clientId}/session-details</span><span class="ep-desc">Client appointment history</span></summary>
+          <div class="ep-body"><p><strong>Auth:</strong> JWT · <strong>Response:</strong> <code>List&lt;SessionDetailsDto&gt;</code> built from the appointment projection.</p></div>
+        </details>
+        <details class="endpoint">
+          <summary><span class="badge get">GET</span> <span class="badge put">PUT</span><span class="path">/therapist/{clientId}/note</span><span class="ep-desc">Get / upsert per-client note</span></summary>
+          <div class="ep-body"><p><strong>Auth:</strong> JWT · <strong>GET Response:</strong> <code>ClientNotesDto</code> (content, createdAt, updatedAt) · <strong>PUT Request:</strong> <code>ClientNotesDto</code> → upserted note.</p></div>
+        </details>
+        <details class="endpoint">
+          <summary><span class="badge get">GET</span><span class="path">/therapist/dashboard/stats</span><span class="ep-desc">Dashboard KPI tiles</span></summary>
+          <div class="ep-body">
+            <p><strong>Auth:</strong> JWT · <strong>Response</strong></p>
+            <pre><span class="pre-label">DashboardStatsDto</span><code>{ "sessionsToday", "activeClients", "completedThisWeek",
+  "dayEarnings", "weekEarnings", "monthEarnings", "lifetimeEarnings" }</code></pre>
+          </div>
+        </details>
+        <details class="endpoint">
+          <summary><span class="badge get">GET</span><span class="path">/therapist/earnings/summary</span><span class="ep-desc">Earnings summary</span></summary>
+          <div class="ep-body">
+            <p><strong>Auth:</strong> JWT · <strong>Response</strong></p>
+            <pre><span class="pre-label">EarningsSummaryDto</span><code>{ week/month/lifetime Earnings,
+  week/month/lifetime PaidCount,       // non-DSF completed
+  week/month/lifetime DsfCount }       // pro-bono completed</code></pre>
+            <p>DSF (sliding-fee) sessions count as zero earnings.</p>
+          </div>
+        </details>
+        <details class="endpoint">
+          <summary><span class="badge get">GET</span><span class="path">/therapist/earnings/sessions</span><span class="ep-desc">Earnings session list</span></summary>
+          <div class="ep-body"><p><strong>Auth:</strong> JWT · <strong>Query:</strong> <code>fromDate</code>, <code>toDate</code> (required), <code>serviceId?</code>, <code>modeId?</code> · <strong>Response:</strong> <code>List&lt;EarningsSessionDto&gt;</code>. Returns <code>400</code> if <code>toDate &lt; fromDate</code>.</p></div>
+        </details>
+        <details class="endpoint">
+          <summary><span class="badge get">GET</span><span class="path">/therapist/earnings/export</span><span class="ep-desc">CSV export</span></summary>
+          <div class="ep-body"><p><strong>Auth:</strong> JWT · <strong>Query:</strong> <code>fromDate</code>, <code>toDate</code>, optional <code>serviceId</code>/<code>modeId</code> · <strong>Response:</strong> <code>200</code> <code>text/csv</code> attachment (<code>earnings-&lt;from&gt;-to-&lt;to&gt;.csv</code>).</p></div>
+        </details>
+
+        <details class="endpoint">
+          <summary><span class="badge get">GET</span><span class="path">/internal/therapist/user/{userId}</span><span class="ep-desc">Service-to-service: resolve therapistId</span></summary>
+          <div class="ep-body"><p><strong>Auth:</strong> internal (gateway over Eureka: <code>http://therapist-service/internal/therapist/user/{userId}</code>) · <strong>Response:</strong> the <code>therapistId</code> string. Called during login to embed the <code>therapistId</code> claim in the JWT.</p></div>
+        </details>
+
+        <!-- ============================ APPOINTMENT ============================ -->
+        <h2 id="appointment-api">Appointment <span class="badge neutral">appointment-service · /appointment</span></h2>
+
+        <details class="endpoint">
+          <summary><span class="badge post">POST</span><span class="path">/appointment/create-appointment</span><span class="ep-desc">Book a slot</span></summary>
+          <div class="ep-body">
+            <p><strong>Auth:</strong> JWT (<code>therapistId</code> from token) · <strong>Request</strong></p>
+            <pre><span class="pre-label">BookAppointmentRequest</span><code>{ "slotId": "SLT…", "clientId": "CLT…", "modeId": "…", "clientName": "Jane" }</code></pre>
+            <p><strong>Response:</strong> <code>200</code> <code>appointmentId</code>. <strong>Errors:</strong> <code>SlotNotAvailableException</code> (unknown/blocked slot or invalid mode), <code>SlotAlreadyBookedException</code> (lost the race).</p>
+            <p><strong>Flow:</strong> validates slot + unavailable overrides + active delivery mode (→ price), atomically <code>markSlotAsBooked</code> (0 rows ⇒ already booked), persists the appointment, emits <code>AppointmentCreated</code> via the outbox.</p>
+          </div>
+        </details>
+        <details class="endpoint">
+          <summary><span class="badge patch">PATCH</span><span class="path">/appointment/update-appointment</span><span class="ep-desc">Status transition</span></summary>
+          <div class="ep-body">
+            <p><strong>Auth:</strong> JWT · <strong>Request</strong></p>
+            <pre><span class="pre-label">UpdateAppointmentStatusRequest</span><code>{ "appointmentId": "…", "status": "CONFIRMED", "reason": null }</code></pre>
+            <p><strong>Allowed targets:</strong> <code>CONFIRMED | COMPLETED | CANCELLED | ABANDONED</code>. Terminal states are immutable. <code>CANCELLED</code> releases the slot. Emits the matching event (<code>AppointmentConfirmed</code>, …). <strong>Errors:</strong> <code>InvalidAppointmentStatusTransitionException</code>, <code>AppointmentNotFoundException</code>.</p>
+          </div>
+        </details>
+        <details class="endpoint">
+          <summary><span class="badge patch">PATCH</span><span class="path">/appointment/reschedule-appointment</span><span class="ep-desc">Move to a new slot</span></summary>
+          <div class="ep-body">
+            <p><strong>Auth:</strong> JWT · <strong>Request</strong></p>
+            <pre><span class="pre-label">RescheduleAppointmentRequest</span><code>{ "appointmentId": "…", "newSlotId": "SLT…", "modeId": "…"?, "reason": "…"? }</code></pre>
+            <p><strong>Response:</strong> <code>200</code> "Appointment rescheduled". Books the new slot, releases the old, re-prices by mode, sets status <code>RESCHEDULED</code>, emits <code>AppointmentRescheduled</code> (with old/new slot + times). Rejects reschedules of terminal appointments or to the same slot.</p>
+          </div>
+        </details>
+        <details class="endpoint">
+          <summary><span class="badge get">GET</span><span class="path">/appointment/get-appointments</span><span class="ep-desc">Today’s active appointments</span></summary>
+          <div class="ep-body"><p><strong>Auth:</strong> JWT · <strong>Response:</strong> <code>List&lt;TherapistAppointments&gt;</code> — today’s <code>CONFIRMED</code>/<code>RESCHEDULED</code>, ordered by start time.</p></div>
+        </details>
+        <details class="endpoint">
+          <summary><span class="badge get">GET</span><span class="path">/appointment/get-availability</span><span class="ep-desc">Effective slots + appointments</span></summary>
+          <div class="ep-body"><p><strong>Auth:</strong> JWT · <strong>Response:</strong> <code>List&lt;AvailabilityResponseDto&gt;</code> — effective slots joined with any booked appointment.</p></div>
+        </details>
+        <details class="endpoint">
+          <summary><span class="badge get">GET</span><span class="path">/appointment/editor-view</span><span class="ep-desc">Calendar editor view</span></summary>
+          <div class="ep-body"><p><strong>Auth:</strong> JWT · <strong>Query:</strong> <code>fromDate</code>, <code>toDate</code> · <strong>Response:</strong> <code>AppointmentScheduleViewDto</code> = { slots, appointments, overrides } for the range. <code>400</code> if <code>toDate &lt; fromDate</code>.</p></div>
+        </details>
+        <details class="endpoint">
+          <summary><span class="badge get">GET</span><span class="path">/appointment/search</span><span class="ep-desc">Filtered appointment search</span></summary>
+          <div class="ep-body"><p><strong>Auth:</strong> JWT · <strong>Query:</strong> <code>clientName?</code>, <code>status?</code> (repeatable <code>AppointmentStatus</code>), <code>fromDate</code>, <code>toDate</code> · <strong>Response:</strong> <code>List&lt;AppointmentScheduleAppointmentDto&gt;</code>. Empty status ⇒ all statuses.</p></div>
+        </details>
+
+        <!-- ============================ CLIENT ============================ -->
+        <h2 id="client-api">Client <span class="badge neutral">client-service · /client</span></h2>
+
+        <details class="endpoint">
+          <summary><span class="badge get">GET</span><span class="path">/client/get/{clientId}</span><span class="ep-desc">Get a client</span></summary>
+          <div class="ep-body"><p><strong>Auth:</strong> JWT (scoped to <code>therapistId</code> from token) · <strong>Response:</strong> <code>ClientDto</code>.</p></div>
+        </details>
+        <details class="endpoint">
+          <summary><span class="badge post">POST</span><span class="path">/client/create-client</span><span class="ep-desc">Create a client</span></summary>
+          <div class="ep-body">
+            <p><strong>Auth:</strong> JWT · <strong>Request:</strong> <code>ClientDto</code> · <strong>Response:</strong> <code>200</code> <code>clientId</code> (or <code>"failed"</code> on serialization error).</p>
+            <p><strong>Side effects:</strong> persists the client and emits <code>ClientCreated</code> via the outbox → Therapist/Notification/Analytics projections.</p>
+          </div>
+        </details>
+        <details class="endpoint">
+          <summary><span class="badge put">PUT</span><span class="path">/client/update/{clientId}</span><span class="ep-desc">Update client details</span></summary>
+          <div class="ep-body"><p><strong>Auth:</strong> JWT · <strong>Request:</strong> <code>ClientDto</code> · <strong>Response:</strong> updated <code>ClientDto</code>. Emits <code>ClientUpdated</code>.</p></div>
+        </details>
+        <details class="endpoint">
+          <summary><span class="badge patch">PATCH</span><span class="path">/client/update-status/{clientId}</span><span class="ep-desc">Change status</span></summary>
+          <div class="ep-body">
+            <p><strong>Auth:</strong> JWT · <strong>Request:</strong> <code>{ "status": "ACTIVE" | "TERMINATED" }</code> · <strong>Response:</strong> updated <code>ClientDto</code>. Emits <code>ClientStatusUpdated</code>.</p>
+          </div>
+        </details>
+
+        <!-- ============================ ANALYTICS ============================ -->
+        <h2 id="analytics-api">Analytics <span class="badge neutral">analytics-service · /analytics</span></h2>
+
+        <details class="endpoint">
+          <summary><span class="badge get">GET</span><span class="path">/analytics/daily</span><span class="ep-desc">Per-day snapshots</span></summary>
+          <div class="ep-body"><p><strong>Auth:</strong> JWT · <strong>Query:</strong> <code>from</code>, <code>to</code> (ISO date) · <strong>Response:</strong> <code>List&lt;DailySnapshotDto&gt;</code> (date, completed/cancelled/abandoned/rescheduled, paid/dsf, online/offline, earnings).</p></div>
+        </details>
+        <details class="endpoint">
+          <summary><span class="badge get">GET</span><span class="path">/analytics/summary</span><span class="ep-desc">Aggregate KPIs</span></summary>
+          <div class="ep-body"><p><strong>Auth:</strong> JWT · <strong>Query:</strong> <code>from</code>, <code>to</code> · <strong>Response:</strong> <code>AnalyticsSummaryDto</code> (totals + <code>completionRate</code>, <code>cancellationRate</code>, earnings, DSF/paid, online/offline).</p></div>
+        </details>
+        <details class="endpoint">
+          <summary><span class="badge get">GET</span><span class="path">/analytics/services</span><span class="ep-desc">Per-service breakdown</span></summary>
+          <div class="ep-body"><p><strong>Auth:</strong> JWT · <strong>Query:</strong> <code>from</code>, <code>to</code> · <strong>Response:</strong> <code>List&lt;ServiceBreakdownDto&gt;</code> (serviceId, completed count, earnings).</p></div>
+        </details>
+        <details class="endpoint">
+          <summary><span class="badge get">GET</span><span class="path">/analytics/retention</span><span class="ep-desc">Retention summary</span></summary>
+          <div class="ep-body"><p><strong>Auth:</strong> JWT · <strong>Response:</strong> <code>RetentionSummaryDto</code> (total/retained/churned clients, retention rate, avg sessions/client, avg client-lifetime days).</p></div>
+        </details>
+        <details class="endpoint">
+          <summary><span class="badge get">GET</span><span class="path">/analytics/retention/frequency</span><span class="ep-desc">Session-frequency histogram</span></summary>
+          <div class="ep-body"><p><strong>Auth:</strong> JWT · <strong>Response:</strong> <code>List&lt;SessionFrequencyDto&gt;</code> bucketed <code>1</code>, <code>2-3</code>, <code>4-6</code>, <code>7-10</code>, <code>10+</code>.</p></div>
+        </details>
+
+        <h2 id="errors">Error handling</h2>
+        <p>UserService, ClientService, TherapistService and AppointmentService each register a <code>GlobalExceptionHandler</code> (<code>@RestControllerAdvice</code>) mapping domain exceptions to a consistent <code>ApiError</code> body. Appointment-specific exceptions: <code>SlotNotAvailableException</code>, <code>SlotAlreadyBookedException</code>, <code>AppointmentNotFoundException</code>, <code>InvalidAppointmentStatusTransitionException</code>, <code>AvailabilityProjectionConflictException</code>.</p>
+
+      </article>
+    </main>
+  </div>
+</body>
+</html>

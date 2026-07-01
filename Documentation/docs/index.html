@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TherapyConnect — Engineering Documentation</title>
+  <meta name="description" content="Reverse-engineered architecture and engineering documentation for the TherapyConnect microservices platform." />
+  <link rel="stylesheet" href="assets/style.css" />
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script defer src="assets/script.js"></script>
+</head>
+<body>
+  <div class="layout">
+    <main class="main">
+      <article class="content" data-toc="off">
+
+        <div class="hero">
+          <h1>TherapyConnect Platform</h1>
+          <p class="lead">An event-driven microservices platform that lets independent therapists manage their practice — clients, services, availability, appointments, calendar invites, and business analytics — built on Spring Boot 3.5, Java 25, Spring Cloud, PostgreSQL and Apache Kafka.</p>
+        </div>
+
+        <div class="stat-row">
+          <div class="stat"><div class="num">9</div><div class="lbl">Maven modules</div></div>
+          <div class="stat"><div class="num">7</div><div class="lbl">Runtime services</div></div>
+          <div class="stat"><div class="num">6</div><div class="lbl">Kafka topics</div></div>
+          <div class="stat"><div class="num">RS256</div><div class="lbl">JWT auth</div></div>
+          <div class="stat"><div class="num">CQRS</div><div class="lbl">+ Outbox</div></div>
+        </div>
+
+        <div class="callout info">
+          <div class="callout-title">📘 How this documentation was produced</div>
+          <p>Every page here was derived directly from the source tree (<code>com.org.*</code> services + the shared <code>events</code> library). Where behavior is inferred rather than explicit, it is called out. Start with <a href="architecture.html">Architecture</a> for the big picture, or jump to a <a href="services.html">service</a>.</p>
+        </div>
+
+        <h2 id="what">What the platform does</h2>
+        <p>TherapyConnect is a back-office system for a solo (or small) therapy practice. The therapist is the primary authenticated actor. Through a React single-page app they can:</p>
+        <ul>
+          <li><strong>Manage clients</strong> — create client records, update details, mark active/terminated, flag DSF (discounted/sliding-fee) clients.</li>
+          <li><strong>Define services &amp; delivery modes</strong> — e.g. "Individual Therapy" delivered <em>online</em> (Google Meet) or <em>offline</em> (in-person at an address), each with its own price.</li>
+          <li><strong>Publish availability</strong> — weekly recurring rules plus date-specific overrides are expanded into bookable time slots.</li>
+          <li><strong>Book &amp; manage appointments</strong> — schedule, confirm, reschedule, complete, cancel or abandon sessions against available slots.</li>
+          <li><strong>Auto-sync calendars</strong> — confirmed appointments create Google Calendar invites (with Meet links for online sessions) for therapist and client.</li>
+          <li><strong>Track the business</strong> — dashboards for earnings, completion/cancellation rates, service breakdowns and client retention.</li>
+          <li><strong>Encrypted session notes</strong> — clinical notes are stored AES-GCM encrypted at the field level.</li>
+        </ul>
+
+        <h2 id="map">Documentation map</h2>
+        <div class="grid cols-2">
+          <a class="card svc-card" href="architecture.html">
+            <div class="svc-head"><span class="svc-ico" style="background:var(--brand-soft)">🏗️</span><div><h3>Architecture</h3><span class="svc-port">topology · patterns</span></div></div>
+            <p>Service topology, layered design, CQRS read-model projections, the transactional outbox, and dependency graphs.</p>
+          </a>
+          <a class="card svc-card" href="services.html">
+            <div class="svc-head"><span class="svc-ico" style="background:var(--green-soft)">📦</span><div><h3>Services</h3><span class="svc-port">7 services · ports</span></div></div>
+            <p>Per-service responsibilities, ports, owned data, events produced/consumed, and key classes.</p>
+          </a>
+          <a class="card svc-card" href="api.html">
+            <div class="svc-head"><span class="svc-ico" style="background:var(--purple-soft)">🔌</span><div><h3>API Reference</h3><span class="svc-port">REST endpoints</span></div></div>
+            <p>Every HTTP endpoint: method, path, auth, request/response shape, and the work it triggers.</p>
+          </a>
+          <a class="card svc-card" href="database.html">
+            <div class="svc-head"><span class="svc-ico" style="background:var(--amber-soft)">🗄️</span><div><h3>Data Model</h3><span class="svc-port">entities · ERD</span></div></div>
+            <p>JPA entities per service, relationships, ID strategies, projections and the outbox table.</p>
+          </a>
+          <a class="card svc-card" href="messaging.html">
+            <div class="svc-head"><span class="svc-ico" style="background:var(--brand-soft)">📨</span><div><h3>Messaging &amp; Events</h3><span class="svc-port">Kafka topics</span></div></div>
+            <p>Topics, event schemas, producers, consumer groups, and the outbox publication loop.</p>
+          </a>
+          <a class="card svc-card" href="security.html">
+            <div class="svc-head"><span class="svc-ico" style="background:var(--red-soft)">🔐</span><div><h3>Security</h3><span class="svc-port">JWT · RSA</span></div></div>
+            <p>RS256 JWT issuance &amp; verification, refresh-token rotation, rate limiting, and notes encryption.</p>
+          </a>
+          <a class="card svc-card" href="workflows.html">
+            <div class="svc-head"><span class="svc-ico" style="background:var(--green-soft)">🔄</span><div><h3>Workflows</h3><span class="svc-port">end-to-end</span></div></div>
+            <p>Traced lifecycles: login, slot generation, booking, reschedule, cancel, and calendar sync.</p>
+          </a>
+          <a class="card svc-card" href="onboarding.html">
+            <div class="svc-head"><span class="svc-ico" style="background:var(--purple-soft)">🎓</span><div><h3>Onboarding</h3><span class="svc-port">new engineers</span></div></div>
+            <p>Local setup, run order, conventions, and where to make your first change.</p>
+          </a>
+        </div>
+
+        <h2 id="stack">Technology at a glance</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Concern</th><th>Choice</th><th>Notes</th></tr></thead>
+            <tbody>
+              <tr><td>Language / runtime</td><td>Java 25</td><td>Set via <code>java.version</code> in the parent POM.</td></tr>
+              <tr><td>Framework</td><td>Spring Boot 3.5.10</td><td>Web MVC (servlet stack), Spring Data JPA, Spring Security.</td></tr>
+              <tr><td>Cloud</td><td>Spring Cloud 2025.0.0</td><td>Netflix Eureka discovery + Spring Cloud Gateway (MVC).</td></tr>
+              <tr><td>Datastore</td><td>PostgreSQL</td><td>One logical schema per service; <code>ddl-auto=update</code>. <code>jsonb</code> for outbox payloads.</td></tr>
+              <tr><td>Messaging</td><td>Apache Kafka</td><td>JSON serialization with type headers; transactional outbox pattern.</td></tr>
+              <tr><td>Auth</td><td>JWT (RS256)</td><td>Gateway signs with a private key; services verify with the shared public key.</td></tr>
+              <tr><td>Resilience</td><td>Resilience4j</td><td>Login rate limiter + circuit breakers on inter-service calls.</td></tr>
+              <tr><td>External APIs</td><td>Google Calendar &amp; Gmail</td><td>Calendar invites/Meet links; password-reset email delivery.</td></tr>
+              <tr><td>Frontend</td><td>React 18 + Vite</td><td><code>auth-app/</code> — React Router, Axios, Recharts, Lucide icons.</td></tr>
+              <tr><td>Boilerplate</td><td>Lombok</td><td><code>@Data</code> on entities/DTOs/events.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout warn">
+          <div class="callout-title">⚠️ Status</div>
+          <p>This is an actively-developed codebase with development-grade defaults (<code>ddl-auto=update</code>, broad Kafka trusted packages, secrets via <code>.env</code>). See <a href="technical-debt.html">Technical Debt</a> for the production-readiness gaps that should be closed before deployment.</p>
+        </div>
+
+      </article>
+    </main>
+  </div>
+</body>
+</html>
