@@ -1,0 +1,7 @@
+CREATE DATABASE gateway;
+CREATE DATABASE "user";
+CREATE DATABASE therapist;
+CREATE DATABASE client;
+CREATE DATABASE appointment;
+CREATE DATABASE notification;
+CREATE DATABASE analytics;

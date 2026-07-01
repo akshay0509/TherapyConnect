@@ -13,6 +13,7 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./postgres-init:/docker-entrypoint-initdb.d:ro
     networks:
       - therapy-net
     restart: unless-stopped
@@ -78,7 +79,7 @@ services:
     ports:
       - "8091:8091"
     environment:
-      DB_URL: jdbc:postgresql://postgres:5432/postgres
+      DB_URL: jdbc:postgresql://postgres:5432/gateway
       DB_USERNAME: ${DB_USERNAME}
       DB_PASSWORD: ${DB_PASSWORD}
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
@@ -107,7 +108,7 @@ services:
     container_name: tc-user
     image: therapy-user:latest
     environment:
-      DB_URL: jdbc:postgresql://postgres:5432/postgres
+      DB_URL: jdbc:postgresql://postgres:5432/user
       DB_USERNAME: ${DB_USERNAME}
       DB_PASSWORD: ${DB_PASSWORD}
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
@@ -140,7 +141,7 @@ services:
     container_name: tc-therapist
     image: therapy-therapist:latest
     environment:
-      DB_URL: jdbc:postgresql://postgres:5432/postgres
+      DB_URL: jdbc:postgresql://postgres:5432/therapist
       DB_USERNAME: ${DB_USERNAME}
       DB_PASSWORD: ${DB_PASSWORD}
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
@@ -169,7 +170,7 @@ services:
     container_name: tc-client
     image: therapy-client:latest
     environment:
-      DB_URL: jdbc:postgresql://postgres:5432/postgres
+      DB_URL: jdbc:postgresql://postgres:5432/client
       DB_USERNAME: ${DB_USERNAME}
       DB_PASSWORD: ${DB_PASSWORD}
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
@@ -197,7 +198,7 @@ services:
     container_name: tc-appointment
     image: therapy-appointment:latest
     environment:
-      DB_URL: jdbc:postgresql://postgres:5432/postgres
+      DB_URL: jdbc:postgresql://postgres:5432/appointment
       DB_USERNAME: ${DB_USERNAME}
       DB_PASSWORD: ${DB_PASSWORD}
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
@@ -225,7 +226,7 @@ services:
     container_name: tc-notification
     image: therapy-notification:latest
     environment:
-      DB_URL: jdbc:postgresql://postgres:5432/postgres
+      DB_URL: jdbc:postgresql://postgres:5432/notification
       DB_USERNAME: ${DB_USERNAME}
       DB_PASSWORD: ${DB_PASSWORD}
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
@@ -254,7 +255,7 @@ services:
     container_name: tc-analytics
     image: therapy-analytics:latest
     environment:
-      DB_URL: jdbc:postgresql://postgres:5432/postgres
+      DB_URL: jdbc:postgresql://postgres:5432/analytics
       DB_USERNAME: ${DB_USERNAME}
       DB_PASSWORD: ${DB_PASSWORD}
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
