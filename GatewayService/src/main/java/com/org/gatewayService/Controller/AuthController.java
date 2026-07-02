@@ -148,7 +148,7 @@ public class AuthController {
 				.secure(true)
 				.path("/auth/refresh")
 				.maxAge(0)
-				.sameSite("Strict")
+				.sameSite("None")
 				.build();
 
 		return ResponseEntity.ok()
@@ -174,7 +174,7 @@ public class AuthController {
 				.secure(true)
 				.path("/auth/refresh")
 				.maxAge(7 * 24 * 60 * 60)
-				.sameSite("Strict")
+				.sameSite("None")
 				.build();
 	}
 
