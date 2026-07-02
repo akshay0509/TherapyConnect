@@ -227,12 +227,12 @@ public class TherapistController {
 	}
 
 	@PostMapping("/create-availability-rules")
-	public void createTherapistAvailabilityRules(@RequestBody List<TherapistAvailabilityRulesDto> therapistAvailabilityRulesDtoList) {
+	public List<TherapistAvailabilityRulesDto> createTherapistAvailabilityRules(@RequestBody List<TherapistAvailabilityRulesDto> therapistAvailabilityRulesDtoList) {
 		String therapistId = SecurityUtils.getTherapistId();
 		for (TherapistAvailabilityRulesDto therapistAvailabilityRulesDto : therapistAvailabilityRulesDtoList) {
 			therapistAvailabilityRulesDto.setTherapistId(therapistId);
 		}
-		therapistService.createTherapistAvailabilityRules(therapistAvailabilityRulesDtoList);
+		return therapistService.createTherapistAvailabilityRules(therapistAvailabilityRulesDtoList);
 	}
 
 	@DeleteMapping("/availability-rules/{ruleId}")

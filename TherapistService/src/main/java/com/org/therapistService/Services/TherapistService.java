@@ -291,15 +291,21 @@ public class TherapistService {
 		outboxService.saveOutboxEvent("THERAPIST_AVAILABILITY", therapistId, "DeliveryModeDeleted", event);
 	}
 
-	public void createTherapistAvailabilityRules(List<TherapistAvailabilityRulesDto> therapistAvailabilityRulesDtoList) {
-		if(!therapistAvailabilityRulesDtoList.isEmpty()) {
-			List<TherapistAvailabilityRules> therapistAvailabilityRulesList = new ArrayList<TherapistAvailabilityRules>();
-			for(TherapistAvailabilityRulesDto therapistAvailabilityRulesDto : therapistAvailabilityRulesDtoList) {
-				TherapistAvailabilityRules therapistAvailabilityRules = therapistAssembler.assembleDtoToEntity(therapistAvailabilityRulesDto);
-				therapistAvailabilityRulesList.add(therapistAvailabilityRules);
-			}
-			therapistAvailabilityRulesRepository.saveAll(therapistAvailabilityRulesList);
+	public List<TherapistAvailabilityRulesDto> createTherapistAvailabilityRules(List<TherapistAvailabilityRulesDto> therapistAvailabilityRulesDtoList) {
+		if(therapistAvailabilityRulesDtoList.isEmpty()) {
+			return new ArrayList<>();
 		}
+		List<TherapistAvailabilityRules> therapistAvailabilityRulesList = new ArrayList<TherapistAvailabilityRules>();
+		for(TherapistAvailabilityRulesDto therapistAvailabilityRulesDto : therapistAvailabilityRulesDtoList) {
+			TherapistAvailabilityRules therapistAvailabilityRules = therapistAssembler.assembleDtoToEntity(therapistAvailabilityRulesDto);
+			therapistAvailabilityRulesList.add(therapistAvailabilityRules);
+		}
+		List<TherapistAvailabilityRules> saved = therapistAvailabilityRulesRepository.saveAll(therapistAvailabilityRulesList);
+		List<TherapistAvailabilityRulesDto> result = new ArrayList<>();
+		for (TherapistAvailabilityRules entity : saved) {
+			result.add(therapistAssembler.assembleEntityToDto(entity));
+		}
+		return result;
 	}
 
 	@Transactional

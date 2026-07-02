@@ -79,7 +79,7 @@ export default function TherapistHomePage() {
   }, []);
 
   const upcoming = appointments
-    .filter((a) => isUpcoming(a.startTime))
+    .filter((a) => isUpcoming(a.startTime) && a.status !== "CANCELLED" && a.status !== "ABANDONED")
     .sort((a, b) => new Date(a.startTime) - new Date(b.startTime));
 
   return (

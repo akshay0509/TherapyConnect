@@ -518,7 +518,10 @@ export default function AppointmentsPage() {
     try {
       await generateSlots(genStartDate, genEndDate);
       setGenSuccess(true);
+      // Wait for Kafka event propagation before reloading so new slots are visible
+      await new Promise(r => setTimeout(r, 3000));
       await reloadAll();
+      setPanel(null);
     } catch (err) { setGenError(err.message); }
     finally { setGenLoading(false); }
   };
@@ -563,7 +566,7 @@ export default function AppointmentsPage() {
     setSearchError(null);
   };
 
-  // ─── Render helpers ────────────────────────────────────────────────────────
+  // ─── Render helpers ────────────────────────────────────────────────────────────
   const hourLabels = Array.from({ length: TOTAL_HOURS + 1 }, (_, i) => {
     const h = HOUR_START + i;
     return h === 12 ? "12 PM" : h < 12 ? `${h} AM` : `${h-12} PM`;
@@ -1113,7 +1116,7 @@ export default function AppointmentsPage() {
                   </div>
                 </div>
                 {genError && <div className={styles.errorBox}><span className={styles.errorIcon}>!</span>{genError}</div>}
-                {genSuccess && <div className={styles.successBox}><span className={styles.successIcon}>✓</span> Slots generated!</div>}
+                {genSuccess && <div className={styles.successBox}><span className={styles.successIcon}>✓</span> Slots generated! Refreshing calendar…</div>}
                 <div className={styles.formActions}>
                   <button className={styles.cancelBtn} onClick={() => setPanel(null)}>Cancel</button>
                   <button className={styles.generateSubmitBtn} onClick={handleGenerate} disabled={genLoading||!genStartDate||!genEndDate}>{genLoading?<span className={styles.btnSpinner}/>:"⚡ Generate"}</button>

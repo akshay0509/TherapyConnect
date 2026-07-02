@@ -22,6 +22,8 @@ public class GoogleCalendarService {
 
 	private static final Logger logger = LoggerFactory.getLogger(GoogleCalendarService.class);
 
+	private static final ZoneId APP_ZONE = ZoneId.of("Asia/Kolkata");
+
 	private final Calendar calendar;
 
 	public GoogleCalendarService(Calendar calendar) {
@@ -158,13 +160,12 @@ public class GoogleCalendarService {
 	private EventDateTime buildEventDateTime(LocalDateTime time) {
 		return new EventDateTime()
 				.setDateTime(convertToDateTime(time))
-				.setTimeZone(ZoneId.systemDefault().toString());
+				.setTimeZone(APP_ZONE.toString());
 	}
 
 	private com.google.api.client.util.DateTime convertToDateTime(LocalDateTime time) {
-
 		return new com.google.api.client.util.DateTime(
-				time.atZone(ZoneId.systemDefault())
+				time.atZone(APP_ZONE)
 				.toInstant()
 				.toEpochMilli()
 				);
