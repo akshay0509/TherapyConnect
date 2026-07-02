@@ -20,6 +20,7 @@ import org.springframework.stereotype.Service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.org.events.Client.ClientStatus;
+import com.org.events.Therapist.TherapistEvent;
 import com.org.events.TherapistAppointment.AppointmentStatus;
 import com.org.events.TherapistAvailability.AvailabilityOverrideEvent;
 import com.org.events.TherapistAvailability.CalendarBlockEvent;
@@ -107,10 +108,18 @@ public class TherapistService {
 
 	private TherapistAssembler therapistAssembler = new TherapistAssembler();
 
-	public TherapistDto createTherapist(TherapistDto therapistDto, String userId) {
+	@Transactional
+	public TherapistDto createTherapist(TherapistDto therapistDto, String userId) throws JsonProcessingException {
 		Therapist therapist = therapistAssembler.assembleDtoToEntity(therapistDto);
 		therapist.setUserId(userId);
 		Therapist saved = therapistRepository.save(therapist);
+
+		TherapistEvent event = new TherapistEvent();
+		event.setEventType("TherapistCreated");
+		event.setTherapistId(saved.getTherapistId());
+		event.setTimezone(saved.getTimezone());
+		outboxService.saveOutboxEvent("THERAPIST_AVAILABILITY", saved.getTherapistId(), "TherapistCreated", event);
+
 		return therapistAssembler.assembleEntityToDto(saved);
 	}
 

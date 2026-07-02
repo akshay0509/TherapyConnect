@@ -22,8 +22,6 @@ public class GoogleCalendarService {
 
 	private static final Logger logger = LoggerFactory.getLogger(GoogleCalendarService.class);
 
-	private static final ZoneId APP_ZONE = ZoneId.of("Asia/Kolkata");
-
 	private final Calendar calendar;
 
 	public GoogleCalendarService(Calendar calendar) {
@@ -38,7 +36,8 @@ public class GoogleCalendarService {
 			LocalDateTime startTime,
 			LocalDateTime endTime,
 			String modeType,
-			String address) throws Exception {
+			String address,
+			ZoneId zone) throws Exception {
 
 		logger.info("inside createAppointmentEvent..");
 
@@ -47,8 +46,8 @@ public class GoogleCalendarService {
 		event.setSummary(summary);
 		event.setDescription(description);
 
-		event.setStart(buildEventDateTime(startTime));
-		event.setEnd(buildEventDateTime(endTime));
+		event.setStart(buildEventDateTime(startTime, zone));
+		event.setEnd(buildEventDateTime(endTime, zone));
 		event.setAttendees(buildAttendees(clientEmail, therapistEmail));
 
 		if ("OFFLINE".equals(modeType)) {
@@ -80,13 +79,14 @@ public class GoogleCalendarService {
 			LocalDateTime startTime,
 			LocalDateTime endTime,
 			String modeType,
-			String address) throws Exception {
+			String address,
+			ZoneId zone) throws Exception {
 
 		Event existingEvent = calendar.events().get("primary", googleCalendarEventId).execute();
 		existingEvent.setSummary(summary);
 		existingEvent.setDescription(description);
-		existingEvent.setStart(buildEventDateTime(startTime));
-		existingEvent.setEnd(buildEventDateTime(endTime));
+		existingEvent.setStart(buildEventDateTime(startTime, zone));
+		existingEvent.setEnd(buildEventDateTime(endTime, zone));
 		existingEvent.setAttendees(buildAttendees(clientEmail, therapistEmail));
 
 		if ("OFFLINE".equals(modeType)) {
@@ -114,13 +114,14 @@ public class GoogleCalendarService {
 			String summary,
 			String description,
 			LocalDateTime startTime,
-			LocalDateTime endTime) throws Exception {
+			LocalDateTime endTime,
+			ZoneId zone) throws Exception {
 
 		Event event = new Event();
 		event.setSummary(summary);
 		event.setDescription(description);
-		event.setStart(buildEventDateTime(startTime));
-		event.setEnd(buildEventDateTime(endTime));
+		event.setStart(buildEventDateTime(startTime, zone));
+		event.setEnd(buildEventDateTime(endTime, zone));
 
 		Event createdEvent = calendar.events()
 				.insert("primary", event)
@@ -157,15 +158,15 @@ public class GoogleCalendarService {
 						);
 	}
 
-	private EventDateTime buildEventDateTime(LocalDateTime time) {
+	private EventDateTime buildEventDateTime(LocalDateTime time, ZoneId zone) {
 		return new EventDateTime()
-				.setDateTime(convertToDateTime(time))
-				.setTimeZone(APP_ZONE.toString());
+				.setDateTime(convertToDateTime(time, zone))
+				.setTimeZone(zone.toString());
 	}
 
-	private com.google.api.client.util.DateTime convertToDateTime(LocalDateTime time) {
+	private com.google.api.client.util.DateTime convertToDateTime(LocalDateTime time, ZoneId zone) {
 		return new com.google.api.client.util.DateTime(
-				time.atZone(APP_ZONE)
+				time.atZone(zone)
 				.toInstant()
 				.toEpochMilli()
 				);

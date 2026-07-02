@@ -132,7 +132,7 @@ public class TherapistController {
 
 	//create a therapist — returns the created profile including the generated therapistId
 	@PostMapping("/create-therapist")
-	public ResponseEntity<TherapistDto> createTherapist(@RequestBody TherapistDto therapistDto) {
+	public ResponseEntity<TherapistDto> createTherapist(@RequestBody TherapistDto therapistDto) throws JsonProcessingException {
 		String userId = SecurityUtils.getUserId();
 		TherapistDto created = therapistService.createTherapist(therapistDto, userId);
 		return ResponseEntity.ok(created);

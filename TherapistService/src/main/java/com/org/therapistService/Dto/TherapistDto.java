@@ -7,7 +7,7 @@ import lombok.Data;
 
 @Data
 public class TherapistDto {
-	
+
 	private String therapistId;
 	private String firstName;
 	private String lastName;
@@ -16,4 +16,5 @@ public class TherapistDto {
 	private String email;
 	private String gender;
 	private int yearsOfExperience;
+	private String timezone;
 }

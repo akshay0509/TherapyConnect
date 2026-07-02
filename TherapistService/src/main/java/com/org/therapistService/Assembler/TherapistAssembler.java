@@ -33,6 +33,7 @@ public class TherapistAssembler {
 		therapist.setGender(therapistDto.getGender());
 		therapist.setPhoneNumber(therapistDto.getPhoneNumber());
 		therapist.setYearsOfExperience(therapistDto.getYearsOfExperience());
+		therapist.setTimezone(therapistDto.getTimezone());
 
 		return therapist;
 	}
@@ -47,6 +48,7 @@ public class TherapistAssembler {
 		therapistDto.setGender(therapist.getGender());
 		therapistDto.setPhoneNumber(therapist.getPhoneNumber());
 		therapistDto.setYearsOfExperience(therapist.getYearsOfExperience());
+		therapistDto.setTimezone(therapist.getTimezone());
 
 		return therapistDto;
 	}
@@ -143,8 +145,6 @@ public class TherapistAssembler {
 		return therapistAvailabilityDto;
 	}
 
-	// replaces assembleToDto(SlotDeliveryOption, TherapyDeliveryMode) — price now comes
-	// directly from the live mode, no option row needed
 	public SlotDeliveryOptionDto assembleModeToOptionDto(TherapyDeliveryMode mode) {
 		SlotDeliveryOptionDto dto = new SlotDeliveryOptionDto();
 		dto.setModeId(mode.getModeId());

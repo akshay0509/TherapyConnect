@@ -1,5 +1,6 @@
 package com.org.notificationService.Messaging;
 
+import java.time.ZoneId;
 import java.util.Optional;
 
 import org.slf4j.Logger;
@@ -14,8 +15,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.org.events.TherapistAppointment.AppointmentEvent;
 import com.org.notificationService.Entity.AppointmentCalendarEvent;
 import com.org.notificationService.Entity.ClientProjection;
+import com.org.notificationService.Entity.TherapistProjection;
 import com.org.notificationService.Repository.AppointmentCalendarEventRepository;
 import com.org.notificationService.Repository.ClientProjectionRepository;
+import com.org.notificationService.Repository.TherapistProjectionRepository;
 import com.org.notificationService.Services.GoogleCalendarService;
 
 import jakarta.transaction.Transactional;
@@ -33,12 +36,16 @@ public class AppointmentEventConsumer {
 	ClientProjectionRepository clientProjectionRepository;
 
 	@Autowired
+	TherapistProjectionRepository therapistProjectionRepository;
+
+	@Autowired
 	AppointmentCalendarEventRepository appointmentCalendarEventRepository;
 
 	@Value("${google.calendar.therapist-email}")
 	private String therapistEmail;
 
 	private static final String topic = "therapist-appointment-events";
+	private static final ZoneId FALLBACK_ZONE = ZoneId.of("Asia/Kolkata");
 
 	private static final Logger logger = LoggerFactory.getLogger(AppointmentEventConsumer.class);
 
@@ -61,6 +68,20 @@ public class AppointmentEventConsumer {
 		}
 	}
 
+	private ZoneId resolveZone(String therapistId) {
+		Optional<TherapistProjection> projection = therapistProjectionRepository.findById(therapistId);
+		if (projection.isEmpty()) {
+			logger.warn("TherapistProjection not found for therapistId={}; using fallback timezone", therapistId);
+			return FALLBACK_ZONE;
+		}
+		try {
+			return ZoneId.of(projection.get().getTimezone());
+		} catch (Exception e) {
+			logger.warn("Invalid timezone '{}' for therapistId={}; using fallback", projection.get().getTimezone(), therapistId);
+			return FALLBACK_ZONE;
+		}
+	}
+
 	private void createInvite(AppointmentEvent appointmentEvent) {
 
 		Optional<AppointmentCalendarEvent> existingCalendarEvent = appointmentCalendarEventRepository.findById(appointmentEvent.getAppointmentId());
@@ -77,6 +98,8 @@ public class AppointmentEventConsumer {
 			return;
 		}
 
+		ZoneId zone = resolveZone(appointmentEvent.getTherapistId());
+
 		try {
 
 			String googleCalendarEventId = googleCalendarService.createAppointmentEvent(
@@ -87,7 +110,8 @@ public class AppointmentEventConsumer {
 					appointmentEvent.getStartTime(),
 					appointmentEvent.getEndTime(),
 					appointmentEvent.getModeType(),
-					appointmentEvent.getAddress()
+					appointmentEvent.getAddress(),
+					zone
 					);
 
 			AppointmentCalendarEvent appointmentCalendarEvent = new AppointmentCalendarEvent();
@@ -110,11 +134,13 @@ public class AppointmentEventConsumer {
 		}
 
 		Optional<ClientProjection> clientProjection = clientProjectionRepository.findById(appointmentEvent.getClientId());
-		
+
 		if (clientProjection.isEmpty()) {
 			logger.error("Client not found. Skipping reschedule event. clientId={}", appointmentEvent.getClientId());
 			return;
 		}
+
+		ZoneId zone = resolveZone(appointmentEvent.getTherapistId());
 
 		try {
 			googleCalendarService.updateAppointmentEvent(
@@ -126,7 +152,8 @@ public class AppointmentEventConsumer {
 					appointmentEvent.getStartTime(),
 					appointmentEvent.getEndTime(),
 					appointmentEvent.getModeType(),
-					appointmentEvent.getAddress()
+					appointmentEvent.getAddress(),
+					zone
 					);
 		}
 		catch (Exception e) {

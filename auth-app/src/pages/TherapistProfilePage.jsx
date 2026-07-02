@@ -22,6 +22,7 @@ const EMPTY_FORM = {
   email: "",
   gender: "",
   yearsOfExperience: "",
+  timezone: "",
 };
 
 export default function TherapistProfilePage() {
@@ -150,6 +151,10 @@ export default function TherapistProfilePage() {
                   <span className={styles.fieldLabel}>Therapist ID</span>
                   <span className={`${styles.fieldValue} ${styles.mono}`}>{profile.therapistId ?? "—"}</span>
                 </div>
+                <div className={styles.profileField}>
+                  <span className={styles.fieldLabel}>Timezone</span>
+                  <span className={styles.fieldValue}>{profile.timezone ?? "—"}</span>
+                </div>
               </div>
             </div>
           </div>
@@ -234,6 +239,25 @@ export default function TherapistProfilePage() {
                     min="0" max="60" required
                     value={form.yearsOfExperience} onChange={handleChange}
                     className={styles.input} placeholder="e.g. 5" />
+                </div>
+                <div className={styles.field}>
+                  <label className={styles.label} htmlFor="timezone">Timezone</label>
+                  <select id="timezone" name="timezone" required
+                    value={form.timezone} onChange={handleChange}
+                    className={`${styles.input} ${styles.select}`}>
+                    <option value="" disabled>Select timezone</option>
+                    <option value="Asia/Kolkata">Asia/Kolkata (IST, UTC+5:30)</option>
+                    <option value="Asia/Dubai">Asia/Dubai (GST, UTC+4)</option>
+                    <option value="Asia/Singapore">Asia/Singapore (SGT, UTC+8)</option>
+                    <option value="Asia/Tokyo">Asia/Tokyo (JST, UTC+9)</option>
+                    <option value="Europe/London">Europe/London (GMT/BST)</option>
+                    <option value="Europe/Paris">Europe/Paris (CET/CEST, UTC+1/+2)</option>
+                    <option value="America/New_York">America/New_York (EST/EDT)</option>
+                    <option value="America/Chicago">America/Chicago (CST/CDT)</option>
+                    <option value="America/Denver">America/Denver (MST/MDT)</option>
+                    <option value="America/Los_Angeles">America/Los_Angeles (PST/PDT)</option>
+                    <option value="UTC">UTC</option>
+                  </select>
                 </div>
               </div>
 

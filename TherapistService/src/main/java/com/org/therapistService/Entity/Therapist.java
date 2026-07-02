@@ -18,7 +18,7 @@ public class Therapist {
 
 	@Id
 	private String therapistId;
-	
+
 	private String firstName;
 	private String lastName;
 	private Date dob;
@@ -26,10 +26,11 @@ public class Therapist {
 	private String email;
 	private String gender;
 	private int yearsOfExperience;
-	
+	private String timezone;
+
 	@Column(nullable = false, unique = true)
     private String userId;
-	
+
 	@PrePersist
     public void generateId() {
         if (this.therapistId == null) {
