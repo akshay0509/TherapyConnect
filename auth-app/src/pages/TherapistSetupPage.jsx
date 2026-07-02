@@ -4,8 +4,6 @@ import { useAuth } from "../context/AuthContext";
 import { createTherapistProfile } from "../api/therapistProfile";
 import styles from "./TherapistProfilePage.module.css";
 
-const GENDERS = ["Male", "Female", "Non-binary", "Prefer not to say"];
-
 export default function TherapistSetupPage() {
   const { completeSetup, logout } = useAuth();
   const navigate = useNavigate();
@@ -96,21 +94,21 @@ export default function TherapistSetupPage() {
               </div>
             </div>
 
-            {/* Date of Birth — three inputs, no native calendar */}
+            {/* Date of Birth — text inputs, no spinner arrows */}
             <div className={styles.formRow}>
               <div className={styles.field}>
                 <label className={styles.label}>Date of Birth</label>
                 <div className={styles.dobRow}>
-                  <input name="dobDay" type="number" min="1" max="31"
-                    value={form.dobDay} onChange={handleChange}
+                  <input name="dobDay" type="text" inputMode="numeric"
+                    maxLength={2} value={form.dobDay} onChange={handleChange}
                     className={`${styles.input} ${styles.dobNarrow}`}
                     placeholder="DD" />
-                  <input name="dobMonth" type="number" min="1" max="12"
-                    value={form.dobMonth} onChange={handleChange}
+                  <input name="dobMonth" type="text" inputMode="numeric"
+                    maxLength={2} value={form.dobMonth} onChange={handleChange}
                     className={`${styles.input} ${styles.dobNarrow}`}
                     placeholder="MM" />
-                  <input name="dobYear" type="number" min="1900" max={new Date().getFullYear()}
-                    value={form.dobYear} onChange={handleChange}
+                  <input name="dobYear" type="text" inputMode="numeric"
+                    maxLength={4} value={form.dobYear} onChange={handleChange}
                     className={`${styles.input} ${styles.dobWide}`}
                     placeholder="YYYY" />
                 </div>
@@ -118,27 +116,26 @@ export default function TherapistSetupPage() {
 
               <div className={styles.field}>
                 <label className={styles.label} htmlFor="yearsOfExperience">Years of Experience</label>
-                <input id="yearsOfExperience" name="yearsOfExperience" type="number"
-                  min="0" max="60"
+                <input id="yearsOfExperience" name="yearsOfExperience" type="text"
+                  inputMode="numeric" maxLength={2}
                   value={form.yearsOfExperience} onChange={handleChange}
                   className={styles.input} placeholder="e.g. 5" />
               </div>
             </div>
 
-            {/* Gender — toggle buttons, no native select */}
-            <div className={styles.field}>
-              <label className={styles.label}>Gender</label>
-              <div className={styles.optionGroup}>
-                {GENDERS.map((g) => (
-                  <button
-                    key={g}
-                    type="button"
-                    className={`${styles.optionBtn} ${form.gender === g ? styles.optionBtnActive : ""}`}
-                    onClick={() => setForm((prev) => ({ ...prev, gender: g }))}
-                  >
-                    {g}
-                  </button>
-                ))}
+            {/* Gender — styled select, no native OS popup issues */}
+            <div className={styles.formRow}>
+              <div className={styles.field}>
+                <label className={styles.label} htmlFor="gender">Gender</label>
+                <select id="gender" name="gender"
+                  value={form.gender} onChange={handleChange}
+                  className={`${styles.input} ${styles.select}`}>
+                  <option value="">Select gender</option>
+                  <option value="Male">Male</option>
+                  <option value="Female">Female</option>
+                  <option value="Non-binary">Non-binary</option>
+                  <option value="Prefer not to say">Prefer not to say</option>
+                </select>
               </div>
             </div>
 
