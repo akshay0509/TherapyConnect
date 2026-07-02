@@ -130,11 +130,12 @@ public class TherapistController {
 		therapistService.getTherapistAvailability(therapistId);
 	}
 
-	//create a therapist
+	//create a therapist — returns the created profile including the generated therapistId
 	@PostMapping("/create-therapist")
-	public void createTherapist(@RequestBody TherapistDto therapistDto) {
+	public ResponseEntity<TherapistDto> createTherapist(@RequestBody TherapistDto therapistDto) {
 		String userId = SecurityUtils.getUserId();
-		therapistService.createTherapist(therapistDto, userId);
+		TherapistDto created = therapistService.createTherapist(therapistDto, userId);
+		return ResponseEntity.ok(created);
 	}
 
 	//create a client for a therapist

@@ -107,10 +107,11 @@ public class TherapistService {
 
 	private TherapistAssembler therapistAssembler = new TherapistAssembler();
 
-	public void createTherapist(TherapistDto therapistDto, String userId) {
+	public TherapistDto createTherapist(TherapistDto therapistDto, String userId) {
 		Therapist therapist = therapistAssembler.assembleDtoToEntity(therapistDto);
 		therapist.setUserId(userId);
-		therapistRepository.save(therapist);
+		Therapist saved = therapistRepository.save(therapist);
+		return therapistAssembler.assembleEntityToDto(saved);
 	}
 
 	public List<TherapistDto> getAllTherapists(){
@@ -449,7 +450,7 @@ public class TherapistService {
 
 	public String getTherapistIdByUserId(String userId) {
 		Therapist therapist = therapistRepository.findByUserId(userId);
-		return therapist.getTherapistId();
+		return therapist != null ? therapist.getTherapistId() : null;
 	}
 
 	public List<TherapistClientsDto> getClientsForTherapist(String therapistId){
@@ -494,7 +495,6 @@ public class TherapistService {
 		logger.info("appointment id :{}", sessionNotes.getAppointmentId());
 		AppointmentProjection appointmentProjection = appointmentProjectionRepository.findByAppointmentIdAndTherapistId(sessionNotes.getAppointmentId(), sessionNotes.getTherapistId());
 		logger.info("clientId id :{}", appointmentProjection.getClientId());
-		// REMOVED: logger.info("notes :" + sessionNotes.getNoteContent()) — plaintext clinical data must never appear in logs
 		sessionNotes.setClientId(appointmentProjection.getClientId());
 		sessionNotesRepository.save(sessionNotes);
 		logger.info("exiting createNotes..");

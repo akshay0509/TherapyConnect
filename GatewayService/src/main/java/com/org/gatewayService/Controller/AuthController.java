@@ -119,16 +119,22 @@ public class AuthController {
 		RefreshTokens stored = tokenOpt.get();
 		Set<String> roles = refreshTokensService.getRoles(stored);
 
-		// Rotate: delete old token, issue new one preserving roles
+		// If therapistId was null at login time (new user pre-setup), try to fetch it now
+		String therapistId = stored.getTherapistId();
+		if (therapistId == null) {
+			therapistId = therapistServiceProxy.getTherapistId(stored.getUserId());
+		}
+
+		// Rotate: delete old token, issue new one preserving roles (and updated therapistId)
 		RefreshTokens newToken = refreshTokensService.createRefreshToken(
-				stored.getUsername(), stored.getUserId(), stored.getTherapistId(), roles);
+				stored.getUsername(), stored.getUserId(), therapistId, roles);
 
 		String accessToken = jwtUtil.generateToken(
 				stored.getUsername(),
 				List.of("read", "write"),
 				roles,
 				stored.getUserId(),
-				stored.getTherapistId());
+				therapistId);
 
 		return ResponseEntity.ok()
 				.header(HttpHeaders.SET_COOKIE, buildRefreshCookie(newToken.getToken()).toString())
