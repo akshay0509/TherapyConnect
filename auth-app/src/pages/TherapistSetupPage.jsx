@@ -2,51 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { createTherapistProfile } from "../api/therapistProfile";
-
-const s = {
-  page: {
-    minHeight: "100vh", background: "#080f17",
-    display: "flex", alignItems: "center", justifyContent: "center",
-    fontFamily: "'DM Sans', sans-serif", padding: "24px 16px",
-  },
-  card: {
-    background: "#0f1923", border: "1px solid rgba(255,255,255,0.07)",
-    borderRadius: 20, padding: "40px 36px", width: "100%", maxWidth: 520,
-    boxShadow: "0 32px 80px rgba(0,0,0,0.5)",
-  },
-  logo: { fontSize: "2rem", marginBottom: 8 },
-  title: {
-    fontFamily: "'Syne', sans-serif", fontSize: "1.5rem", fontWeight: 800,
-    color: "#e2e8f0", margin: "0 0 6px",
-  },
-  subtitle: { fontSize: "0.875rem", color: "#64748b", margin: "0 0 32px" },
-  grid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px 20px" },
-  fullRow: { gridColumn: "1 / -1" },
-  field: { display: "flex", flexDirection: "column", gap: 6 },
-  label: { fontSize: "0.8rem", fontWeight: 600, color: "#94a3b8", letterSpacing: "0.04em", textTransform: "uppercase" },
-  input: {
-    background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)",
-    borderRadius: 10, padding: "10px 14px", color: "#e2e8f0", fontSize: "0.9rem",
-    outline: "none", width: "100%", boxSizing: "border-box",
-  },
-  select: {
-    background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)",
-    borderRadius: 10, padding: "10px 14px", color: "#e2e8f0", fontSize: "0.9rem",
-    outline: "none", width: "100%", boxSizing: "border-box",
-  },
-  button: {
-    marginTop: 24, width: "100%", padding: "13px", background: "rgba(245,158,11,0.15)",
-    border: "1px solid rgba(245,158,11,0.35)", borderRadius: 12,
-    color: "#fbbf24", fontWeight: 700, fontSize: "0.95rem",
-    cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
-  },
-  error: {
-    gridColumn: "1 / -1", background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.25)",
-    borderRadius: 10, padding: "10px 14px", color: "#fca5a5", fontSize: "0.85rem",
-    display: "flex", alignItems: "center", gap: 8,
-  },
-  step: { fontSize: "0.78rem", color: "#475569", marginBottom: 20 },
-};
+import styles from "./TherapistProfilePage.module.css";
 
 export default function TherapistSetupPage() {
   const { completeSetup, logout } = useAuth();
@@ -70,9 +26,8 @@ export default function TherapistSetupPage() {
       await createTherapistProfile({
         ...form,
         yearsOfExperience: parseInt(form.yearsOfExperience, 10) || 0,
-        dob: form.dob || null,
+        dob: form.dob ? new Date(form.dob).toISOString() : null,
       });
-      // Refresh the token — server now has therapistId, refresh endpoint will pick it up
       await completeSetup();
       navigate("/therapist-home", { replace: true });
     } catch (err) {
@@ -83,80 +38,101 @@ export default function TherapistSetupPage() {
   };
 
   return (
-    <div style={s.page}>
-      <div style={s.card}>
-        <div style={s.logo}>🧑‍⚕️</div>
-        <h1 style={s.title}>Complete your profile</h1>
-        <p style={s.subtitle}>Before you can use the platform, we need a few details about you.</p>
-        <p style={s.step}>Step 1 of 1 — Therapist profile</p>
+    <div className={styles.page}>
+      <header className={styles.header}>
+        <div className={styles.headerInner}>
+          <span className={styles.logo}>🧠 Therapy Connect</span>
+          <span className={styles.rolePill}>Therapist</span>
+        </div>
+      </header>
 
-        <form onSubmit={handleSubmit}>
-          <div style={s.grid}>
+      <main className={styles.main}>
+        <div className={styles.formWrap}>
+          <div className={styles.formHeader}>
+            <h2 className={styles.formTitle}>Complete your profile</h2>
+            <p className={styles.formSub}>Before you can use the platform, we need a few details about you.</p>
+          </div>
 
-            <div style={s.field}>
-              <label style={s.label}>First name *</label>
-              <input style={s.input} name="firstName" required value={form.firstName} onChange={handleChange} placeholder="Jane" />
+          <form onSubmit={handleSubmit} className={styles.form}>
+            <div className={styles.formRow}>
+              <div className={styles.field}>
+                <label className={styles.label} htmlFor="firstName">First Name *</label>
+                <input id="firstName" name="firstName" type="text" required
+                  value={form.firstName} onChange={handleChange}
+                  className={styles.input} placeholder="Jane" />
+              </div>
+              <div className={styles.field}>
+                <label className={styles.label} htmlFor="lastName">Last Name *</label>
+                <input id="lastName" name="lastName" type="text" required
+                  value={form.lastName} onChange={handleChange}
+                  className={styles.input} placeholder="Smith" />
+              </div>
             </div>
 
-            <div style={s.field}>
-              <label style={s.label}>Last name *</label>
-              <input style={s.input} name="lastName" required value={form.lastName} onChange={handleChange} placeholder="Smith" />
+            <div className={styles.formRow}>
+              <div className={styles.field}>
+                <label className={styles.label} htmlFor="email">Email</label>
+                <input id="email" name="email" type="email"
+                  value={form.email} onChange={handleChange}
+                  className={styles.input} placeholder="you@example.com" />
+              </div>
+              <div className={styles.field}>
+                <label className={styles.label} htmlFor="phoneNumber">Phone Number</label>
+                <input id="phoneNumber" name="phoneNumber" type="tel"
+                  value={form.phoneNumber} onChange={handleChange}
+                  className={styles.input} placeholder="+91 98765 43210" />
+              </div>
             </div>
 
-            <div style={{ ...s.field, ...s.fullRow }}>
-              <label style={s.label}>Email</label>
-              <input style={s.input} name="email" type="email" value={form.email} onChange={handleChange} placeholder="you@example.com" />
+            <div className={styles.formRow}>
+              <div className={styles.field}>
+                <label className={styles.label} htmlFor="dob">Date of Birth</label>
+                <input id="dob" name="dob" type="date"
+                  value={form.dob} onChange={handleChange}
+                  className={`${styles.input} ${styles.dateInput}`}
+                  max={new Date().toISOString().split("T")[0]} />
+              </div>
+              <div className={styles.field}>
+                <label className={styles.label} htmlFor="gender">Gender</label>
+                <select id="gender" name="gender"
+                  value={form.gender} onChange={handleChange}
+                  className={`${styles.input} ${styles.select}`}>
+                  <option value="">Select gender</option>
+                  <option value="Male">Male</option>
+                  <option value="Female">Female</option>
+                  <option value="Non-binary">Non-binary</option>
+                  <option value="Prefer not to say">Prefer not to say</option>
+                </select>
+              </div>
             </div>
 
-            <div style={s.field}>
-              <label style={s.label}>Phone number</label>
-              <input style={s.input} name="phoneNumber" value={form.phoneNumber} onChange={handleChange} placeholder="+91 98765 43210" />
-            </div>
-
-            <div style={s.field}>
-              <label style={s.label}>Date of birth</label>
-              <input style={s.input} name="dob" type="date" value={form.dob} onChange={handleChange} />
-            </div>
-
-            <div style={s.field}>
-              <label style={s.label}>Gender</label>
-              <select style={s.select} name="gender" value={form.gender} onChange={handleChange}>
-                <option value="">Select</option>
-                <option value="Male">Male</option>
-                <option value="Female">Female</option>
-                <option value="Non-binary">Non-binary</option>
-                <option value="Prefer not to say">Prefer not to say</option>
-              </select>
-            </div>
-
-            <div style={s.field}>
-              <label style={s.label}>Years of experience</label>
-              <input style={s.input} name="yearsOfExperience" type="number" min="0" max="60" value={form.yearsOfExperience} onChange={handleChange} placeholder="5" />
+            <div className={styles.formRow}>
+              <div className={styles.field}>
+                <label className={styles.label} htmlFor="yearsOfExperience">Years of Experience</label>
+                <input id="yearsOfExperience" name="yearsOfExperience" type="number"
+                  min="0" max="60"
+                  value={form.yearsOfExperience} onChange={handleChange}
+                  className={styles.input} placeholder="e.g. 5" />
+              </div>
             </div>
 
             {error && (
-              <div style={s.error}>
-                <span>!</span> {error}
+              <div className={styles.errorBox}>
+                <span className={styles.errorIcon}>!</span>{error}
               </div>
             )}
 
-          </div>
-
-          <button type="submit" style={s.button} disabled={loading}>
-            {loading ? "Setting up…" : "Complete setup"}
-          </button>
-        </form>
-
-        <div style={{ marginTop: 16, textAlign: "center" }}>
-          <button
-            type="button"
-            onClick={() => logout()}
-            style={{ background: "none", border: "none", color: "#475569", fontSize: "0.8rem", cursor: "pointer" }}
-          >
-            Sign out
-          </button>
+            <div className={styles.formActions}>
+              <button type="button" className={styles.cancelBtn} onClick={() => logout()}>
+                Sign out
+              </button>
+              <button type="submit" className={styles.submitBtn} disabled={loading}>
+                {loading ? <span className={styles.btnSpinner} /> : "Complete setup"}
+              </button>
+            </div>
+          </form>
         </div>
-      </div>
+      </main>
     </div>
   );
 }
