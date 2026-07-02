@@ -1,0 +1,92 @@
+/* ─── Custom calendar popover ─── */
+.calWrap { position: relative; }
+
+.calPopover {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 200;
+  background: #0d1520;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 14px;
+  padding: 16px;
+  box-shadow: 0 16px 48px rgba(0,0,0,0.6);
+  width: 280px;
+}
+
+.calHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  gap: 8px;
+}
+
+.calNav {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 5px 8px;
+  display: flex;
+  align-items: center;
+  transition: color 0.15s, border-color 0.15s;
+  flex-shrink: 0;
+}
+.calNav:hover { color: #f1f5f9; border-color: rgba(255,255,255,0.25); }
+
+.calMonthYear {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex: 1;
+  justify-content: center;
+}
+
+.calSelect {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px;
+  color: #e2e8f0;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.82rem;
+  padding: 5px 8px;
+  cursor: pointer;
+  outline: none;
+  appearance: none;
+}
+.calSelect:focus { border-color: #10b981; }
+.calSelect option { background: #0d1520; color: #f1f5f9; }
+
+.calGrid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.calDayName {
+  text-align: center;
+  font-size: 0.65rem;
+  color: #475569;
+  font-weight: 600;
+  text-transform: uppercase;
+  padding: 4px 0 8px;
+}
+
+.calDay {
+  text-align: center;
+  padding: 7px 0;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  color: #cbd5e1;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+  background: none;
+  border: none;
+  font-family: 'DM Sans', sans-serif;
+  width: 100%;
+}
+.calDay:hover:not(:disabled) { background: rgba(16,185,129,0.15); color: #34d399; }
+.calDaySelected { background: #10b981 !important; color: #fff !important; }
+.calDay:disabled { color: #2d3748; cursor: not-allowed; }

@@ -1,8 +1,30 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { createTherapistProfile } from "../api/therapistProfile";
 import styles from "./TherapistProfilePage.module.css";
+import cal from "./TherapistSetupPage.module.css";
+
+const MONTHS = ["January","February","March","April","May","June",
+                "July","August","September","October","November","December"];
+const GENDERS = ["Male","Female","Non-binary","Prefer not to say"];
+const TODAY = new Date();
+const CURRENT_YEAR = TODAY.getFullYear();
+
+function getDaysInMonth(year, month) {
+  return new Date(year, month + 1, 0).getDate();
+}
+
+function getFirstDayOfWeek(year, month) {
+  const d = new Date(year, month, 1).getDay();
+  return (d + 6) % 7; // shift so Monday = 0
+}
+
+function formatDob(d) {
+  if (!d) return "";
+  return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+}
 
 export default function TherapistSetupPage() {
   const { completeSetup, logout } = useAuth();
@@ -10,29 +32,56 @@ export default function TherapistSetupPage() {
 
   const [form, setForm] = useState({
     firstName: "", lastName: "", email: "", phoneNumber: "",
-    dobDay: "", dobMonth: "", dobYear: "",
+    dob: null,
     gender: "", yearsOfExperience: "",
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
+  // Calendar
+  const [calOpen, setCalOpen] = useState(false);
+  const [calYear, setCalYear] = useState(CURRENT_YEAR - 30);
+  const [calMonth, setCalMonth] = useState(0);
+  const calRef = useRef(null);
+
+  useEffect(() => {
+    if (!calOpen) return;
+    const handler = (e) => {
+      if (calRef.current && !calRef.current.contains(e.target)) setCalOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [calOpen]);
+
   const handleChange = (e) =>
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+
+  const selectDate = (day) => {
+    const date = new Date(calYear, calMonth, day);
+    if (date > TODAY) return;
+    setForm((prev) => ({ ...prev, dob: date }));
+    setCalOpen(false);
+  };
+
+  const prevMonth = () => {
+    if (calMonth === 0) { setCalMonth(11); setCalYear(y => y - 1); }
+    else setCalMonth(m => m - 1);
+  };
+  const nextMonth = () => {
+    if (calMonth === 11) { setCalMonth(0); setCalYear(y => y + 1); }
+    else setCalMonth(m => m + 1);
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
     try {
-      const { dobDay, dobMonth, dobYear, gender, yearsOfExperience, ...rest } = form;
-      const dob = dobDay && dobMonth && dobYear
-        ? new Date(`${dobYear}-${String(dobMonth).padStart(2, "0")}-${String(dobDay).padStart(2, "0")}`).toISOString()
-        : null;
-
+      const { dob, gender, yearsOfExperience, ...rest } = form;
       await createTherapistProfile({
         ...rest,
         gender,
-        dob,
+        dob: dob ? dob.toISOString() : null,
         yearsOfExperience: parseInt(yearsOfExperience, 10) || 0,
       });
       await completeSetup();
@@ -43,6 +92,10 @@ export default function TherapistSetupPage() {
       setLoading(false);
     }
   };
+
+  const daysInMonth = getDaysInMonth(calYear, calMonth);
+  const firstDay = getFirstDayOfWeek(calYear, calMonth);
+  const yearOptions = Array.from({ length: CURRENT_YEAR - 1939 }, (_, i) => CURRENT_YEAR - i);
 
   return (
     <div className={styles.page}>
@@ -94,23 +147,70 @@ export default function TherapistSetupPage() {
               </div>
             </div>
 
-            {/* Date of Birth — text inputs, no spinner arrows */}
+            {/* DOB + Experience */}
             <div className={styles.formRow}>
               <div className={styles.field}>
                 <label className={styles.label}>Date of Birth</label>
-                <div className={styles.dobRow}>
-                  <input name="dobDay" type="text" inputMode="numeric"
-                    maxLength={2} value={form.dobDay} onChange={handleChange}
-                    className={`${styles.input} ${styles.dobNarrow}`}
-                    placeholder="DD" />
-                  <input name="dobMonth" type="text" inputMode="numeric"
-                    maxLength={2} value={form.dobMonth} onChange={handleChange}
-                    className={`${styles.input} ${styles.dobNarrow}`}
-                    placeholder="MM" />
-                  <input name="dobYear" type="text" inputMode="numeric"
-                    maxLength={4} value={form.dobYear} onChange={handleChange}
-                    className={`${styles.input} ${styles.dobWide}`}
-                    placeholder="YYYY" />
+                <div className={cal.calWrap} ref={calRef}>
+                  <input
+                    type="text"
+                    readOnly
+                    value={formatDob(form.dob)}
+                    placeholder="Select date"
+                    className={styles.input}
+                    style={{ cursor: "pointer" }}
+                    onClick={() => setCalOpen(o => !o)}
+                  />
+                  {calOpen && (
+                    <div className={cal.calPopover}>
+                      <div className={cal.calHeader}>
+                        <button type="button" className={cal.calNav} onClick={prevMonth}>
+                          <ChevronLeft size={14} />
+                        </button>
+                        <div className={cal.calMonthYear}>
+                          <select className={cal.calSelect}
+                            value={calMonth}
+                            onChange={e => setCalMonth(Number(e.target.value))}>
+                            {MONTHS.map((m, i) => <option key={m} value={i}>{m}</option>)}
+                          </select>
+                          <select className={cal.calSelect}
+                            value={calYear}
+                            onChange={e => setCalYear(Number(e.target.value))}>
+                            {yearOptions.map(y => <option key={y} value={y}>{y}</option>)}
+                          </select>
+                        </div>
+                        <button type="button" className={cal.calNav} onClick={nextMonth}>
+                          <ChevronRight size={14} />
+                        </button>
+                      </div>
+
+                      <div className={cal.calGrid}>
+                        {["Mo","Tu","We","Th","Fr","Sa","Su"].map(d => (
+                          <div key={d} className={cal.calDayName}>{d}</div>
+                        ))}
+                        {Array.from({ length: firstDay }).map((_, i) => <div key={`e${i}`} />)}
+                        {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(day => {
+                          const date = new Date(calYear, calMonth, day);
+                          const isFuture = date > TODAY;
+                          const isSelected = form.dob &&
+                            form.dob.getDate() === day &&
+                            form.dob.getMonth() === calMonth &&
+                            form.dob.getFullYear() === calYear;
+                          return (
+                            <button
+                              key={day}
+                              type="button"
+                              disabled={isFuture}
+                              onClick={() => selectDate(day)}
+                              className={`${cal.calDay} ${isSelected ? cal.calDaySelected : ""}`}
+                            >
+                              {day}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -123,19 +223,20 @@ export default function TherapistSetupPage() {
               </div>
             </div>
 
-            {/* Gender — styled select, no native OS popup issues */}
-            <div className={styles.formRow}>
-              <div className={styles.field}>
-                <label className={styles.label} htmlFor="gender">Gender</label>
-                <select id="gender" name="gender"
-                  value={form.gender} onChange={handleChange}
-                  className={`${styles.input} ${styles.select}`}>
-                  <option value="">Select gender</option>
-                  <option value="Male">Male</option>
-                  <option value="Female">Female</option>
-                  <option value="Non-binary">Non-binary</option>
-                  <option value="Prefer not to say">Prefer not to say</option>
-                </select>
+            {/* Gender — toggle buttons, fully CSS-controlled */}
+            <div className={styles.field}>
+              <label className={styles.label}>Gender</label>
+              <div className={styles.optionGroup}>
+                {GENDERS.map((g) => (
+                  <button
+                    key={g}
+                    type="button"
+                    className={`${styles.optionBtn} ${form.gender === g ? styles.optionBtnActive : ""}`}
+                    onClick={() => setForm((prev) => ({ ...prev, gender: g }))}
+                  >
+                    {g}
+                  </button>
+                ))}
               </div>
             </div>
 
