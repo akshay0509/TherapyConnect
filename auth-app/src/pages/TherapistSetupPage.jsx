@@ -4,13 +4,16 @@ import { useAuth } from "../context/AuthContext";
 import { createTherapistProfile } from "../api/therapistProfile";
 import styles from "./TherapistProfilePage.module.css";
 
+const GENDERS = ["Male", "Female", "Non-binary", "Prefer not to say"];
+
 export default function TherapistSetupPage() {
   const { completeSetup, logout } = useAuth();
   const navigate = useNavigate();
 
   const [form, setForm] = useState({
     firstName: "", lastName: "", email: "", phoneNumber: "",
-    dob: "", gender: "", yearsOfExperience: "",
+    dobDay: "", dobMonth: "", dobYear: "",
+    gender: "", yearsOfExperience: "",
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -23,10 +26,16 @@ export default function TherapistSetupPage() {
     setLoading(true);
     setError(null);
     try {
+      const { dobDay, dobMonth, dobYear, gender, yearsOfExperience, ...rest } = form;
+      const dob = dobDay && dobMonth && dobYear
+        ? new Date(`${dobYear}-${String(dobMonth).padStart(2, "0")}-${String(dobDay).padStart(2, "0")}`).toISOString()
+        : null;
+
       await createTherapistProfile({
-        ...form,
-        yearsOfExperience: parseInt(form.yearsOfExperience, 10) || 0,
-        dob: form.dob ? new Date(form.dob).toISOString() : null,
+        ...rest,
+        gender,
+        dob,
+        yearsOfExperience: parseInt(yearsOfExperience, 10) || 0,
       });
       await completeSetup();
       navigate("/therapist-home", { replace: true });
@@ -54,6 +63,8 @@ export default function TherapistSetupPage() {
           </div>
 
           <form onSubmit={handleSubmit} className={styles.form}>
+
+            {/* Name */}
             <div className={styles.formRow}>
               <div className={styles.field}>
                 <label className={styles.label} htmlFor="firstName">First Name *</label>
@@ -69,6 +80,7 @@ export default function TherapistSetupPage() {
               </div>
             </div>
 
+            {/* Contact */}
             <div className={styles.formRow}>
               <div className={styles.field}>
                 <label className={styles.label} htmlFor="email">Email</label>
@@ -84,35 +96,49 @@ export default function TherapistSetupPage() {
               </div>
             </div>
 
+            {/* Date of Birth — three inputs, no native calendar */}
             <div className={styles.formRow}>
               <div className={styles.field}>
-                <label className={styles.label} htmlFor="dob">Date of Birth</label>
-                <input id="dob" name="dob" type="date"
-                  value={form.dob} onChange={handleChange}
-                  className={`${styles.input} ${styles.dateInput}`}
-                  max={new Date().toISOString().split("T")[0]} />
+                <label className={styles.label}>Date of Birth</label>
+                <div className={styles.dobRow}>
+                  <input name="dobDay" type="number" min="1" max="31"
+                    value={form.dobDay} onChange={handleChange}
+                    className={`${styles.input} ${styles.dobNarrow}`}
+                    placeholder="DD" />
+                  <input name="dobMonth" type="number" min="1" max="12"
+                    value={form.dobMonth} onChange={handleChange}
+                    className={`${styles.input} ${styles.dobNarrow}`}
+                    placeholder="MM" />
+                  <input name="dobYear" type="number" min="1900" max={new Date().getFullYear()}
+                    value={form.dobYear} onChange={handleChange}
+                    className={`${styles.input} ${styles.dobWide}`}
+                    placeholder="YYYY" />
+                </div>
               </div>
-              <div className={styles.field}>
-                <label className={styles.label} htmlFor="gender">Gender</label>
-                <select id="gender" name="gender"
-                  value={form.gender} onChange={handleChange}
-                  className={`${styles.input} ${styles.select}`}>
-                  <option value="">Select gender</option>
-                  <option value="Male">Male</option>
-                  <option value="Female">Female</option>
-                  <option value="Non-binary">Non-binary</option>
-                  <option value="Prefer not to say">Prefer not to say</option>
-                </select>
-              </div>
-            </div>
 
-            <div className={styles.formRow}>
               <div className={styles.field}>
                 <label className={styles.label} htmlFor="yearsOfExperience">Years of Experience</label>
                 <input id="yearsOfExperience" name="yearsOfExperience" type="number"
                   min="0" max="60"
                   value={form.yearsOfExperience} onChange={handleChange}
                   className={styles.input} placeholder="e.g. 5" />
+              </div>
+            </div>
+
+            {/* Gender — toggle buttons, no native select */}
+            <div className={styles.field}>
+              <label className={styles.label}>Gender</label>
+              <div className={styles.optionGroup}>
+                {GENDERS.map((g) => (
+                  <button
+                    key={g}
+                    type="button"
+                    className={`${styles.optionBtn} ${form.gender === g ? styles.optionBtnActive : ""}`}
+                    onClick={() => setForm((prev) => ({ ...prev, gender: g }))}
+                  >
+                    {g}
+                  </button>
+                ))}
               </div>
             </div>
 
@@ -130,6 +156,7 @@ export default function TherapistSetupPage() {
                 {loading ? <span className={styles.btnSpinner} /> : "Complete setup"}
               </button>
             </div>
+
           </form>
         </div>
       </main>
