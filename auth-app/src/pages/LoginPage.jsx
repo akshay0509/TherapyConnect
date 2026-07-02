@@ -53,10 +53,10 @@ export default function LoginPage() {
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    const { success, role } = await login(form.username, form.password);
+    const { success } = await login(form.username, form.password);
     if (success) {
-      if (role === "THERAPIST") navigate("/therapist-home");
-      else navigate("/"); // CLIENT or any other role
+      // Let RoleRedirect in App.jsx decide where to send the user based on role + therapistId
+      navigate("/");
     }
   };
 
@@ -153,6 +153,13 @@ export default function LoginPage() {
                 </button>
               </div>
             </div>
+
+            {sessionExpired && !error && (
+              <div className={styles.error} role="alert">
+                <span className={styles.errorIcon}>!</span>
+                Your session has expired. Please sign in again.
+              </div>
+            )}
 
             {error && (
               <div className={styles.error} role="alert">

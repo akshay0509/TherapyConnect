@@ -18,6 +18,12 @@ function getRoleFromToken(token) {
   return authorities[0] ?? null;
 }
 
+function getTherapistIdFromToken(token) {
+  if (!token) return null;
+  const claims = decodeJwt(token);
+  return claims.therapistId || null;
+}
+
 function getTokenExpiry(token) {
   if (!token) return null;
   const claims = decodeJwt(token);
@@ -33,6 +39,7 @@ export function AuthProvider({ children }) {
   const [showTimeoutWarning, setShowTimeoutWarning] = useState(false);
 
   const role = getRoleFromToken(token);
+  const therapistId = getTherapistIdFromToken(token);
 
   const warningTimerRef = useRef(null);
   const expireTimerRef  = useRef(null);
@@ -85,7 +92,6 @@ export function AuthProvider({ children }) {
   }, [scheduleTimeoutWarning]);
 
   // Silent refresh on mount — restores session from the HttpOnly refresh token cookie.
-  // This replaces the previous localStorage.getItem("jwt_token") initialisation.
   useEffect(() => {
     let cancelled = false;
     refreshRequest()
@@ -120,13 +126,22 @@ export function AuthProvider({ children }) {
       const userData = data.user || { username: claims.sub || username };
       applyToken(jwt, userData);
       sessionStorage.removeItem("sessionExpired");
-      return { success: true, role: getRoleFromToken(jwt) };
+      return { success: true, role: getRoleFromToken(jwt), therapistId: getTherapistIdFromToken(jwt) };
     } catch (err) {
       setError(err.message || "Login failed. Please check your credentials.");
-      return { success: false, role: null };
+      return { success: false, role: null, therapistId: null };
     } finally {
       setLoading(false);
     }
+  }, [applyToken]);
+
+  // Called after therapist setup — silently refreshes to upgrade the token with therapistId
+  const completeSetup = useCallback(async () => {
+    const data = await refreshRequest();
+    const jwt = data.token;
+    const claims = decodeJwt(jwt);
+    applyToken(jwt, { username: claims.sub });
+    return { therapistId: getTherapistIdFromToken(jwt) };
   }, [applyToken]);
 
   // Called by "Stay signed in" button — performs a silent refresh before the access token expires
@@ -144,7 +159,7 @@ export function AuthProvider({ children }) {
   }, [applyToken, logout]);
 
   return (
-    <AuthContext.Provider value={{ token, user, role, login, logout, error, loading, showTimeoutWarning, staySignedIn }}>
+    <AuthContext.Provider value={{ token, user, role, therapistId, login, logout, completeSetup, error, loading, showTimeoutWarning, staySignedIn }}>
       {children}
       {showTimeoutWarning && (
         <div style={{
@@ -157,7 +172,7 @@ export function AuthProvider({ children }) {
             fontFamily: "'DM Sans', sans-serif", color: "#e2e8f0",
             boxShadow: "0 24px 64px rgba(0,0,0,0.6)",
           }}>
-            <div style={{ fontSize: "1.8rem", marginBottom: 12 }}>⏱</div>
+            <div style={{ fontSize: "1.8rem", marginBottom: 12 }}>&#x23F1;</div>
             <h2 style={{ fontFamily: "'Syne', sans-serif", fontSize: "1.1rem", fontWeight: 800, margin: "0 0 8px", color: "#fbbf24" }}>
               Session expiring soon
             </h2>

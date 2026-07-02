@@ -6,6 +6,7 @@ import LoginPage from "./pages/LoginPage";
 import HomePage from "./pages/HomePage";
 import TherapistHomePage from "./pages/TherapistHomePage";
 import TherapistProfilePage from "./pages/TherapistProfilePage";
+import TherapistSetupPage from "./pages/TherapistSetupPage";
 import MyServicesPage from "./pages/MyServicesPage";
 import AvailabilityRulesPage from "./pages/AvailabilityRulesPage";
 import MyClientsPage from "./pages/MyClientsPage";
@@ -18,9 +19,12 @@ import EarningsPage from "./pages/EarningsPage";
 import AnalyticsPage from "./pages/AnalyticsPage";
 
 function RoleRedirect() {
-  const { token, role } = useAuth();
+  const { token, role, therapistId } = useAuth();
   if (!token) return <Navigate to="/login" replace />;
-  if (role === "THERAPIST") return <Navigate to="/therapist-home" replace />;
+  if (role === "THERAPIST") {
+    if (!therapistId) return <Navigate to="/therapist/setup" replace />;
+    return <Navigate to="/therapist-home" replace />;
+  }
   return <Navigate to="/client-home" replace />;
 }
 
@@ -32,8 +36,6 @@ function ProtectedRoute({ children, allowedRole }) {
 }
 
 // Navigates to login with sessionExpired state when the auth token expires.
-// Must run in an effect — calling navigate() during render causes a React warning
-// and can produce extra render cycles.
 function SessionExpiredRedirect() {
   const navigate = useNavigate();
   const { token } = useAuth();
@@ -57,6 +59,11 @@ export default function App() {
           <Routes>
             <Route path="/login" element={<LoginPage />} />
             <Route path="/reset-password" element={<ResetPasswordPage />} />
+
+            {/* Therapist onboarding — shown when therapist account has no profile yet */}
+            <Route path="/therapist/setup" element={
+              <ProtectedRoute allowedRole="THERAPIST"><TherapistSetupPage /></ProtectedRoute>
+            } />
 
             {/* Role-based homes */}
             <Route path="/client-home" element={
