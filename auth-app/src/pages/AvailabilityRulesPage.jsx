@@ -9,23 +9,11 @@ const DAY_MAP = {
 };
 const ALL_DAYS = [1, 2, 3, 4, 5, 6, 7];
 
-const SESSION_TYPE_LABEL = {
-  ONLINE: "Online",
-  OFFLINE_AT_HALUSURU: "Offline – Halusuru",
-  OFFLINE_AT_SESHADRIPURAM: "Offline – Seshadripuram",
-};
-const SESSION_TYPE_ICON = {
-  ONLINE: "💻",
-  OFFLINE_AT_HALUSURU: "📍",
-  OFFLINE_AT_SESHADRIPURAM: "📍",
-};
-
 const EMPTY_ROW = () => ({
   _id: crypto.randomUUID(),
   dayOfWeek: "",
   startTime: "",
   endTime: "",
-  sessionType: "",
   isActive: true,
 });
 
@@ -95,7 +83,7 @@ export default function AvailabilityRulesPage() {
   const handleSave = async () => {
     // Validate all new rows
     for (const row of newRows) {
-      if (!row.dayOfWeek || !row.startTime || !row.endTime || !row.sessionType) {
+      if (!row.dayOfWeek || !row.startTime || !row.endTime) {
         setSaveError("Please fill in all fields for every new rule.");
         return;
       }
@@ -108,11 +96,10 @@ export default function AvailabilityRulesPage() {
     setSaving(true);
     setSaveError(null);
     try {
-      const payload = newRows.map(({ dayOfWeek, startTime, endTime, sessionType, isActive }) => ({
+      const payload = newRows.map(({ dayOfWeek, startTime, endTime, isActive }) => ({
         dayOfWeek: parseInt(dayOfWeek, 10),
         startTime,
         endTime,
-        sessionType,
         isActive,
       }));
       const saved = await createAvailabilityRules(payload);
@@ -147,7 +134,6 @@ export default function AvailabilityRulesPage() {
       dayOfWeek: rule.dayOfWeek,
       startTime: rule.startTime,
       endTime:   rule.endTime,
-      sessionType: rule.sessionType,
       isActive:  rule.isActive,
     });
     setEditError(null);
@@ -251,7 +237,6 @@ export default function AvailabilityRulesPage() {
                       <th>Day</th>
                       <th>Start</th>
                       <th>End</th>
-                      <th>Session Type</th>
                       <th>Status</th>
                       <th>Actions</th>
                     </tr>
@@ -267,14 +252,6 @@ export default function AvailabilityRulesPage() {
                           </td>
                           <td className={styles.timeCell}>{formatTime(rule.startTime)}</td>
                           <td className={styles.timeCell}>{formatTime(rule.endTime)}</td>
-                          <td>
-                            <span className={styles.sessionTag}>
-                              {rule.sessionType
-                                ? `${SESSION_TYPE_ICON[rule.sessionType] ?? ""} ${SESSION_TYPE_LABEL[rule.sessionType] ?? rule.sessionType}`
-                                : <span style={{color:"#475569"}}>—</span>
-                              }
-                            </span>
-                          </td>
                           <td>
                             <span className={`${styles.badge} ${rule.isActive ? styles.badgeActive : styles.badgeInactive}`}>
                               {rule.isActive ? "Active" : "Inactive"}
@@ -346,22 +323,6 @@ export default function AvailabilityRulesPage() {
                           onChange={(e) => updateRow(row._id, "endTime", e.target.value)}
                           required
                         />
-                      </div>
-
-                      {/* Session type */}
-                      <div className={`${styles.newRowField} ${styles.newRowFieldWide}`}>
-                        <label className={styles.newRowLabel}>Session Type</label>
-                        <select
-                          className={styles.select}
-                          value={row.sessionType}
-                          onChange={(e) => updateRow(row._id, "sessionType", e.target.value)}
-                          required
-                        >
-                          <option value="" disabled>Select type</option>
-                          {Object.entries(SESSION_TYPE_LABEL).map(([val, label]) => (
-                            <option key={val} value={val}>{label}</option>
-                          ))}
-                        </select>
                       </div>
 
                       {/* Active toggle */}
@@ -458,13 +419,6 @@ export default function AvailabilityRulesPage() {
                   <select className={styles.select} value={editForm.dayOfWeek}
                     onChange={e => setEditForm(p => ({ ...p, dayOfWeek: Number(e.target.value) }))}>
                     {ALL_DAYS.map(d => <option key={d} value={d}>{DAY_MAP[d]}</option>)}
-                  </select>
-                </div>
-                <div className={styles.editField}>
-                  <label className={styles.editLabel}>Session Type</label>
-                  <select className={styles.select} value={editForm.sessionType}
-                    onChange={e => setEditForm(p => ({ ...p, sessionType: e.target.value }))}>
-                    {Object.entries(SESSION_TYPE_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                   </select>
                 </div>
                 <div className={styles.editField}>

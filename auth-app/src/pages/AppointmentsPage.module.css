@@ -309,3 +309,15 @@
 .searchResultLeft { display: flex; flex-direction: column; gap: 3px; }
 .searchResultClient { font-size: 0.875rem; color: #cbd5e1; font-weight: 500; }
 .searchResultTime { font-size: 0.75rem; color: #475569; }
+
+/* --- Custom session fee --- */
+.customFeeBox { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; }
+.customFeeLabel { display: flex; align-items: center; gap: 8px; font-size: 0.82rem; color: #94a3b8; cursor: pointer; user-select: none; }
+.customFeeCheck { width: 15px; height: 15px; cursor: pointer; accent-color: #10b981; flex-shrink: 0; }
+.customFeeInputRow { display: flex; align-items: stretch; }
+.customFeeCurrency { padding: 9px 10px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-right: none; border-radius: 8px 0 0 8px; color: #94a3b8; font-size: 0.9rem; display: flex; align-items: center; }
+.customFeeInput { flex: 1; padding: 9px 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 0 8px 8px 0; color: #f1f5f9; font-size: 0.9rem; font-family: 'DM Sans', sans-serif; outline: none; transition: border-color 0.2s, background 0.2s; -moz-appearance: textfield; }
+.customFeeInput::-webkit-outer-spin-button,.customFeeInput::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.customFeeInput:focus:not(:disabled) { border-color: #10b981; background: rgba(16,185,129,0.06); }
+.customFeeInputOff { color: #475569; background: rgba(255,255,255,0.02); cursor: not-allowed; }
+.customFeeHint { font-size: 0.72rem; color: #475569; margin: 0; }

@@ -181,8 +181,8 @@ export default function AppointmentsPage() {
   const [panel, setPanel] = useState(null);
   const [panelSlot, setPanelSlot] = useState(null);
 
-  // Booking form — uses modeId, not sessionType
-  const [booking, setBooking] = useState({ clientId: "", clientName: "", modeId: "" });
+  // Booking form
+  const [booking, setBooking] = useState({ clientId: "", clientName: "", modeId: "", useCustomPrice: false, customPrice: "" });
   const [bookingModes, setBookingModes] = useState([]); // modes for the slot's service
   const [bookingLoading, setBookingLoading] = useState(false);
   const [bookingError, setBookingError] = useState(null);
@@ -373,7 +373,7 @@ export default function AppointmentsPage() {
       ? allModes.filter(m => m.serviceId === slot.serviceId && m.isActive)
       : allModes.filter(m => m.isActive);
     setBookingModes(slotModes);
-    setBooking({ clientId: "", clientName: "", modeId: slot.modeId || "" });
+    setBooking({ clientId: "", clientName: "", modeId: slot.modeId || "", useCustomPrice: false, customPrice: "" });
     setBookingError(null); setBookingSuccess(false);
     setPanel("book");
   };
@@ -397,6 +397,9 @@ export default function AppointmentsPage() {
     e.preventDefault();
     if (!booking.clientId) { setBookingError("Please select a client."); return; }
     if (!booking.modeId) { setBookingError("Please select a delivery mode."); return; }
+    if (booking.useCustomPrice && (!booking.customPrice || parseFloat(booking.customPrice) < 0)) {
+      setBookingError("Please enter a valid custom session fee."); return;
+    }
     setBookingLoading(true); setBookingError(null);
     try {
       const result = await createAppointment({
@@ -405,6 +408,7 @@ export default function AppointmentsPage() {
         clientId: booking.clientId,
         clientName: booking.clientName,
         modeId: booking.modeId,
+        customPrice: booking.useCustomPrice ? parseFloat(booking.customPrice) : undefined,
       });
       setSlots(prev => prev.map(s => s.slotId === panelSlot.slotId ? { ...s, slotStatus: "BOOKED", clientId: booking.clientId, clientName: booking.clientName } : s));
       setAppointments(prev => [...prev, {
@@ -838,8 +842,41 @@ export default function AppointmentsPage() {
                     <ClientDropdown clients={clients} value={booking.clientId} onChange={(id,name) => setBooking(p => ({...p, clientId:id, clientName:name}))} />
                   </div>
                   <div className={styles.field}><label className={styles.label}>Delivery Mode</label>
-                    <ModeDropdown modes={bookingModes} value={booking.modeId} onChange={v => setBooking(p => ({...p, modeId:v}))} />
+                    <ModeDropdown modes={bookingModes} value={booking.modeId} onChange={v => setBooking(p => ({...p, modeId:v, useCustomPrice: false, customPrice: ""}))} />
                   </div>
+                  {booking.modeId && (() => {
+                    const selectedMode = bookingModes.find(m => m.modeId === booking.modeId);
+                    if (!selectedMode || selectedMode.price == null) return null;
+                    return (
+                      <div className={styles.customFeeBox}>
+                        <label className={styles.customFeeLabel}>
+                          <input
+                            type="checkbox"
+                            className={styles.customFeeCheck}
+                            checked={booking.useCustomPrice}
+                            onChange={e => setBooking(p => ({ ...p, useCustomPrice: e.target.checked, customPrice: "" }))}
+                          />
+                          Custom session fee
+                        </label>
+                        <div className={styles.customFeeInputRow}>
+                          <span className={styles.customFeeCurrency}>₹</span>
+                          <input
+                            type="number"
+                            min="0"
+                            step="1"
+                            className={`${styles.customFeeInput} ${!booking.useCustomPrice ? styles.customFeeInputOff : ""}`}
+                            disabled={!booking.useCustomPrice}
+                            value={booking.useCustomPrice ? booking.customPrice : parseFloat(selectedMode.price).toFixed(0)}
+                            onChange={e => setBooking(p => ({ ...p, customPrice: e.target.value }))}
+                            placeholder="0"
+                          />
+                        </div>
+                        {!booking.useCustomPrice && (
+                          <p className={styles.customFeeHint}>Default: ₹{parseFloat(selectedMode.price).toFixed(0)}</p>
+                        )}
+                      </div>
+                    );
+                  })()}
                   <div className={styles.slotSummary}>
                     <div className={styles.summaryRow}><span className={styles.summaryLabel}>Time</span><span className={styles.summaryValue}>{formatTime(panelSlot.startTime)} – {formatTime(panelSlot.endTime)}</span></div>
                     <div className={styles.summaryRow}><span className={styles.summaryLabel}>Slot</span><span className={styles.summaryValue}>{panelSlot.slotId}</span></div>

@@ -24,16 +24,12 @@ export async function getAppointments() {
   }
 }
 
-// modeId is required (@NotNull on backend). sessionType is NOT sent.
-export async function createAppointment({ slotId, therapistId, clientId, clientName, modeId }) {
+// modeId is required (@NotNull on backend). customPrice is optional — overrides mode default fee.
+export async function createAppointment({ slotId, therapistId, clientId, clientName, modeId, customPrice }) {
   try {
-    const response = await api.post("/appointment/create-appointment", {
-      slotId,
-      therapistId,
-      clientId,
-      clientName,
-      modeId,
-    });
+    const body = { slotId, therapistId, clientId, clientName, modeId };
+    if (customPrice != null) body.customPrice = customPrice;
+    const response = await api.post("/appointment/create-appointment", body);
     return response.data;
   } catch (err) {
     const message = err.response?.data?.message || err.response?.data?.error || "Failed to book appointment.";

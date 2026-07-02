@@ -86,7 +86,9 @@ public class AppointmentService {
 				.orElseThrow(() -> new SlotNotAvailableException(
 						"Mode " + modeId + " is not available for slot " + slotId));
 
-		BigDecimal sessionFee = deliveryMode.getPrice();
+		BigDecimal sessionFee = bookAppointmentRequest.getCustomPrice() != null
+				? bookAppointmentRequest.getCustomPrice()
+				: deliveryMode.getPrice();
 
 		int updated = therapistAvailabilityRepository.markSlotAsBooked(slotId);
 
