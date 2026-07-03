@@ -1,5 +1,7 @@
 package com.org.userService.Controller;
 
+import java.util.Map;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,17 +21,22 @@ import com.org.userService.Services.UserService;
 
 @RestController
 public class UserController {
-	
+
 	@Autowired
 	UserService userService;
-	
+
 	private static final Logger logger = LoggerFactory.getLogger(UserController.class);
 
 	@PostMapping("/create-user")
-	public void createUser(@RequestBody UserDto userDto) {
-		userService.createUser(userDto);
+	public ResponseEntity<Map<String, String>> createUser(@RequestBody UserDto userDto) {
+		try {
+			userService.createUser(userDto);
+			return ResponseEntity.ok(Map.of("message", "User created successfully."));
+		} catch (IllegalArgumentException e) {
+			return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+		}
 	}
-	
+
 	@PostMapping("/validate-user")
 	public ResponseEntity<AuthResponse> validate(@RequestBody AuthRequest authRequest){
 		logger.debug("inside validate user "+authRequest);
@@ -37,7 +44,7 @@ public class UserController {
 		logger.debug("exiting validate user "+authResponse);
 		return ResponseEntity.ok(authResponse);
 	}
-	
+
 	@PostMapping("/forgot-password")
 	public ResponseEntity<String> forgotPassword(@RequestBody ForgotPasswordRequest request) {
 		userService.createPasswordResetToken(request.getEmail());
@@ -54,5 +61,5 @@ public class UserController {
 	public ResponseEntity<UserDto> updateAccount(@RequestBody UpdateAccountRequest request) {
 		return ResponseEntity.ok(userService.updateAccount(request));
 	}
-	
+
 }

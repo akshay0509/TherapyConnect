@@ -27,31 +27,37 @@ public class UserService {
 
 	@Autowired
 	UserRepository userRepository;
-	
+
 	@Autowired
 	PasswordEncoder passwordEncoder;
-	
+
 	@Autowired
 	EmailService emailService;
 
 	private static final Logger logger = LoggerFactory.getLogger(UserService.class);
-	
+
 	private UserAssembler userAssembler = new UserAssembler();
-	
+
 	public void createUser(UserDto userDto) {
 		logger.debug("inside createUser.");
+
+		if (userRepository.existsByEmail(userDto.getEmail())) {
+			throw new IllegalArgumentException("An account with this email already exists.");
+		}
+		if (userRepository.existsByUsername(userDto.getUsername())) {
+			throw new IllegalArgumentException("That username is already taken.");
+		}
+
 		User user = userAssembler.assembleDtoToEntity(userDto);
-		
 		String passwordHash = passwordEncoder.encode(userDto.getPassword());
 		user.setPasswordHash(passwordHash);
-		
 		userRepository.save(user);
 		logger.debug("exiting createUser.");
 	}
-	
+
 	public AuthResponse validateUser(AuthRequest authRequest) {
 		User user = userRepository.findByUsername(authRequest.getUsername());
-		
+
 		if (user == null) {
             return AuthResponse.failure(FailureReason.INVALID_CREDENTIALS);
         }
@@ -67,7 +73,7 @@ public class UserService {
         if (!passwordEncoder.matches(authRequest.getPassword(), user.getPasswordHash())) {
             return AuthResponse.failure(FailureReason.INVALID_CREDENTIALS);
         }
-		
+
         return AuthResponse.success(
                 user.getUserId(),
                 user.getUsername(),
@@ -75,9 +81,9 @@ public class UserService {
                 user.isEnabled(),
                 user.isAccountLocked()
         );
-		
+
 	}
-	
+
 	public void createPasswordResetToken(String email) {
 		User user = userRepository.findByEmail(email);
 		if (user == null) {
@@ -105,7 +111,6 @@ public class UserService {
 	}
 
 	public UserDto updateAccount(UpdateAccountRequest request) {
-		// Username resolved from the validated JWT — not from the request body
 		String lookupUsername = SecurityUtils.getUsername();
 		User user = userRepository.findByUsername(lookupUsername);
 		if (user == null) {
