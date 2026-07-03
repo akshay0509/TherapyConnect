@@ -17,6 +17,7 @@ public class SecurityConfig {
 			.authorizeHttpRequests(authz -> authz
 				.requestMatchers("/auth/**").permitAll()
 				.requestMatchers("/user/create-user").permitAll()
+				.requestMatchers("/user/forgot-username").permitAll()
 				.requestMatchers("/user/forgot-password").permitAll()
 				.requestMatchers("/user/reset-password").permitAll()
 				.anyRequest().authenticated()

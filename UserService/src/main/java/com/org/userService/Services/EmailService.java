@@ -42,34 +42,42 @@ public class EmailService {
 
     public void sendPasswordResetEmail(String toEmail, String resetToken) {
         String resetLink = frontendUrl + "/reset-password?token=" + resetToken;
-
         try {
-            NetHttpTransport httpTransport = GoogleNetHttpTransport.newTrustedTransport();
-
-            UserCredentials credentials = UserCredentials.newBuilder()
-                    .setClientId(clientId)
-                    .setClientSecret(clientSecret)
-                    .setRefreshToken(refreshToken)
-                    .build();
-
-            Gmail gmail = new Gmail.Builder(httpTransport, JSON_FACTORY, new HttpCredentialsAdapter(credentials))
-                    .setApplicationName(applicationName)
-                    .build();
-
-            byte[] rawMessage = buildRawMimeMessage(toEmail, "Password Reset Request", buildResetEmailHtml(resetLink));
-            String encoded = Base64.getUrlEncoder().encodeToString(rawMessage);
-
-            Message message = new Message();
-            message.setRaw(encoded);
-
-            gmail.users().messages().send("me", message).execute();
+            send(toEmail, "Password Reset Request", buildResetEmailHtml(resetLink));
             logger.info("Password reset email sent to {}", maskEmail(toEmail));
-
         } catch (Exception e) {
-            // Log but do not rethrow — caller already returns a generic "if email exists" response.
-            // Token remains valid; user can retry. Alert ops if this recurs.
             logger.error("Failed to send password reset email to {}: {}", maskEmail(toEmail), e.getMessage());
         }
+    }
+
+    public void sendUsernameEmail(String toEmail, String username) {
+        try {
+            send(toEmail, "Your TherapyConnect Username", buildUsernameEmailHtml(username));
+            logger.info("Username reminder email sent to {}", maskEmail(toEmail));
+        } catch (Exception e) {
+            logger.error("Failed to send username email to {}: {}", maskEmail(toEmail), e.getMessage());
+        }
+    }
+
+    private void send(String toEmail, String subject, String htmlBody) throws Exception {
+        NetHttpTransport httpTransport = GoogleNetHttpTransport.newTrustedTransport();
+
+        UserCredentials credentials = UserCredentials.newBuilder()
+                .setClientId(clientId)
+                .setClientSecret(clientSecret)
+                .setRefreshToken(refreshToken)
+                .build();
+
+        Gmail gmail = new Gmail.Builder(httpTransport, JSON_FACTORY, new HttpCredentialsAdapter(credentials))
+                .setApplicationName(applicationName)
+                .build();
+
+        byte[] rawMessage = buildRawMimeMessage(toEmail, subject, htmlBody);
+        String encoded = Base64.getUrlEncoder().encodeToString(rawMessage);
+
+        Message message = new Message();
+        message.setRaw(encoded);
+        gmail.users().messages().send("me", message).execute();
     }
 
     private byte[] buildRawMimeMessage(String toEmail, String subject, String htmlBody) {
@@ -114,6 +122,36 @@ public class EmailService {
                 </body>
                 </html>
                 """.formatted(resetLink);
+    }
+
+    private String buildUsernameEmailHtml(String username) {
+        return """
+                <!DOCTYPE html>
+                <html lang="en">
+                <head><meta charset="UTF-8"></head>
+                <body style="font-family: 'Segoe UI', Arial, sans-serif; background: #f8fafc; padding: 40px 0; margin: 0;">
+                  <div style="max-width: 520px; margin: 0 auto; background: #ffffff; border-radius: 12px;
+                              border: 1px solid #e2e8f0; overflow: hidden;">
+                    <div style="background: #1e293b; padding: 28px 32px;">
+                      <h1 style="color: #f0f6fc; font-size: 1.2rem; margin: 0; font-weight: 700;">Your Username</h1>
+                    </div>
+                    <div style="padding: 32px;">
+                      <p style="color: #475569; font-size: 0.95rem; line-height: 1.7; margin: 0 0 20px;">
+                        Here is the username associated with this email address:
+                      </p>
+                      <div style="background: #f1f5f9; border-radius: 8px; padding: 16px 20px; margin-bottom: 24px;
+                                  font-family: monospace; font-size: 1.1rem; color: #1e293b; font-weight: 700;
+                                  letter-spacing: 0.02em;">
+                        %s
+                      </div>
+                      <p style="color: #94a3b8; font-size: 0.82rem; margin: 0; line-height: 1.6;">
+                        If you did not request this, please ignore this email.
+                      </p>
+                    </div>
+                  </div>
+                </body>
+                </html>
+                """.formatted(username);
     }
 
     private String maskEmail(String email) {

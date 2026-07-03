@@ -45,6 +45,12 @@ public class UserController {
 		return ResponseEntity.ok(authResponse);
 	}
 
+	@PostMapping("/forgot-username")
+	public ResponseEntity<String> forgotUsername(@RequestBody ForgotPasswordRequest request) {
+		userService.sendUsername(request.getEmail());
+		return ResponseEntity.ok("If an account with that email exists, your username has been sent.");
+	}
+
 	@PostMapping("/forgot-password")
 	public ResponseEntity<String> forgotPassword(@RequestBody ForgotPasswordRequest request) {
 		userService.createPasswordResetToken(request.getEmail());

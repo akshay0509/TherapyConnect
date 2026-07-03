@@ -23,6 +23,16 @@ export async function forgotPassword(email) {
   }
 }
 
+export async function forgotUsername(email) {
+  try {
+    const response = await api.post("/user/forgot-username", { email });
+    return response.data;
+  } catch (err) {
+    const message = err.response?.data?.message || err.response?.data?.error || "Failed to send username email.";
+    throw new Error(message);
+  }
+}
+
 export async function resetPassword(token, newPassword) {
   try {
     const response = await api.post("/user/reset-password", { token, newPassword });

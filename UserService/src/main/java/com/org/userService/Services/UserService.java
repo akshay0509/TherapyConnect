@@ -84,6 +84,14 @@ public class UserService {
 
 	}
 
+	public void sendUsername(String email) {
+		User user = userRepository.findByEmail(email);
+		if (user == null) {
+			return;
+		}
+		emailService.sendUsernameEmail(email, user.getUsername());
+	}
+
 	public void createPasswordResetToken(String email) {
 		User user = userRepository.findByEmail(email);
 		if (user == null) {

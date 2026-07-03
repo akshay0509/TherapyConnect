@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { createUserRequest, forgotPassword } from "../api/user";
+import { createUserRequest, forgotPassword, forgotUsername } from "../api/user";
 import styles from "./LoginPage.module.css";
 
 export default function LoginPage() {
@@ -17,11 +17,12 @@ export default function LoginPage() {
   const [createError, setCreateError] = useState(null);
   const [createSuccess, setCreateSuccess] = useState(false);
 
-  // Forgot password
+  // Forgot password / forgot username (shared email input)
   const [forgotEmail, setForgotEmail] = useState("");
   const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotUsernameLoading, setForgotUsernameLoading] = useState(false);
   const [forgotError, setForgotError] = useState(null);
-  const [forgotSuccess, setForgotSuccess] = useState(false);
+  const [forgotSuccess, setForgotSuccess] = useState(null); // "password" | "username" | null
 
   const handleChange = (e) =>
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
@@ -34,16 +35,16 @@ export default function LoginPage() {
     setShowPassword(false);
     setForgotEmail("");
     setForgotError(null);
-    setForgotSuccess(false);
+    setForgotSuccess(null);
   };
 
   const handleForgotPassword = async (e) => {
     e.preventDefault();
     if (!forgotEmail) { setForgotError("Please enter your email address."); return; }
-    setForgotLoading(true); setForgotError(null); setForgotSuccess(false);
+    setForgotLoading(true); setForgotError(null); setForgotSuccess(null);
     try {
       await forgotPassword(forgotEmail);
-      setForgotSuccess(true);
+      setForgotSuccess("password");
     } catch (err) {
       setForgotError(err.message);
     } finally {
@@ -51,11 +52,23 @@ export default function LoginPage() {
     }
   };
 
+  const handleForgotUsername = async () => {
+    if (!forgotEmail) { setForgotError("Please enter your email address."); return; }
+    setForgotUsernameLoading(true); setForgotError(null); setForgotSuccess(null);
+    try {
+      await forgotUsername(forgotEmail);
+      setForgotSuccess("username");
+    } catch (err) {
+      setForgotError(err.message);
+    } finally {
+      setForgotUsernameLoading(false);
+    }
+  };
+
   const handleLogin = async (e) => {
     e.preventDefault();
     const { success } = await login(form.username, form.password);
     if (success) {
-      // Let RoleRedirect in App.jsx decide where to send the user based on role + therapistId
       navigate("/");
     }
   };
@@ -87,10 +100,14 @@ export default function LoginPage() {
         <div className={styles.brand}>
           <div className={styles.logo}>⬡</div>
           <h1 className={styles.title}>
-            {isLogin ? "Welcome back" : isForgot ? "Reset password" : "Create account"}
+            {isLogin ? "Welcome back" : isForgot ? "Account recovery" : "Create account"}
           </h1>
           <p className={styles.subtitle}>
-            {isLogin ? "Sign in to your account" : isForgot ? "We'll send a reset link to your email" : "Fill in the details below"}
+            {isLogin
+              ? "Sign in to your account"
+              : isForgot
+              ? "Enter your email to recover your account"
+              : "Fill in the details below"}
           </p>
         </div>
 
@@ -172,7 +189,7 @@ export default function LoginPage() {
               {loading ? <span className={styles.spinner} /> : "Sign in"}
             </button>
             <button type="button" className={styles.forgotLink} onClick={() => switchMode("forgot")}>
-              Forgot password?
+              Forgot password or username?
             </button>
           </form>
         )}
@@ -277,7 +294,8 @@ export default function LoginPage() {
             </button>
           </form>
         )}
-        {/* ── FORGOT PASSWORD FORM ── */}
+
+        {/* ── FORGOT / RECOVERY FORM ── */}
         {isForgot && (
           <form onSubmit={handleForgotPassword} className={styles.form}>
             {!forgotSuccess ? (
@@ -300,14 +318,24 @@ export default function LoginPage() {
                     <span className={styles.errorIcon}>!</span>{forgotError}
                   </div>
                 )}
-                <button type="submit" className={styles.button} disabled={forgotLoading}>
+                <button type="submit" className={styles.button} disabled={forgotLoading || forgotUsernameLoading}>
                   {forgotLoading ? <span className={styles.spinner}/> : "Send reset link"}
+                </button>
+                <button
+                  type="button"
+                  className={styles.buttonSecondary}
+                  disabled={forgotLoading || forgotUsernameLoading}
+                  onClick={handleForgotUsername}
+                >
+                  {forgotUsernameLoading ? <span className={styles.spinner}/> : "Email my username"}
                 </button>
               </>
             ) : (
               <div className={styles.success} role="status">
                 <span className={styles.successIcon}>✓</span>
-                If an account with that email exists, a reset link has been sent. Check your inbox.
+                {forgotSuccess === "password"
+                  ? "If an account with that email exists, a reset link has been sent. Check your inbox."
+                  : "If an account with that email exists, your username has been sent. Check your inbox."}
               </div>
             )}
             <button type="button" className={styles.forgotLink} onClick={() => switchMode("login")}>
