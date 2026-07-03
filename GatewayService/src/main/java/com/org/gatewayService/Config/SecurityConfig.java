@@ -17,12 +17,14 @@ public class SecurityConfig {
 			.authorizeHttpRequests(authz -> authz
 				.requestMatchers("/auth/**").permitAll()
 				.requestMatchers("/user/create-user").permitAll()
+				.requestMatchers("/user/forgot-password").permitAll()
+				.requestMatchers("/user/reset-password").permitAll()
 				.anyRequest().authenticated()
 			)
 			.oauth2ResourceServer(oauth2 -> oauth2
 				.jwt(withDefaults())
 			);
-			
+
 		return http.build();
 	}
 }
