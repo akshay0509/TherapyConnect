@@ -16,13 +16,13 @@ import jakarta.transaction.Transactional;
 
 @Service
 public class OutboxEventScheduler {
-	
+
 	@Autowired
 	private OutboxEventRepository outboxEventRepository;
-	
+
 	@Autowired
 	private OutboxEventProducer outboxEventProducer;
-	
+
 	private static final Logger logger = LoggerFactory.getLogger(OutboxEventScheduler.class);
 
 	@Scheduled(fixedDelay = 2000)
@@ -31,17 +31,19 @@ public class OutboxEventScheduler {
 
 		List<OutboxEvent> outboxEventList = outboxEventRepository.findTop100ByPublishedFalseOrderByCreatedAtAsc();
 
-		for(OutboxEvent outboxEvent : outboxEventList) {
-			logger.info("Inside loop.." + outboxEventList.size());
+		if (outboxEventList.isEmpty()) {
+			return;
+		}
+
+		logger.info("Publishing {} pending outbox events", outboxEventList.size());
+
+		for (OutboxEvent outboxEvent : outboxEventList) {
 			try {
 				outboxEventProducer.sendMessage(outboxEvent.getAggregateId(), outboxEvent.getPayload());
 				outboxEvent.setPublished(true);
 				outboxEventRepository.save(outboxEvent);
-			}
-			catch (Exception ex) {
-				logger.error("Failed to publish outbox event {}",
-					    outboxEvent.getOutboxEventId(),
-					    ex);
+			} catch (Exception ex) {
+				logger.error("Failed to publish outbox event {}", outboxEvent.getOutboxEventId(), ex);
 				break;
 			}
 		}

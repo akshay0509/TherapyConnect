@@ -13,23 +13,27 @@
             </JsonTemplateLayout>
         </Console>
 
-        <RollingFile name="AuditFile" 
+        <RollingFile name="AuditFile"
                      fileName="${LOG_PATH}/audit.json"
                      filePattern="${ARCHIVE_PATH}/audit-%d{yyyy-MM-dd}-%i.json.gz">
-            
+
             <JsonTemplateLayout eventTemplateUri="classpath:EcsLayout.json"/>
 
             <Policies>
                 <TimeBasedTriggeringPolicy interval="1" modulate="true"/>
-                <SizeBasedTriggeringPolicy size="250 MB"/>
+                <SizeBasedTriggeringPolicy size="50 MB"/>
             </Policies>
-            
-            <DefaultRolloverStrategy max="100"/>
+
+            <DefaultRolloverStrategy max="30">
+                <Delete basePath="${ARCHIVE_PATH}" maxDepth="1">
+                    <IfLastModified age="30d"/>
+                </Delete>
+            </DefaultRolloverStrategy>
         </RollingFile>
     </Appenders>
 
     <Loggers>
-        <Logger name="com.org.discoveryService" level="INFO" additivity="false">
+        <Logger name="com.org.clientService" level="INFO" additivity="false">
             <AppenderRef ref="JsonConsole"/>
             <AppenderRef ref="AuditFile"/>
         </Logger>

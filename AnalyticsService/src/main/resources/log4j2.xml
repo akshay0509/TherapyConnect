@@ -32,10 +32,14 @@
 
             <Policies>
                 <TimeBasedTriggeringPolicy interval="1" modulate="true"/>
-                <SizeBasedTriggeringPolicy size="250 MB"/>
+                <SizeBasedTriggeringPolicy size="50 MB"/>
             </Policies>
 
-            <DefaultRolloverStrategy max="100"/>
+            <DefaultRolloverStrategy max="30">
+                <Delete basePath="${ARCHIVE_PATH}" maxDepth="1">
+                    <IfLastModified age="30d"/>
+                </Delete>
+            </DefaultRolloverStrategy>
         </RollingFile>
     </Appenders>
 

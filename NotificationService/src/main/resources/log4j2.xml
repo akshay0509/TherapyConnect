@@ -13,27 +13,31 @@
             </JsonTemplateLayout>
         </Console>
 
-        <RollingFile name="AuditFile" 
+        <RollingFile name="AuditFile"
                      fileName="${LOG_PATH}/audit.json"
                      filePattern="${ARCHIVE_PATH}/audit-%d{yyyy-MM-dd}-%i.json.gz">
-            
+
             <JsonTemplateLayout eventTemplateUri="classpath:EcsLayout.json">
             	<EventTemplateAdditionalField key="traceId" format="JSON" value='{"$resolver": "mdc", "key": "traceId"}'/>
             	<EventTemplateAdditionalField key="therapistId" format="JSON" value='{"$resolver": "mdc", "key": "therapistId"}'/>
             	<EventTemplateAdditionalField key="path" format="JSON" value='{"$resolver": "mdc", "key": "path"}'/>
-				            
+
                 <EventTemplateAdditionalField key="appName" value="NotificationService"/>
                 <EventTemplateAdditionalField key="environment" value="PROD"/>
             </JsonTemplateLayout>
 
             <Policies>
                 <TimeBasedTriggeringPolicy interval="1" modulate="true"/>
-                <SizeBasedTriggeringPolicy size="250 MB"/>
+                <SizeBasedTriggeringPolicy size="50 MB"/>
             </Policies>
-            
-            <DefaultRolloverStrategy max="100"/>
+
+            <DefaultRolloverStrategy max="30">
+                <Delete basePath="${ARCHIVE_PATH}" maxDepth="1">
+                    <IfLastModified age="30d"/>
+                </Delete>
+            </DefaultRolloverStrategy>
         </RollingFile>
-        
+
         <RollingFile name="SchedulerFile"
 			fileName="${LOG_PATH}/scheduler.json"
 			filePattern="${ARCHIVE_PATH}/scheduler-%d{yyyy-MM-dd}-%i.json.gz">
@@ -57,21 +61,25 @@
 
 			<Policies>
 				<TimeBasedTriggeringPolicy interval="1" modulate="true" />
-				<SizeBasedTriggeringPolicy size="250 MB" />
+				<SizeBasedTriggeringPolicy size="20 MB" />
 			</Policies>
 
-			<DefaultRolloverStrategy max="100" />
+			<DefaultRolloverStrategy max="14">
+                <Delete basePath="${ARCHIVE_PATH}" maxDepth="1">
+                    <IfLastModified age="14d"/>
+                </Delete>
+            </DefaultRolloverStrategy>
 
 		</RollingFile>
     </Appenders>
 
     <Loggers>
-    
+
     	<Logger name="com.org.notificationService.Scheduler" level="INFO" additivity="false">
 			<AppenderRef ref="SchedulerFile" />
 			<AppenderRef ref="JsonConsole" />
 		</Logger>
-		
+
         <Logger name="com.org.notificationService" level="INFO" additivity="false">
             <AppenderRef ref="JsonConsole"/>
             <AppenderRef ref="AuditFile"/>
