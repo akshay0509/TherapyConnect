@@ -66,6 +66,11 @@ export async function updateUserStatus(userId, { enabled, locked }) {
   return data;
 }
 
+export async function adminResetPassword(userId, newPassword) {
+  const { data } = await adminApi.put(`/user/admin/users/${userId}/reset-password`, { newPassword });
+  return data;
+}
+
 // ── Login audit log ──
 export async function getLoginAudit() {
   const { data } = await adminApi.get("/user/admin/audit");

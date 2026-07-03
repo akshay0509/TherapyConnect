@@ -6,6 +6,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Sort;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import com.org.userService.Dto.AdminUserDto;
@@ -22,6 +23,9 @@ public class AdminUserService {
 
 	@Autowired
 	UserLoginAuditRepository userLoginAuditRepository;
+
+	@Autowired
+	PasswordEncoder passwordEncoder;
 
 	private static final Logger logger = LoggerFactory.getLogger(AdminUserService.class);
 
@@ -50,6 +54,21 @@ public class AdminUserService {
 		userRepository.save(user);
 		logger.info("Admin updated user {}: enabled={}, locked={}", userId, user.isEnabled(), user.isAccountLocked());
 		return toDto(user);
+	}
+
+	public void resetPassword(String userId, String newPassword) {
+		if (newPassword == null || newPassword.length() < 8) {
+			throw new IllegalArgumentException("Password must be at least 8 characters.");
+		}
+		User user = userRepository.findById(userId)
+				.orElseThrow(() -> new IllegalArgumentException("User not found: " + userId));
+
+		user.setPasswordHash(passwordEncoder.encode(newPassword));
+		// Invalidate any pending self-service reset token
+		user.setResetPasswordToken(null);
+		user.setResetPasswordTokenExpiresAt(null);
+		userRepository.save(user);
+		logger.info("Admin force-reset password for user {}", userId);
 	}
 
 	public List<UserLoginAudit> getRecentLoginAudit() {

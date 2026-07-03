@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   adminLogout,
+  adminResetPassword,
   getAnalyticsHealth,
   getAppointmentHealth,
   getLoginAudit,
@@ -64,6 +65,12 @@ export default function AdminPage() {
   const [usersError, setUsersError] = useState("");
   const [userActionId, setUserActionId] = useState(null); // userId currently being updated
   const [pendingAction, setPendingAction] = useState(null); // { user, field, value, label }
+
+  // Force password reset
+  const [resetTarget, setResetTarget] = useState(null); // user object or null
+  const [resetPw, setResetPw] = useState("");
+  const [resetBusy, setResetBusy] = useState(false);
+  const [resetError, setResetError] = useState("");
 
   // Audit log
   const [audit, setAudit] = useState([]);
@@ -194,6 +201,39 @@ export default function AdminPage() {
 
   function requestUserAction(user, field, value, label) {
     setPendingAction({ user, field, value, label });
+  }
+
+  function openResetDialog(user) {
+    setResetTarget(user);
+    setResetPw("");
+    setResetError("");
+  }
+
+  function generatePassword() {
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%";
+    let pw = "";
+    const rand = new Uint32Array(12);
+    crypto.getRandomValues(rand);
+    for (let i = 0; i < 12; i++) pw += chars[rand[i] % chars.length];
+    setResetPw(pw);
+  }
+
+  async function confirmResetPassword() {
+    if (!resetPw || resetPw.length < 8) {
+      setResetError("Password must be at least 8 characters.");
+      return;
+    }
+    setResetBusy(true);
+    setResetError("");
+    try {
+      await adminResetPassword(resetTarget.userId, resetPw);
+      setResetTarget(null);
+    } catch (err) {
+      if (handleAuthError(err)) return;
+      setResetError(err.response?.data?.error || "Failed to reset password.");
+    } finally {
+      setResetBusy(false);
+    }
   }
 
   // ── Outbox status rendering ──────────────────────────────────────
@@ -394,6 +434,13 @@ export default function AdminPage() {
                         Lock
                       </button>
                     )}
+                    <button
+                      className={styles.miniBtn}
+                      disabled={userActionId === u.userId}
+                      onClick={() => openResetDialog(u)}
+                    >
+                      Reset PW
+                    </button>
                   </div>
                 </td>
               </tr>
@@ -604,6 +651,42 @@ export default function AdminPage() {
               </button>
               <button className={styles.confirmBtn} onClick={handleReplay}>
                 Yes, Replay
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Force password reset dialog */}
+      {resetTarget && (
+        <div className={styles.overlay}>
+          <div className={styles.dialog}>
+            <h3>Reset Password</h3>
+            <p>
+              Set a new password for <strong>{resetTarget.username}</strong>.
+              Their current password stops working immediately — share the new
+              one with them through a secure channel.
+            </p>
+            <div className={styles.resetRow}>
+              <input
+                className={styles.datetimeInput}
+                type="text"
+                placeholder="new password (min 8 chars)"
+                value={resetPw}
+                onChange={(e) => setResetPw(e.target.value)}
+                autoFocus
+              />
+              <button type="button" className={styles.miniBtn} onClick={generatePassword}>
+                Generate
+              </button>
+            </div>
+            {resetError && <div className={styles.fetchError}>{resetError}</div>}
+            <div className={styles.dialogActions}>
+              <button className={styles.cancelBtn} onClick={() => setResetTarget(null)} disabled={resetBusy}>
+                Cancel
+              </button>
+              <button className={styles.confirmBtn} onClick={confirmResetPassword} disabled={resetBusy}>
+                {resetBusy ? "Saving…" : "Reset Password"}
               </button>
             </div>
           </div>

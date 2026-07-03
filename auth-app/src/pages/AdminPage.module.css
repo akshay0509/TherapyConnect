@@ -333,6 +333,16 @@
   background: rgba(34,197,94,0.08);
 }
 
+/* ── Reset password dialog row ── */
+.resetRow {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 18px;
+}
+
+.resetRow input { font-family: monospace; }
+
 /* ── Audit filters ── */
 .auditFilters {
   display: flex;

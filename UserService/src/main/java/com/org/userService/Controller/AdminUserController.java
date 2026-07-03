@@ -39,6 +39,17 @@ public class AdminUserController {
 		}
 	}
 
+	@PutMapping("/users/{userId}/reset-password")
+	public ResponseEntity<Map<String, String>> resetPassword(@PathVariable String userId,
+			@RequestBody Map<String, String> body) {
+		try {
+			adminUserService.resetPassword(userId, body.get("newPassword"));
+			return ResponseEntity.ok(Map.of("message", "Password reset successfully."));
+		} catch (IllegalArgumentException e) {
+			return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+		}
+	}
+
 	@GetMapping("/audit")
 	public ResponseEntity<List<UserLoginAudit>> getLoginAudit() {
 		return ResponseEntity.ok(adminUserService.getRecentLoginAudit());
