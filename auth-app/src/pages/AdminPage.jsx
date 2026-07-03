@@ -210,7 +210,7 @@ export default function AdminPage() {
     );
   }
 
-  const portainerUrl = `http://${window.location.hostname}:9000`;
+  const portainerUrl = "http://therapyconnect.duckdns.org:9000";
 
   return (
     <div className={styles.page}>
