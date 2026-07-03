@@ -118,7 +118,24 @@ public class TherapistService {
 		event.setEventType("TherapistCreated");
 		event.setTherapistId(saved.getTherapistId());
 		event.setTimezone(saved.getTimezone());
+		event.setPaymentEnabled(saved.isPaymentEnabled());
 		outboxService.saveOutboxEvent("THERAPIST_AVAILABILITY", saved.getTherapistId(), "TherapistCreated", event);
+
+		return therapistAssembler.assembleEntityToDto(saved);
+	}
+
+	@Transactional
+	public TherapistDto updatePaymentSettings(String therapistId, boolean paymentEnabled) throws JsonProcessingException {
+		Therapist therapist = therapistRepository.findByTherapistId(therapistId);
+		therapist.setPaymentEnabled(paymentEnabled);
+		Therapist saved = therapistRepository.save(therapist);
+
+		TherapistEvent event = new TherapistEvent();
+		event.setEventType("TherapistPaymentSettingsUpdated");
+		event.setTherapistId(saved.getTherapistId());
+		event.setTimezone(saved.getTimezone());
+		event.setPaymentEnabled(saved.isPaymentEnabled());
+		outboxService.saveOutboxEvent("THERAPIST_AVAILABILITY", saved.getTherapistId(), "TherapistPaymentSettingsUpdated", event);
 
 		return therapistAssembler.assembleEntityToDto(saved);
 	}

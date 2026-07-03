@@ -28,6 +28,11 @@ public class Therapist {
 	private int yearsOfExperience;
 	private String timezone;
 
+	// columnDefinition needed so ddl-auto=update can add the column to the
+	// existing THERAPIST table without violating NOT NULL on old rows
+	@Column(nullable = false, columnDefinition = "boolean default false")
+	private boolean paymentEnabled = false;
+
 	@Column(nullable = false, unique = true)
     private String userId;
 

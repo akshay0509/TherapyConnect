@@ -1,14 +1,30 @@
 package com.org.appointmentService.Repository;
 
+import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import com.org.appointmentService.Entity.OutboxEvent;
 
-@Repository
-public interface OutboxEventRepository extends JpaRepository<OutboxEvent, String>{
+import org.springframework.transaction.annotation.Transactional;
 
-	List<OutboxEvent> findTop100ByPublishedFalseOrderByCreatedAtAsc();
+@Repository
+public interface OutboxEventRepository extends JpaRepository<OutboxEvent, String> {
+
+    List<OutboxEvent> findTop100ByPublishedFalseOrderByCreatedAtAsc();
+
+    long countByPublishedFalse();
+
+    Optional<OutboxEvent> findTopByPublishedFalseOrderByCreatedAtAsc();
+
+    @Transactional
+    @Modifying
+    @Query("UPDATE OutboxEvent o SET o.published = false WHERE o.createdAt >= :from")
+    int resetPublishedFrom(@Param("from") LocalDateTime from);
 }

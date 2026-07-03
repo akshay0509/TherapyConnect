@@ -5,6 +5,8 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -17,6 +19,7 @@ import com.org.appointmentService.Dto.AvailabilityResponseDto;
 import com.org.appointmentService.Dto.BookAppointmentRequest;
 import com.org.appointmentService.Dto.RescheduleAppointmentRequest;
 import com.org.appointmentService.Dto.UpdateAppointmentStatusRequest;
+import com.org.appointmentService.Entity.AppointmentPayment;
 import com.org.appointmentService.Entity.TherapistAppointments;
 import com.org.appointmentService.Entity.TherapistAvailability;
 import com.org.appointmentService.Entity.TherapistAvailabilityOverride;
@@ -25,6 +28,7 @@ import com.org.appointmentService.Exception.AppointmentNotFoundException;
 import com.org.appointmentService.Exception.InvalidAppointmentStatusTransitionException;
 import com.org.appointmentService.Exception.SlotAlreadyBookedException;
 import com.org.appointmentService.Exception.SlotNotAvailableException;
+import com.org.appointmentService.Repository.AppointmentPaymentRepository;
 import com.org.appointmentService.Repository.TherapistAppointmentsRepository;
 import com.org.appointmentService.Repository.TherapistAvailabilityOverrideRepository;
 import com.org.appointmentService.Repository.TherapistAvailabilityRepository;
@@ -51,6 +55,9 @@ public class AppointmentService {
 
 	@Autowired
 	private OutboxService outboxService;
+
+	@Autowired
+	private AppointmentPaymentRepository appointmentPaymentRepository;
 
 	private static final EnumSet<AppointmentStatus> TERMINAL_STATUSES = EnumSet.of(
 			AppointmentStatus.COMPLETED,
@@ -271,10 +278,10 @@ public class AppointmentService {
 
 		List<AvailabilityResponseDto> slots = therapistAvailabilityRepository.findEffectiveSlotsWithAppointmentInRange(therapistId, from, to);
 
-		List<AppointmentScheduleAppointmentDto> appointments = therapistAppointmentsRepository
+		List<AppointmentScheduleAppointmentDto> appointments = withPaymentInfo(therapistAppointmentsRepository
 				.findByTherapistIdAndStartTimeLessThanAndEndTimeGreaterThanOrderByStartTimeAsc(therapistId, to, from).stream()
 				.map(this::toAppointmentScheduleAppointmentDto)
-				.toList();
+				.toList());
 
 		List<AppointmentScheduleOverrideDto> overrides = therapistAvailabilityOverrideRepository
 				.findByTherapistIdAndStartTimeLessThanAndEndTimeGreaterThanOrderByStartTimeAsc(therapistId, to, from).stream()
@@ -289,9 +296,34 @@ public class AppointmentService {
 		LocalDateTime to = toDate.plusDays(1).atStartOfDay();
 		boolean statusesEmpty = statuses == null || statuses.isEmpty();
 		List<AppointmentStatus> effectiveStatuses = statusesEmpty ? List.of(AppointmentStatus.values()) : statuses;
-		return therapistAppointmentsRepository.searchAppointments(therapistId, blankToNull(clientName), statusesEmpty, effectiveStatuses, from, to).stream()
+		return withPaymentInfo(therapistAppointmentsRepository.searchAppointments(therapistId, blankToNull(clientName), statusesEmpty, effectiveStatuses, from, to).stream()
 				.map(this::toAppointmentScheduleAppointmentDto)
+				.toList());
+	}
+
+	private List<AppointmentScheduleAppointmentDto> withPaymentInfo(List<AppointmentScheduleAppointmentDto> appointments) {
+
+		if (appointments.isEmpty()) {
+			return appointments;
+		}
+
+		List<String> appointmentIds = appointments.stream()
+				.map(AppointmentScheduleAppointmentDto::getAppointmentId)
 				.toList();
+
+		Map<String, AppointmentPayment> paymentsByAppointment = appointmentPaymentRepository
+				.findByAppointmentIdIn(appointmentIds).stream()
+				.collect(Collectors.toMap(AppointmentPayment::getAppointmentId, p -> p));
+
+		for (AppointmentScheduleAppointmentDto dto : appointments) {
+			AppointmentPayment payment = paymentsByAppointment.get(dto.getAppointmentId());
+			if (payment != null) {
+				dto.setPaymentStatus(payment.getStatus());
+				dto.setPaymentLinkUrl(payment.getPaymentLinkUrl());
+			}
+		}
+
+		return appointments;
 	}
 
 	private AppointmentScheduleAppointmentDto toAppointmentScheduleAppointmentDto(TherapistAppointments appointment) {

@@ -56,12 +56,13 @@ public class ClientService {
 		clientEvent.setClientId(client.getClientId());
 		clientEvent.setTherapistId(client.getTherapistId());
 		clientEvent.setEmail(client.getEmail());
+		clientEvent.setPhoneNumber(client.getPhoneNumber());
 		clientEvent.setFirstName(client.getFirstName());
 		clientEvent.setLastName(client.getLastName());
 		clientEvent.setOccurredAt(LocalDateTime.now());
 		clientEvent.setStatus(client.getStatus());
 		clientEvent.setDsf(client.isDsf());
-		
+
 		outboxService.saveOutboxEvent("CLIENT", client.getClientId(), "ClientCreated", clientEvent);
 		
 		return client.getClientId();
@@ -113,6 +114,7 @@ public class ClientService {
 		clientEvent.setClientId(client.getClientId());
 		clientEvent.setTherapistId(client.getTherapistId());
 		clientEvent.setEmail(client.getEmail());
+		clientEvent.setPhoneNumber(client.getPhoneNumber());
 		clientEvent.setFirstName(client.getFirstName());
 		clientEvent.setLastName(client.getLastName());
 		clientEvent.setOccurredAt(LocalDateTime.now());

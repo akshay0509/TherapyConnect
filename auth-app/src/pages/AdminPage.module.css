@@ -1,0 +1,379 @@
+.page {
+  min-height: 100vh;
+  background: #f1f5f9;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+/* ── Header ── */
+.header {
+  background: #0f172a;
+  color: white;
+  padding: 0 32px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.headerIcon {
+  font-size: 1.3rem;
+}
+
+.headerTitle {
+  font-size: 1.05rem;
+  font-weight: 700;
+  flex: 1;
+  letter-spacing: 0.01em;
+}
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.refreshBtn {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: white;
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.refreshBtn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.refreshBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.logoutBtn {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  color: rgba(255, 255, 255, 0.8);
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.logoutBtn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: white;
+}
+
+/* ── Meta bar ── */
+.metaBar {
+  background: #1e293b;
+  color: #94a3b8;
+  font-size: 0.78rem;
+  padding: 6px 32px;
+}
+
+/* ── Main content ── */
+.content {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 32px 24px;
+}
+
+.section {
+  margin-bottom: 32px;
+}
+
+.sectionTitle {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #64748b;
+  margin-bottom: 12px;
+}
+
+/* ── Status cards ── */
+.cardsRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.card {
+  background: white;
+  border-radius: 12px;
+  padding: 22px 24px;
+  border-left: 4px solid transparent;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.cardOk {
+  border-left-color: #22c55e;
+}
+
+.cardWarn {
+  border-left-color: #f59e0b;
+}
+
+.cardError {
+  border-left-color: #ef4444;
+}
+
+.cardNeutral {
+  border-left-color: #94a3b8;
+}
+
+.cardLabel {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #94a3b8;
+  margin-bottom: 10px;
+}
+
+.statusBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 1rem;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
+.statusBadge.ok { color: #16a34a; }
+.statusBadge.warn { color: #d97706; }
+.statusBadge.error { color: #dc2626; }
+.statusBadge.neutral { color: #64748b; }
+
+.statusDot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.dotOk { background: #22c55e; }
+.dotWarn { background: #f59e0b; }
+.dotError { background: #ef4444; }
+.dotNeutral { background: #94a3b8; }
+
+.cardDetail {
+  font-size: 0.85rem;
+  color: #475569;
+  line-height: 1.6;
+}
+
+.cardDetail strong {
+  color: #1e293b;
+}
+
+/* ── Recovery panel ── */
+.recoveryPanel {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.recoveryDesc {
+  font-size: 0.85rem;
+  color: #64748b;
+  margin-bottom: 18px;
+  line-height: 1.6;
+}
+
+.recoveryRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.recoveryLabel {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #374151;
+  white-space: nowrap;
+}
+
+.datetimeInput {
+  padding: 9px 12px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-family: monospace;
+  color: #1e293b;
+  flex: 1;
+  min-width: 200px;
+  transition: border-color 0.15s;
+}
+
+.datetimeInput:focus {
+  outline: none;
+  border-color: #3b82f6;
+}
+
+.replayBtn {
+  padding: 9px 20px;
+  background: #dc2626;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+
+.replayBtn:hover:not(:disabled) {
+  background: #b91c1c;
+}
+
+.replayBtn:disabled {
+  background: #94a3b8;
+  cursor: not-allowed;
+}
+
+.replayResult {
+  margin-top: 14px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.replayResult.success {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #15803d;
+}
+
+.replayResult.failure {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #dc2626;
+}
+
+/* ── Portainer ── */
+.portainerPanel {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.portainerText h3 {
+  margin: 0 0 4px;
+  font-size: 0.95rem;
+  color: #1e293b;
+}
+
+.portainerText p {
+  margin: 0;
+  font-size: 0.82rem;
+  color: #64748b;
+}
+
+.portainerBtn {
+  padding: 10px 20px;
+  background: #0284c7;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-block;
+  transition: background 0.15s;
+}
+
+.portainerBtn:hover {
+  background: #0369a1;
+}
+
+/* ── Loading / error states ── */
+.loading {
+  text-align: center;
+  padding: 60px;
+  color: #64748b;
+}
+
+.fetchError {
+  padding: 16px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 10px;
+  color: #dc2626;
+  font-size: 0.85rem;
+  margin-bottom: 16px;
+}
+
+/* ── Confirm overlay ── */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.dialog {
+  background: white;
+  border-radius: 14px;
+  padding: 32px;
+  width: 400px;
+  max-width: 90vw;
+}
+
+.dialog h3 {
+  margin: 0 0 12px;
+  color: #1e293b;
+}
+
+.dialog p {
+  font-size: 0.9rem;
+  color: #475569;
+  margin-bottom: 24px;
+  line-height: 1.6;
+}
+
+.dialogActions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.cancelBtn {
+  padding: 9px 18px;
+  background: #f1f5f9;
+  color: #64748b;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.confirmBtn {
+  padding: 9px 18px;
+  background: #dc2626;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}

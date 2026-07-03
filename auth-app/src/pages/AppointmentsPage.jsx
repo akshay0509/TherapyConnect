@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { getAvailability, createAppointment, generateSlots, updateAppointmentStatus, rescheduleAppointment, createAvailabilityOverride, deleteAvailabilityOverride, bulkAvailabilityOverrides, searchAppointments } from "../api/appointments";
+import { getAvailability, createAppointment, generateSlots, updateAppointmentStatus, rescheduleAppointment, createAvailabilityOverride, deleteAvailabilityOverride, bulkAvailabilityOverrides, searchAppointments, getPaymentInfo, ensurePaymentLink } from "../api/appointments";
 import { getTherapistClients } from "../api/therapistClients";
 import { useModeMap, useAllModes } from "../context/DeliveryModesContext";
 import styles from "./AppointmentsPage.module.css";
@@ -187,12 +187,17 @@ export default function AppointmentsPage() {
   const [bookingLoading, setBookingLoading] = useState(false);
   const [bookingError, setBookingError] = useState(null);
   const [bookingSuccess, setBookingSuccess] = useState(false);
+  // { appointmentId, status, url } — set when the booking response includes payment info
+  const [bookingPayment, setBookingPayment] = useState(null);
+  const [linkCopied, setLinkCopied] = useState(false);
 
   // Update status
   const [updateStatus, setUpdateStatus] = useState("");
   const [updateReason, setUpdateReason] = useState("");
   const [updateLoading, setUpdateLoading] = useState(false);
   const [updateError, setUpdateError] = useState(null);
+  const [panelPayment, setPanelPayment] = useState(null); // payment info for the selected appointment
+  const [paymentRetryLoading, setPaymentRetryLoading] = useState(false);
 
   // Reschedule
   const [reschedWeekStart, setReschedWeekStart] = useState(() => getWeekStart(new Date()));
@@ -375,6 +380,7 @@ export default function AppointmentsPage() {
     setBookingModes(slotModes);
     setBooking({ clientId: "", clientName: "", modeId: slot.modeId || "", useCustomPrice: false, customPrice: "" });
     setBookingError(null); setBookingSuccess(false);
+    setBookingPayment(null); setLinkCopied(false);
     setPanel("book");
   };
 
@@ -382,7 +388,38 @@ export default function AppointmentsPage() {
     setPanelSlot(slot);
     setUpdateStatus(slot.appointmentStatus || "");
     setUpdateReason(""); setUpdateError(null);
+    setPanelPayment(null); setLinkCopied(false);
     setPanel("update");
+    if (slot.appointmentId) {
+      getPaymentInfo(slot.appointmentId).then(setPanelPayment).catch(() => setPanelPayment(null));
+    }
+  };
+
+  const copyPaymentLink = async (url) => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+    } catch {
+      // clipboard unavailable (http origin) — leave the link selectable
+    }
+  };
+
+  const handlePaymentRetry = async (appointmentId, fromBookingPanel) => {
+    setPaymentRetryLoading(true);
+    try {
+      const payment = await ensurePaymentLink(appointmentId);
+      if (fromBookingPanel) {
+        setBookingPayment({ appointmentId, status: payment?.status, url: payment?.paymentLinkUrl, clientNotified: payment?.clientNotified });
+      } else {
+        setPanelPayment(payment);
+      }
+    } catch (err) {
+      if (fromBookingPanel) setBookingError(friendlyError(err.message));
+      else setUpdateError(friendlyError(err.message));
+    } finally {
+      setPaymentRetryLoading(false);
+    }
   };
 
   const openReschedule = (slot) => {
@@ -421,7 +458,17 @@ export default function AppointmentsPage() {
         modeId: booking.modeId,
       }]);
       setBookingSuccess(true);
-      setTimeout(() => setPanel(null), 1200);
+      if (result?.paymentStatus) {
+        // keep the panel open so the therapist can copy/share the payment link
+        setBookingPayment({
+          appointmentId: result.appointmentId,
+          status: result.paymentStatus,
+          url: result.paymentLinkUrl,
+          clientNotified: result.clientNotified,
+        });
+      } else {
+        setTimeout(() => setPanel(null), 1200);
+      }
     } catch (err) { setBookingError(friendlyError(err.message)); }
     finally { setBookingLoading(false); }
   };
@@ -838,7 +885,47 @@ export default function AppointmentsPage() {
                 <button className={styles.closeBtn} onClick={() => setPanel(null)}>✕</button>
               </div>
               {bookingSuccess ? (
-                <div className={styles.successBox}><span className={styles.successIcon}>✓</span> Booked!</div>
+                <div className={styles.panelForm}>
+                  <div className={styles.successBox}><span className={styles.successIcon}>✓</span> Booked!</div>
+                  {bookingPayment && bookingPayment.status === "LINK_CREATED" && (
+                    <div className={styles.slotSummary}>
+                      <div className={styles.summaryRow}>
+                        <span className={styles.summaryLabel}>Payment link</span>
+                        <span className={styles.summaryValue} style={{ wordBreak: "break-all" }}>{bookingPayment.url}</span>
+                      </div>
+                      <div className={styles.formActions}>
+                        <button type="button" className={styles.submitBtn} onClick={() => copyPaymentLink(bookingPayment.url)}>
+                          {linkCopied ? "Copied!" : "Copy link"}
+                        </button>
+                      </div>
+                      <p className={styles.customFeeHint}>
+                        {bookingPayment.clientNotified
+                          ? "✓ Link sent to the client by SMS/email. The appointment confirms automatically once paid."
+                          : "Client has no contact details on file — share this link manually. The appointment confirms automatically once paid."}
+                      </p>
+                    </div>
+                  )}
+                  {bookingPayment && bookingPayment.status === "LINK_FAILED" && (
+                    <div className={styles.slotSummary}>
+                      <div className={styles.errorBox}>
+                        <span className={styles.errorIcon}>!</span>
+                        Booking saved, but the payment link could not be created.
+                      </div>
+                      <div className={styles.formActions}>
+                        <button type="button" className={styles.submitBtn} disabled={paymentRetryLoading}
+                          onClick={() => handlePaymentRetry(bookingPayment.appointmentId, true)}>
+                          {paymentRetryLoading ? <span className={styles.btnSpinner}/> : "Retry payment link"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {bookingError && <div className={styles.errorBox}><span className={styles.errorIcon}>!</span>{bookingError}</div>}
+                  {bookingPayment && (
+                    <div className={styles.formActions}>
+                      <button type="button" className={styles.cancelBtn} onClick={() => setPanel(null)}>Close</button>
+                    </div>
+                  )}
+                </div>
               ) : (
                 <form onSubmit={handleBook} className={styles.panelForm}>
                   <div className={styles.field}><label className={styles.label}>Client</label>
@@ -926,6 +1013,34 @@ export default function AppointmentsPage() {
                     <div className={styles.summaryRow}>
                       <span className={styles.summaryLabel}>Reason</span>
                       <span className={styles.summaryValue}>{panelSlot.reason}</span>
+                    </div>
+                  )}
+                  {panelPayment && (
+                    <div className={styles.summaryRow}>
+                      <span className={styles.summaryLabel}>Payment</span>
+                      <span className={styles.summaryValue}>
+                        {panelPayment.status === "PAID" && `✓ Paid ₹${parseFloat(panelPayment.amount).toFixed(0)}`}
+                        {panelPayment.status === "LINK_CREATED" && (panelPayment.clientNotified ? "Awaiting payment (client notified)" : "Awaiting payment")}
+                        {panelPayment.status === "LINK_FAILED" && "Link creation failed"}
+                        {panelPayment.status === "EXPIRED" && "Link expired"}
+                        {panelPayment.status === "CANCELLED" && "Link cancelled"}
+                      </span>
+                    </div>
+                  )}
+                  {panelPayment && panelPayment.status === "LINK_CREATED" && panelPayment.paymentLinkUrl && (
+                    <div className={styles.formActions}>
+                      <button type="button" className={styles.cancelBtn} onClick={() => copyPaymentLink(panelPayment.paymentLinkUrl)}>
+                        {linkCopied ? "Copied!" : "Copy payment link"}
+                      </button>
+                    </div>
+                  )}
+                  {panelPayment && (panelPayment.status === "LINK_FAILED" || panelPayment.status === "EXPIRED") &&
+                    !["CANCELLED", "ABANDONED", "COMPLETED"].includes(panelSlot.appointmentStatus) && (
+                    <div className={styles.formActions}>
+                      <button type="button" className={styles.cancelBtn} disabled={paymentRetryLoading}
+                        onClick={() => handlePaymentRetry(panelSlot.appointmentId, false)}>
+                        {paymentRetryLoading ? "Retrying…" : "Retry payment link"}
+                      </button>
                     </div>
                   )}
                 </div>

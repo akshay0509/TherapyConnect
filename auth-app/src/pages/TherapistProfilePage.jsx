@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { getTherapistProfile, createTherapistProfile } from "../api/therapistProfile";
+import { getTherapistProfile, createTherapistProfile, updatePaymentSettings } from "../api/therapistProfile";
 import styles from "./TherapistProfilePage.module.css";
 
 function getInitials(firstName, lastName) {
@@ -39,6 +39,10 @@ export default function TherapistProfilePage() {
   const [formLoading, setFormLoading] = useState(false);
   const [formSuccess, setFormSuccess] = useState(false);
 
+  // Payment settings state
+  const [paymentSaving, setPaymentSaving] = useState(false);
+  const [paymentError, setPaymentError] = useState(null);
+
   useEffect(() => {
     getTherapistProfile()
       .then((data) => {
@@ -73,6 +77,19 @@ export default function TherapistProfilePage() {
       setFormError(err.message);
     } finally {
       setFormLoading(false);
+    }
+  };
+
+  const handlePaymentToggle = async () => {
+    setPaymentSaving(true);
+    setPaymentError(null);
+    try {
+      const updated = await updatePaymentSettings(!profile.paymentEnabled);
+      setProfile(updated);
+    } catch (err) {
+      setPaymentError(err.message);
+    } finally {
+      setPaymentSaving(false);
     }
   };
 
@@ -156,6 +173,45 @@ export default function TherapistProfilePage() {
                   <span className={styles.fieldValue}>{profile.timezone ?? "—"}</span>
                 </div>
               </div>
+
+              <div className={styles.profileDivider} />
+
+              <div className={styles.profileGrid}>
+                <div className={styles.profileField}>
+                  <span className={styles.fieldLabel}>Collect payments (Razorpay)</span>
+                  <span className={styles.fieldValue}>
+                    {profile.paymentEnabled
+                      ? "On — a payment link is created for every booking"
+                      : "Off — bookings are created without payment"}
+                  </span>
+                </div>
+                <div className={styles.profileField}>
+                  <button
+                    type="button"
+                    onClick={handlePaymentToggle}
+                    disabled={paymentSaving}
+                    style={{
+                      padding: "8px 18px",
+                      borderRadius: "8px",
+                      border: "none",
+                      cursor: paymentSaving ? "wait" : "pointer",
+                      fontWeight: 600,
+                      color: "#fff",
+                      background: profile.paymentEnabled ? "#dc2626" : "#16a34a",
+                    }}
+                  >
+                    {paymentSaving
+                      ? "Saving…"
+                      : profile.paymentEnabled ? "Turn off payments" : "Turn on payments"}
+                  </button>
+                </div>
+              </div>
+
+              {paymentError && (
+                <div className={styles.errorBox}>
+                  <span className={styles.errorIcon}>!</span>{paymentError}
+                </div>
+              )}
             </div>
           </div>
         )}

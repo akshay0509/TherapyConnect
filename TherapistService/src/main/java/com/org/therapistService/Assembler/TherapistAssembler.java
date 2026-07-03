@@ -49,6 +49,7 @@ public class TherapistAssembler {
 		therapistDto.setPhoneNumber(therapist.getPhoneNumber());
 		therapistDto.setYearsOfExperience(therapist.getYearsOfExperience());
 		therapistDto.setTimezone(therapist.getTimezone());
+		therapistDto.setPaymentEnabled(therapist.isPaymentEnabled());
 
 		return therapistDto;
 	}

@@ -18,10 +18,12 @@ import com.org.appointmentService.Dto.AppointmentScheduleAppointmentDto;
 import com.org.appointmentService.Dto.AppointmentScheduleViewDto;
 import com.org.appointmentService.Dto.AvailabilityResponseDto;
 import com.org.appointmentService.Dto.BookAppointmentRequest;
+import com.org.appointmentService.Dto.BookAppointmentResponse;
 import com.org.appointmentService.Dto.RescheduleAppointmentRequest;
 import com.org.appointmentService.Dto.UpdateAppointmentStatusRequest;
 import com.org.appointmentService.Entity.TherapistAppointments;
 import com.org.appointmentService.Services.AppointmentService;
+import com.org.appointmentService.Services.PaymentService;
 import com.org.appointmentService.Utility.SecurityUtils;
 import com.org.events.TherapistAppointment.AppointmentStatus;
 
@@ -33,8 +35,11 @@ public class AppointmentController {
 	@Autowired
 	private AppointmentService appointmentService;
 
+	@Autowired
+	private PaymentService paymentService;
+
 	@PostMapping("/create-appointment")
-	public ResponseEntity<String> bookAppointment(@RequestBody @Valid BookAppointmentRequest bookAppointmentRequest) {
+	public ResponseEntity<BookAppointmentResponse> bookAppointment(@RequestBody @Valid BookAppointmentRequest bookAppointmentRequest) {
 
 		String therapistId = SecurityUtils.getTherapistId();
 		bookAppointmentRequest.setTherapistId(therapistId);
@@ -43,10 +48,23 @@ public class AppointmentController {
 		try {
 			appointmentId = appointmentService.bookAppointment(bookAppointmentRequest);
 		}
-		catch (JsonProcessingException e) {			
-			return ResponseEntity.ok("failed");
+		catch (JsonProcessingException e) {
+			return ResponseEntity.internalServerError().build();
 		}
-		return ResponseEntity.ok(appointmentId);
+
+		BookAppointmentResponse response = new BookAppointmentResponse();
+		response.setAppointmentId(appointmentId);
+
+		// Payment link creation runs after the booking transaction commits and
+		// can never fail the booking — worst case paymentStatus is LINK_FAILED
+		// and the therapist retries from the payments endpoint.
+		paymentService.ensurePaymentLink(appointmentId, therapistId).ifPresent(payment -> {
+			response.setPaymentStatus(payment.getStatus());
+			response.setPaymentLinkUrl(payment.getPaymentLinkUrl());
+			response.setClientNotified(payment.isClientNotified());
+		});
+
+		return ResponseEntity.ok(response);
 	}
 
 	@PatchMapping("/update-appointment")
@@ -60,6 +78,13 @@ public class AppointmentController {
 		}
 		catch (JsonProcessingException e) {
 			return ResponseEntity.internalServerError().body("failed");
+		}
+
+		// A dead appointment must not keep a payable link alive. COMPLETED is
+		// deliberately excluded so a post-session payment can still be collected.
+		if (updateAppointmentStatusRequest.getStatus() == AppointmentStatus.CANCELLED
+				|| updateAppointmentStatusRequest.getStatus() == AppointmentStatus.ABANDONED) {
+			paymentService.cancelUnpaidLinkBestEffort(updateAppointmentStatusRequest.getAppointmentId());
 		}
 
 		return ResponseEntity.ok("Appointment status updated");
@@ -77,6 +102,9 @@ public class AppointmentController {
 		catch (JsonProcessingException e) {
 			return ResponseEntity.internalServerError().body("failed");
 		}
+
+		// fee may have changed with the new slot/mode — reissue any unpaid link
+		paymentService.refreshLinkAfterReschedule(rescheduleAppointmentRequest.getAppointmentId(), therapistId);
 
 		return ResponseEntity.ok("Appointment rescheduled");
 	}

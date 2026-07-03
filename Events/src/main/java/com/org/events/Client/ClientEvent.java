@@ -14,6 +14,7 @@ public class ClientEvent {
 	private String clientId;
 	private String therapistId;
     private String email;
+    private String phoneNumber;
     private String firstName;
     private String lastName;
     private ClientStatus status;

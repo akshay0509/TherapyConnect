@@ -39,4 +39,19 @@ public class JwtUtil {
 				.signWith(privateKey, SignatureAlgorithm.RS256)
 				.compact();
 	}
+
+	// Admin sessions last 8 hours — no refresh token mechanism for admin
+	public String generateAdminToken(String username) {
+		return Jwts.builder()
+				.setIssuer("gateway-auth")
+				.setSubject(username)
+				.setAudience("therapist-service")
+				.claim("scope", List.of("read", "write"))
+				.claim("authorities", Set.of("ADMIN"))
+				.claim("userId", "admin")
+				.setIssuedAt(new Date())
+				.setExpiration(new Date(System.currentTimeMillis() + 8L * 60 * 60 * 1000))
+				.signWith(privateKey, SignatureAlgorithm.RS256)
+				.compact();
+	}
 }

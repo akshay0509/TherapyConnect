@@ -36,6 +36,7 @@ services:
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
     volumes:
       - kafka_data:/var/lib/kafka/data
     networks:
@@ -87,6 +88,8 @@ services:
       SPRING_APPLICATION_JSON: '{"eureka":{"client":{"serviceUrl":{"defaultZone":"http://discovery:8761/eureka/"}}}}'
       JWT_PUBLIC_KEY: file:/app/keys/gateway-public.pem
       JWT_PRIVATE_KEY: file:/app/keys/gateway-private.pem
+      ADMIN_USERNAME: ${ADMIN_USERNAME}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
     volumes:
       - ./keys:/app/keys:ro
     networks:
@@ -209,6 +212,9 @@ services:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery:8761/eureka/
       SPRING_APPLICATION_JSON: '{"eureka":{"client":{"serviceUrl":{"defaultZone":"http://discovery:8761/eureka/"}}}}'
       JWT_PUBLIC_KEY: file:/app/keys/gateway-public.pem
+      RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID:-}
+      RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET:-}
+      RAZORPAY_WEBHOOK_SECRET: ${RAZORPAY_WEBHOOK_SECRET:-}
     volumes:
       - ./keys:/app/keys:ro
     networks:
@@ -281,6 +287,20 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # ── Portainer ─────────────────────────────────────────────────────────────
+
+  portainer:
+    image: portainer/portainer-ce:latest
+    container_name: tc-portainer
+    ports:
+      - "9000:9000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_data:/data
+    networks:
+      - therapy-net
+    restart: unless-stopped
+
 networks:
   therapy-net:
     driver: bridge
@@ -288,3 +308,4 @@ networks:
 volumes:
   postgres_data:
   kafka_data:
+  portainer_data:

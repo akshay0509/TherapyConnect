@@ -17,6 +17,8 @@ import ResetPasswordPage from "./pages/ResetPasswordPage";
 import AccountSettingsPage from "./pages/AccountSettingsPage";
 import EarningsPage from "./pages/EarningsPage";
 import AnalyticsPage from "./pages/AnalyticsPage";
+import AdminLoginPage from "./pages/AdminLoginPage";
+import AdminPage from "./pages/AdminPage";
 
 function RoleRedirect() {
   const { token, role, therapistId } = useAuth();
@@ -57,6 +59,10 @@ export default function App() {
         <SessionExpiredRedirect />
         <DeliveryModesProvider>
           <Routes>
+            {/* ── Admin routes — independent of therapist/client auth ── */}
+            <Route path="/admin-login" element={<AdminLoginPage />} />
+            <Route path="/admin" element={<AdminPage />} />
+
             <Route path="/login" element={<LoginPage />} />
             <Route path="/reset-password" element={<ResetPasswordPage />} />
 

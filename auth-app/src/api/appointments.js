@@ -25,6 +25,8 @@ export async function getAppointments() {
 }
 
 // modeId is required (@NotNull on backend). customPrice is optional — overrides mode default fee.
+// Returns { appointmentId, paymentStatus, paymentLinkUrl } — payment fields are
+// null when payments are disabled for the therapist.
 export async function createAppointment({ slotId, therapistId, clientId, clientName, modeId, customPrice }) {
   try {
     const body = { slotId, therapistId, clientId, clientName, modeId };
@@ -33,6 +35,28 @@ export async function createAppointment({ slotId, therapistId, clientId, clientN
     return response.data;
   } catch (err) {
     const message = err.response?.data?.message || err.response?.data?.error || "Failed to book appointment.";
+    throw new Error(message);
+  }
+}
+
+export async function getPaymentInfo(appointmentId) {
+  try {
+    const response = await api.get(`/appointment/payments/${appointmentId}`);
+    return response.data;
+  } catch (err) {
+    if (err.response?.status === 404) return null;
+    const message = err.response?.data?.message || err.response?.data?.error || "Failed to fetch payment info.";
+    throw new Error(message);
+  }
+}
+
+// Creates the payment link if missing, or retries after a failure.
+export async function ensurePaymentLink(appointmentId) {
+  try {
+    const response = await api.post(`/appointment/payments/${appointmentId}/link`);
+    return response.data;
+  } catch (err) {
+    const message = err.response?.data?.message || err.response?.data?.error || "Failed to create payment link.";
     throw new Error(message);
   }
 }

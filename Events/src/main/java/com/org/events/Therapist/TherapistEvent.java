@@ -13,6 +13,7 @@ public class TherapistEvent {
 	private LocalDateTime occurredAt;
 	private String therapistId;
 	private String timezone;
+	private Boolean paymentEnabled;
 
 	public TherapistEvent() {
 		String uniquePart = UUID.randomUUID().toString().substring(0, 8);

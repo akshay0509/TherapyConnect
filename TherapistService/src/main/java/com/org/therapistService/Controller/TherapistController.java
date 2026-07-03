@@ -25,6 +25,7 @@ import com.org.therapistService.Dto.DashboardStatsDto;
 import com.org.therapistService.Dto.EarningsSessionDto;
 import com.org.therapistService.Dto.EarningsSummaryDto;
 import com.org.therapistService.Dto.PageResponseDto;
+import com.org.therapistService.Dto.PaymentSettingsDto;
 import com.org.therapistService.Dto.SessionDetailsDto;
 import com.org.therapistService.Dto.SessionNotesDto;
 import com.org.therapistService.Dto.TherapistAvailabilityOverridesDto;
@@ -60,6 +61,16 @@ public class TherapistController {
 	public TherapistDto getTherapistProfile(){
 		String therapistId = SecurityUtils.getTherapistId();
 		return therapistService.getTherapist(therapistId);
+	}
+
+	@PutMapping("/payment-settings")
+	public ResponseEntity<TherapistDto> updatePaymentSettings(@RequestBody PaymentSettingsDto paymentSettingsDto) throws JsonProcessingException {
+		if (paymentSettingsDto.getPaymentEnabled() == null) {
+			return ResponseEntity.badRequest().build();
+		}
+		String therapistId = SecurityUtils.getTherapistId();
+		TherapistDto updated = therapistService.updatePaymentSettings(therapistId, paymentSettingsDto.getPaymentEnabled());
+		return ResponseEntity.ok(updated);
 	}
 
 	@GetMapping("/dashboard/stats")

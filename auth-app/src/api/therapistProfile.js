@@ -20,3 +20,13 @@ export async function createTherapistProfile(profileData) {
     throw new Error(message);
   }
 }
+
+export async function updatePaymentSettings(paymentEnabled) {
+  try {
+    const response = await api.put("/therapist/payment-settings", { paymentEnabled });
+    return response.data;
+  } catch (err) {
+    const message = err.response?.data?.message || err.response?.data?.error || "Failed to update payment settings.";
+    throw new Error(message);
+  }
+}
