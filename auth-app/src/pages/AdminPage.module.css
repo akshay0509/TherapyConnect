@@ -174,6 +174,206 @@
 
 .cardDetail strong { color: #cbd5e1; }
 
+/* ── Services grid ── */
+.servicesGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.serviceChip {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+
+.serviceName {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #cbd5e1;
+  flex: 1;
+  text-transform: capitalize;
+}
+
+.serviceNameDown { color: #f87171; }
+
+.serviceStatus {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #475569;
+}
+
+/* ── Tables (users / audit) ── */
+.tablePanel {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 14px;
+  padding: 8px 0;
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.83rem;
+}
+
+.table th {
+  text-align: left;
+  padding: 12px 16px;
+  font-size: 0.66rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #475569;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  white-space: nowrap;
+}
+
+.table td {
+  padding: 11px 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  vertical-align: middle;
+}
+
+.table tbody tr:last-child td { border-bottom: none; }
+
+.table tbody tr:hover { background: rgba(255,255,255,0.02); }
+
+.cellUsername { color: #e2e8f0; font-weight: 600; }
+.cellMuted    { color: #64748b; }
+.cellFaint    { color: #3f4c5e; font-size: 0.75rem; }
+
+.roleBadge {
+  display: inline-block;
+  padding: 3px 9px;
+  border-radius: 6px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  background: rgba(99, 102, 241, 0.12);
+  color: #a5b4fc;
+  border: 1px solid rgba(99, 102, 241, 0.25);
+}
+
+.pill {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.pillActive {
+  background: rgba(34, 197, 94, 0.12);
+  color: #4ade80;
+  border: 1px solid rgba(34, 197, 94, 0.25);
+}
+
+.pillLocked {
+  background: rgba(245, 158, 11, 0.12);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.25);
+}
+
+.pillDisabled {
+  background: rgba(239, 68, 68, 0.12);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+}
+
+.rowActions {
+  display: flex;
+  gap: 6px;
+}
+
+.miniBtn {
+  padding: 5px 12px;
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 7px;
+  color: #94a3b8;
+  font-size: 0.72rem;
+  font-weight: 600;
+  font-family: 'DM Sans', sans-serif;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+
+.miniBtn:hover:not(:disabled) {
+  border-color: rgba(245,158,11,0.4);
+  color: #fcd34d;
+  background: rgba(245,158,11,0.06);
+}
+
+.miniBtn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.miniBtnDanger:hover:not(:disabled) {
+  border-color: rgba(239,68,68,0.4);
+  color: #fca5a5;
+  background: rgba(239,68,68,0.06);
+}
+
+.miniBtnOk {
+  border-color: rgba(34,197,94,0.3);
+  color: #4ade80;
+}
+
+.miniBtnOk:hover:not(:disabled) {
+  border-color: rgba(34,197,94,0.5);
+  color: #86efac;
+  background: rgba(34,197,94,0.08);
+}
+
+/* ── Audit filters ── */
+.auditFilters {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px 12px;
+}
+
+.filterBtn {
+  padding: 5px 14px;
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 999px;
+  color: #64748b;
+  font-size: 0.75rem;
+  font-family: 'DM Sans', sans-serif;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+
+.filterBtn:hover { color: #94a3b8; }
+
+.filterBtnActive {
+  background: rgba(245,158,11,0.1);
+  border-color: rgba(245,158,11,0.35);
+  color: #fcd34d;
+}
+
+.auditCount {
+  margin-left: auto;
+  font-size: 0.72rem;
+  color: #475569;
+}
+
+.emptyNote {
+  padding: 18px 16px;
+  color: #475569;
+  font-size: 0.83rem;
+  text-align: center;
+}
+
 /* ── Recovery panel ── */
 .recoveryPanel {
   background: rgba(255,255,255,0.03);

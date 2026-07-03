@@ -45,3 +45,29 @@ export async function replayOutbox(from) {
   const { data } = await adminApi.post("/appointment/admin/outbox/replay", body);
   return data;
 }
+
+// ── Service health (gateway pings each service via Eureka) ──
+export async function getServicesHealth() {
+  const { data } = await adminApi.get("/admin/services");
+  return data;
+}
+
+// ── User management ──
+export async function getUsers() {
+  const { data } = await adminApi.get("/user/admin/users");
+  return data;
+}
+
+export async function updateUserStatus(userId, { enabled, locked }) {
+  const body = {};
+  if (enabled !== undefined) body.enabled = enabled;
+  if (locked !== undefined) body.locked = locked;
+  const { data } = await adminApi.put(`/user/admin/users/${userId}/status`, body);
+  return data;
+}
+
+// ── Login audit log ──
+export async function getLoginAudit() {
+  const { data } = await adminApi.get("/user/admin/audit");
+  return data;
+}

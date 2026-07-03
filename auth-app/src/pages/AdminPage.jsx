@@ -4,8 +4,12 @@ import {
   adminLogout,
   getAnalyticsHealth,
   getAppointmentHealth,
+  getLoginAudit,
+  getServicesHealth,
+  getUsers,
   isAdminLoggedIn,
   replayOutbox,
+  updateUserStatus,
 } from "../api/admin";
 import styles from "./AdminPage.module.css";
 
@@ -45,6 +49,7 @@ export default function AdminPage() {
 
   const [apptHealth, setApptHealth] = useState(null);
   const [analyticsHealth, setAnalyticsHealth] = useState(null);
+  const [services, setServices] = useState([]);
   const [fetchError, setFetchError] = useState("");
   const [loading, setLoading] = useState(true);
   const [lastRefreshed, setLastRefreshed] = useState(null);
@@ -53,6 +58,29 @@ export default function AdminPage() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [replaying, setReplaying] = useState(false);
   const [replayResult, setReplayResult] = useState(null);
+
+  // User management
+  const [users, setUsers] = useState([]);
+  const [usersError, setUsersError] = useState("");
+  const [userActionId, setUserActionId] = useState(null); // userId currently being updated
+  const [pendingAction, setPendingAction] = useState(null); // { user, field, value, label }
+
+  // Audit log
+  const [audit, setAudit] = useState([]);
+  const [auditError, setAuditError] = useState("");
+  const [auditFilter, setAuditFilter] = useState("all"); // "all" | "success" | "failure"
+
+  const handleAuthError = useCallback(
+    (err) => {
+      if (err.response?.status === 401 || err.response?.status === 403) {
+        adminLogout();
+        navigate("/admin-login", { replace: true });
+        return true;
+      }
+      return false;
+    },
+    [navigate]
+  );
 
   const fetchHealth = useCallback(async () => {
     setFetchError("");
@@ -71,24 +99,59 @@ export default function AdminPage() {
         setReplayFrom(appt.outbox.estimatedIssueStartedAt);
       }
     } catch (err) {
-      if (err.response?.status === 401 || err.response?.status === 403) {
-        adminLogout();
-        navigate("/admin-login", { replace: true });
-        return;
-      }
+      if (handleAuthError(err)) return;
       setFetchError("Failed to fetch system health. Check network or try refreshing.");
     } finally {
       setLoading(false);
     }
-  }, [navigate]);
+  }, [handleAuthError]);
+
+  const fetchServices = useCallback(async () => {
+    try {
+      const data = await getServicesHealth();
+      setServices(data);
+    } catch (err) {
+      if (handleAuthError(err)) return;
+      setServices([]);
+    }
+  }, [handleAuthError]);
+
+  const fetchUsers = useCallback(async () => {
+    setUsersError("");
+    try {
+      const data = await getUsers();
+      setUsers(data);
+    } catch (err) {
+      if (handleAuthError(err)) return;
+      setUsersError("Failed to load users.");
+    }
+  }, [handleAuthError]);
+
+  const fetchAudit = useCallback(async () => {
+    setAuditError("");
+    try {
+      const data = await getLoginAudit();
+      setAudit(data);
+    } catch (err) {
+      if (handleAuthError(err)) return;
+      setAuditError("Failed to load login audit.");
+    }
+  }, [handleAuthError]);
+
+  const refreshAll = useCallback(() => {
+    fetchHealth();
+    fetchServices();
+    fetchUsers();
+    fetchAudit();
+  }, [fetchHealth, fetchServices, fetchUsers, fetchAudit]);
 
   useEffect(() => {
     if (!isAdminLoggedIn()) {
       navigate("/admin-login", { replace: true });
       return;
     }
-    fetchHealth();
-  }, [navigate, fetchHealth]);
+    refreshAll();
+  }, [navigate, refreshAll]);
 
   function handleLogout() {
     adminLogout();
@@ -110,6 +173,27 @@ export default function AdminPage() {
     } finally {
       setReplaying(false);
     }
+  }
+
+  // ── User status actions ──────────────────────────────────────────
+  async function confirmUserAction() {
+    const { user, field, value } = pendingAction;
+    setPendingAction(null);
+    setUserActionId(user.userId);
+    setUsersError("");
+    try {
+      const updated = await updateUserStatus(user.userId, { [field]: value });
+      setUsers((prev) => prev.map((u) => (u.userId === updated.userId ? updated : u)));
+    } catch (err) {
+      if (handleAuthError(err)) return;
+      setUsersError(err.response?.data?.error || "Failed to update user.");
+    } finally {
+      setUserActionId(null);
+    }
+  }
+
+  function requestUserAction(user, field, value, label) {
+    setPendingAction({ user, field, value, label });
   }
 
   // ── Outbox status rendering ──────────────────────────────────────
@@ -210,6 +294,184 @@ export default function AdminPage() {
     );
   }
 
+  // ── Services grid ────────────────────────────────────────────────
+  function renderServicesGrid() {
+    if (!services.length) {
+      return <div className={styles.emptyNote}>Service status unavailable.</div>;
+    }
+    return (
+      <div className={styles.servicesGrid}>
+        {services.map((svc) => {
+          const isUp = svc.status === "UP";
+          const isDegraded = svc.status === "DEGRADED";
+          const dotClass = isUp ? styles.dotOk : isDegraded ? styles.dotWarn : styles.dotError;
+          const nameClass = isUp ? "" : styles.serviceNameDown;
+          return (
+            <div key={svc.name} className={styles.serviceChip}>
+              <span className={`${styles.statusDot} ${dotClass}`} />
+              <span className={`${styles.serviceName} ${nameClass}`}>
+                {svc.name.replace("-service", "")}
+              </span>
+              <span className={styles.serviceStatus}>{svc.status}</span>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  // ── Users table ──────────────────────────────────────────────────
+  function renderUsersTable() {
+    return (
+      <div className={styles.tablePanel}>
+        {usersError && <div className={styles.fetchError}>{usersError}</div>}
+        <table className={styles.table}>
+          <thead>
+            <tr>
+              <th>Username</th>
+              <th>Email</th>
+              <th>Role</th>
+              <th>Status</th>
+              <th>Last Login</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {users.map((u) => (
+              <tr key={u.userId}>
+                <td className={styles.cellUsername}>{u.username}</td>
+                <td className={styles.cellMuted}>{u.email}</td>
+                <td>
+                  <span className={styles.roleBadge}>{u.userRole || "—"}</span>
+                </td>
+                <td>
+                  {!u.enabled ? (
+                    <span className={`${styles.pill} ${styles.pillDisabled}`}>DISABLED</span>
+                  ) : u.accountLocked ? (
+                    <span className={`${styles.pill} ${styles.pillLocked}`}>
+                      LOCKED{u.failedAttempts > 0 ? ` (${u.failedAttempts})` : ""}
+                    </span>
+                  ) : (
+                    <span className={`${styles.pill} ${styles.pillActive}`}>ACTIVE</span>
+                  )}
+                </td>
+                <td className={styles.cellMuted}>
+                  {u.lastLoginTime ? timeAgo(u.lastLoginTime) : "never"}
+                </td>
+                <td>
+                  <div className={styles.rowActions}>
+                    {u.enabled ? (
+                      <button
+                        className={`${styles.miniBtn} ${styles.miniBtnDanger}`}
+                        disabled={userActionId === u.userId}
+                        onClick={() => requestUserAction(u, "enabled", false, `Disable account "${u.username}"? The user will not be able to log in.`)}
+                      >
+                        Disable
+                      </button>
+                    ) : (
+                      <button
+                        className={`${styles.miniBtn} ${styles.miniBtnOk}`}
+                        disabled={userActionId === u.userId}
+                        onClick={() => requestUserAction(u, "enabled", true, `Enable account "${u.username}"?`)}
+                      >
+                        Enable
+                      </button>
+                    )}
+                    {u.accountLocked ? (
+                      <button
+                        className={`${styles.miniBtn} ${styles.miniBtnOk}`}
+                        disabled={userActionId === u.userId}
+                        onClick={() => requestUserAction(u, "locked", false, `Unlock account "${u.username}"? Failed attempts will be reset.`)}
+                      >
+                        Unlock
+                      </button>
+                    ) : (
+                      <button
+                        className={styles.miniBtn}
+                        disabled={userActionId === u.userId}
+                        onClick={() => requestUserAction(u, "locked", true, `Lock account "${u.username}"?`)}
+                      >
+                        Lock
+                      </button>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            ))}
+            {!users.length && (
+              <tr>
+                <td colSpan={6} className={styles.emptyNote}>No users found.</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
+  // ── Audit table ──────────────────────────────────────────────────
+  const filteredAudit = audit.filter((a) =>
+    auditFilter === "all" ? true : auditFilter === "success" ? a.success : !a.success
+  );
+
+  function renderAuditTable() {
+    return (
+      <div className={styles.tablePanel}>
+        {auditError && <div className={styles.fetchError}>{auditError}</div>}
+        <div className={styles.auditFilters}>
+          {["all", "success", "failure"].map((f) => (
+            <button
+              key={f}
+              className={`${styles.filterBtn} ${auditFilter === f ? styles.filterBtnActive : ""}`}
+              onClick={() => setAuditFilter(f)}
+            >
+              {f === "all" ? "All" : f === "success" ? "Success" : "Failed"}
+            </button>
+          ))}
+          <span className={styles.auditCount}>
+            {filteredAudit.length} of last {audit.length} events
+          </span>
+        </div>
+        <table className={styles.table}>
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Username</th>
+              <th>Result</th>
+              <th>IP Address</th>
+              <th>Reason</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredAudit.map((a) => (
+              <tr key={a.id}>
+                <td className={styles.cellMuted}>
+                  {formatDateTime(a.loginAt)}{" "}
+                  <span className={styles.cellFaint}>({timeAgo(a.loginAt)})</span>
+                </td>
+                <td className={styles.cellUsername}>{a.username || "—"}</td>
+                <td>
+                  {a.success ? (
+                    <span className={`${styles.pill} ${styles.pillActive}`}>SUCCESS</span>
+                  ) : (
+                    <span className={`${styles.pill} ${styles.pillDisabled}`}>FAILED</span>
+                  )}
+                </td>
+                <td className={styles.cellMuted}>{a.ipAddress || "—"}</td>
+                <td className={styles.cellMuted}>{a.failureReason || "—"}</td>
+              </tr>
+            ))}
+            {!filteredAudit.length && (
+              <tr>
+                <td colSpan={5} className={styles.emptyNote}>No login events.</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
   const portainerUrl = "http://therapyconnect.duckdns.org:9000";
 
   return (
@@ -221,7 +483,7 @@ export default function AdminPage() {
         <div className={styles.headerActions}>
           <button
             className={styles.refreshBtn}
-            onClick={fetchHealth}
+            onClick={refreshAll}
             disabled={loading}
           >
             {loading ? "Loading…" : "↻ Refresh"}
@@ -241,6 +503,12 @@ export default function AdminPage() {
       <div className={styles.content}>
         {fetchError && <div className={styles.fetchError}>{fetchError}</div>}
 
+        {/* Services */}
+        <div className={styles.section}>
+          <div className={styles.sectionTitle}>Services</div>
+          {renderServicesGrid()}
+        </div>
+
         {/* System status */}
         <div className={styles.section}>
           <div className={styles.sectionTitle}>System Status</div>
@@ -248,6 +516,18 @@ export default function AdminPage() {
             {renderOutboxCard()}
             {renderAnalyticsCard()}
           </div>
+        </div>
+
+        {/* User management */}
+        <div className={styles.section}>
+          <div className={styles.sectionTitle}>Users</div>
+          {renderUsersTable()}
+        </div>
+
+        {/* Login audit */}
+        <div className={styles.section}>
+          <div className={styles.sectionTitle}>Login Activity</div>
+          {renderAuditTable()}
         </div>
 
         {/* Recovery actions */}
@@ -324,6 +604,24 @@ export default function AdminPage() {
               </button>
               <button className={styles.confirmBtn} onClick={handleReplay}>
                 Yes, Replay
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirm user action dialog */}
+      {pendingAction && (
+        <div className={styles.overlay}>
+          <div className={styles.dialog}>
+            <h3>Confirm Action</h3>
+            <p>{pendingAction.label}</p>
+            <div className={styles.dialogActions}>
+              <button className={styles.cancelBtn} onClick={() => setPendingAction(null)}>
+                Cancel
+              </button>
+              <button className={styles.confirmBtn} onClick={confirmUserAction}>
+                Confirm
               </button>
             </div>
           </div>
