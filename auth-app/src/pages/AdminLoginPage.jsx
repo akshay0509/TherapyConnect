@@ -27,6 +27,11 @@ export default function AdminLoginPage() {
 
   return (
     <div className={styles.container}>
+      <div className={styles.bg}>
+        <div className={styles.blob1} />
+        <div className={styles.blob2} />
+        <div className={styles.grid} />
+      </div>
       <div className={styles.card}>
         <div className={styles.logoArea}>
           <div className={styles.lockIcon}>🔐</div>
