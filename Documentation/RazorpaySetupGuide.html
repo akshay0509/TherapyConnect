@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Razorpay Setup Guide — Therapy Connect</title>
+<script>
+  // Set theme before first paint to avoid a flash of the wrong theme
+  (function () {
+    var t = localStorage.getItem("tc-theme");
+    if (!t) t = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    document.documentElement.setAttribute("data-theme", t);
+    if (localStorage.getItem("tc-razorpay-sidebar") === "collapsed") {
+      document.addEventListener("DOMContentLoaded", function () { document.body.classList.add("sidebar-collapsed"); });
+    }
+  })();
+</script>
+<style>
+/* ============================================================
+   TherapyConnect — Razorpay Setup Guide
+   Design system shared with the engineering documentation site
+   ============================================================ */
+:root {
+  --brand: #2563eb; --brand-strong: #1d4ed8; --brand-soft: #dbeafe; --accent: #0ea5e9;
+  --bg: #ffffff; --bg-alt: #f8fafc; --bg-sidebar: #f1f5f9; --bg-code: #f6f8fa; --bg-card: #ffffff;
+  --text: #0f172a; --text-muted: #475569; --text-faint: #94a3b8;
+  --border: #e2e8f0; --border-strong: #cbd5e1;
+  --shadow: 0 1px 3px rgba(15,23,42,.08), 0 1px 2px rgba(15,23,42,.04);
+  --shadow-lg: 0 10px 30px rgba(15,23,42,.12);
+  --green: #16a34a; --green-soft: #dcfce7; --amber: #d97706; --amber-soft: #fef3c7;
+  --red: #dc2626; --red-soft: #fee2e2; --purple: #7c3aed; --purple-soft: #ede9fe;
+  --sidebar-w: 290px; --toc-w: 220px; --topbar-h: 56px; --maxw: 880px; --radius: 10px;
+  --mono: "SFMono-Regular","JetBrains Mono",Consolas,"Liberation Mono",Menlo,monospace;
+  --sans: "Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+html[data-theme="dark"] {
+  --brand: #60a5fa; --brand-strong: #93c5fd; --brand-soft: #1e3a5f; --accent: #38bdf8;
+  --bg: #0b1120; --bg-alt: #0f172a; --bg-sidebar: #0d1424; --bg-code: #111a2e; --bg-card: #111a2e;
+  --text: #e2e8f0; --text-muted: #94a3b8; --text-faint: #64748b;
+  --border: #1e293b; --border-strong: #334155;
+  --shadow: 0 1px 3px rgba(0,0,0,.4); --shadow-lg: 0 10px 30px rgba(0,0,0,.5);
+  --green-soft: #14331f; --amber-soft: #3a2c0a; --red-soft: #3a1416; --purple-soft: #251a3d;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; scroll-padding-top: calc(var(--topbar-h) + 16px); }
+body { font-family: var(--sans); font-size: 15.5px; line-height: 1.65; color: var(--text); background: var(--bg); -webkit-font-smoothing: antialiased; }
+
+/* Topbar */
+.topbar { position: fixed; top:0; left:0; right:0; height: var(--topbar-h); z-index: 100;
+  background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 14px; padding: 0 18px; }
+.topbar .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: -.01em; color: var(--text); text-decoration: none; font-size: 15px; }
+.topbar .brand .logo { width: 26px; height: 26px; border-radius: 7px; background: linear-gradient(135deg, var(--brand), var(--accent)); display: grid; place-items: center; color: #fff; font-weight: 800; font-size: 14px; flex-shrink: 0; }
+.topbar .spacer { flex: 1; }
+.topbar .version-pill { font-size: 11.5px; color: var(--text-muted); background: var(--bg-alt); border: 1px solid var(--border); padding: 3px 9px; border-radius: 999px; font-family: var(--mono); }
+.icon-btn { background: var(--bg-alt); border: 1px solid var(--border); width: 36px; height: 36px; border-radius: 8px; cursor: pointer; display: grid; place-items: center; color: var(--text-muted); transition: all .15s; }
+.icon-btn:hover { color: var(--brand); border-color: var(--brand); }
+.menu-toggle { display: none; }
+
+/* Search */
+.search-box { position: relative; }
+.search-box input { width: 220px; height: 36px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-alt); padding: 0 12px 0 34px; color: var(--text); font-size: 13.5px; font-family: var(--sans); }
+.search-box input:focus { outline: none; border-color: var(--brand); background: var(--bg); }
+.search-box .search-ico { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text-faint); pointer-events: none; }
+.search-results { position: absolute; top: 44px; right: 0; width: 380px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow-lg); max-height: 60vh; overflow-y: auto; display: none; z-index: 200; }
+.search-results.show { display: block; }
+.search-results a { display: block; padding: 9px 14px; text-decoration: none; color: var(--text); border-bottom: 1px solid var(--border); font-size: 13.5px; }
+.search-results a:hover { background: var(--bg-alt); }
+.search-results a .r-page { font-size: 11px; color: var(--brand); display: block; font-weight: 600; }
+.search-results .no-res { padding: 14px; color: var(--text-faint); font-size: 13px; }
+
+/* Layout */
+.layout { display: flex; padding-top: var(--topbar-h); }
+.sidebar { position: fixed; top: var(--topbar-h); bottom: 0; left: 0; width: var(--sidebar-w); background: var(--bg-sidebar); border-right: 1px solid var(--border); overflow-y: auto; padding: 20px 12px 60px; z-index: 90; transition: transform .22s ease; }
+.sidebar .nav-title { font-size: 11px; text-transform: uppercase; letter-spacing: .07em; color: var(--text-faint); font-weight: 700; padding: 0 12px 8px; }
+.sidebar a.nav-link { display: flex; align-items: center; gap: 9px; padding: 7px 12px; border-radius: 8px; color: var(--text-muted); text-decoration: none; font-size: 13.5px; font-weight: 500; margin-bottom: 1px; transition: all .12s; }
+.sidebar a.nav-link:hover { background: var(--bg); color: var(--text); }
+.sidebar a.nav-link.active { background: var(--brand-soft); color: var(--brand-strong); font-weight: 600; }
+html[data-theme="dark"] .sidebar a.nav-link.active { color: var(--brand); }
+.sidebar a.nav-link .num { font-family: var(--mono); font-size: 10.5px; min-width: 20px; height: 20px; display: grid; place-items: center; border-radius: 5px; background: var(--bg-alt); border: 1px solid var(--border); color: var(--text-faint); flex-shrink: 0; }
+.sidebar a.nav-link.active .num { background: var(--brand); border-color: var(--brand); color: #fff; }
+body.sidebar-collapsed .main { margin-left: 0; }
+@media (min-width: 1025px) { body.sidebar-collapsed .sidebar { transform: translateX(-100%); } }
+.sidebar-collapse-btn { display: grid; }
+@media (max-width: 1024px) { .sidebar-collapse-btn { display: none; } }
+
+.main { margin-left: var(--sidebar-w); flex: 1; min-width: 0; display: flex; justify-content: center; padding: 0 36px 100px; transition: margin-left .22s ease; }
+.content { max-width: var(--maxw); width: 100%; padding-top: 26px; }
+@media (min-width: 1281px) { .main { padding-right: calc(var(--toc-w) + 60px); } }
+
+/* TOC */
+.toc-panel { position: fixed; top: calc(var(--topbar-h) + 26px); right: 24px; width: var(--toc-w); max-height: calc(100vh - var(--topbar-h) - 60px); overflow-y: auto; font-size: 13px; padding-left: 14px; border-left: 1px solid var(--border); }
+.toc-panel .toc-title { font-size: 11px; text-transform: uppercase; letter-spacing: .07em; color: var(--text-faint); font-weight: 700; margin-bottom: 10px; }
+.toc-panel a { display: block; color: var(--text-muted); text-decoration: none; padding: 4px 0 4px 10px; margin-left: -12px; border-left: 2px solid transparent; line-height: 1.4; }
+.toc-panel a:hover { color: var(--text); }
+.toc-panel a.active { color: var(--brand); border-left-color: var(--brand); font-weight: 600; }
+@media (max-width: 1280px) { .toc-panel { display: none; } }
+
+/* Breadcrumbs */
+.breadcrumbs { font-size: 12.5px; color: var(--text-faint); margin-bottom: 18px; display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+.breadcrumbs a { color: var(--text-muted); text-decoration: none; }
+.breadcrumbs a:hover { color: var(--brand); }
+.breadcrumbs .sep { color: var(--border-strong); }
+
+/* Cover / hero */
+.cover { background: var(--bg-card); border: 1px solid var(--border); border-radius: 14px; padding: 40px; margin-bottom: 36px; position: relative; overflow: hidden; box-shadow: var(--shadow); }
+.cover::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 4px; background: linear-gradient(90deg, var(--brand), var(--accent)); }
+.cover h1 { font-size: 2rem; font-weight: 800; letter-spacing: -.025em; margin-bottom: 8px; color: var(--text); line-height: 1.15; }
+.cover .subtitle { font-size: 1.02rem; color: var(--text-muted); margin-bottom: 26px; max-width: 680px; }
+.cover .meta-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.cover .meta-item { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 8px; padding: 13px 15px; }
+.cover .meta-label { font-size: 10.5px; text-transform: uppercase; letter-spacing: .08em; color: var(--text-faint); margin-bottom: 4px; font-weight: 700; }
+.cover .meta-value { font-size: 13.5px; color: var(--brand); font-family: var(--mono); }
+
+/* Sections */
+.section { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 30px 34px; margin-bottom: 24px; box-shadow: var(--shadow); scroll-margin-top: 72px; }
+.section-header { display: flex; align-items: center; gap: 14px; margin-bottom: 22px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+.section-num { width: 34px; height: 34px; border-radius: 9px; background: linear-gradient(135deg, var(--brand), var(--accent)); color: #fff; font-size: 14px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.section h2 { font-size: 1.4rem; font-weight: 700; letter-spacing: -.02em; color: var(--text); }
+.section h3 { font-size: 1.08rem; font-weight: 650; color: var(--text); margin: 0 0 10px; scroll-margin-top: 72px; display: flex; align-items: center; }
+.section h4 { font-size: 12px; font-weight: 700; color: var(--text-faint); margin: 20px 0 8px; text-transform: uppercase; letter-spacing: .06em; }
+.section p { color: var(--text-muted); margin-bottom: 12px; }
+.section ul, .section ol { padding-left: 22px; margin-bottom: 12px; }
+.section li { color: var(--text-muted); margin: 6px 0; }
+.section strong { color: var(--text); font-weight: 650; }
+.section a { color: var(--brand); text-decoration: none; }
+.section a:hover { text-decoration: underline; }
+
+/* Step cards (inset within a section) */
+.step { background: var(--bg-alt); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 20px; margin: 16px 0; }
+.step:first-of-type { margin-top: 6px; }
+.pill { display: inline-block; background: linear-gradient(135deg, var(--brand), var(--accent)); color: #fff; border-radius: 999px; font-size: .7rem; font-weight: 700; padding: 3px 11px; margin-right: 10px; letter-spacing: .03em; text-transform: uppercase; flex-shrink: 0; }
+
+/* Code */
+pre { background: var(--bg-code); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; margin: 14px 0; overflow-x: auto; }
+pre code { font-family: var(--mono); font-size: 13px; line-height: 1.6; color: var(--text); background: none; border: none; padding: 0; }
+.comment { color: var(--text-faint); }
+code { font-family: var(--mono); font-size: 0.86em; background: var(--bg-code); border: 1px solid var(--border); border-radius: 5px; padding: .12em .4em; color: var(--text); }
+
+/* Callouts — default is a warning; .ok is success */
+.callout { border-radius: var(--radius); padding: 14px 18px; margin: 16px 0; font-size: 14px; border: 1px solid var(--border); border-left: 4px solid var(--amber); background: var(--amber-soft); color: var(--text-muted); }
+.callout strong { font-weight: 700; color: var(--text); }
+.callout.ok, .callout.success { border-left-color: var(--green); background: var(--green-soft); }
+.callout.info { border-left-color: var(--brand); background: var(--brand-soft); }
+.callout.danger { border-left-color: var(--red); background: var(--red-soft); }
+html[data-theme="dark"] .callout, html[data-theme="dark"] .callout.ok,
+html[data-theme="dark"] .callout.success, html[data-theme="dark"] .callout.info,
+html[data-theme="dark"] .callout.danger { background: var(--bg-alt); }
+
+/* Tables */
+table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 13.5px; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+th { background: var(--bg-alt); font-weight: 650; text-align: left; padding: 10px 14px; border-bottom: 2px solid var(--border); color: var(--text); vertical-align: top; }
+td { padding: 9px 14px; border-bottom: 1px solid var(--border); color: var(--text-muted); vertical-align: top; }
+tr:last-child td { border-bottom: none; }
+tbody tr:hover, table tr:hover td { background: var(--bg-alt); }
+
+/* Footer */
+.page-footer { margin-top: 40px; padding-top: 24px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; font-size: 13px; color: var(--text-muted); }
+
+/* Mobile */
+.backdrop { display: none; }
+@media (max-width: 1024px) {
+  .menu-toggle { display: grid; }
+  .sidebar { transform: translateX(-100%); box-shadow: var(--shadow-lg); }
+  .sidebar.open { transform: translateX(0); }
+  .main { margin-left: 0; padding: 0 18px 80px; }
+  .backdrop.show { display: block; position: fixed; inset: var(--topbar-h) 0 0 0; background: rgba(0,0,0,.4); z-index: 80; }
+  .search-box input { width: 150px; }
+  .section { padding: 24px 20px; }
+  .cover { padding: 28px 22px; }
+  .cover .meta-grid { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 600px) {
+  .topbar .version-pill { display: none; }
+  .search-box input { width: 120px; }
+  .cover h1 { font-size: 1.6rem; }
+  .cover .meta-grid { grid-template-columns: 1fr; }
+}
+
+/* Print */
+@media print {
+  .topbar, .sidebar, .toc-panel, .menu-toggle, .search-box, .backdrop { display: none !important; }
+  .main { margin: 0; padding: 0; } .layout { padding-top: 0; } .content { max-width: 100%; }
+  .section, pre, table, .cover, .step { break-inside: avoid; box-shadow: none; }
+  a { color: #000; text-decoration: underline; } body { font-size: 11pt; }
+}
+</style>
+</head>
+<body>
+<div class="layout">
+<main class="main">
+<article class="content" id="top">
+
+<!-- ═══════════════════════════════════════════════════════════════════ COVER -->
+<div class="cover">
+  <h1>Razorpay Setup Guide</h1>
+  <p class="subtitle">Therapy Connect — payment links for appointment bookings. Wire up Razorpay so confirmed bookings collect payment and auto-confirm on success.</p>
+  <div class="meta-grid">
+    <div class="meta-item"><div class="meta-label">Integration</div><div class="meta-value">Razorpay Payment Links</div></div>
+    <div class="meta-item"><div class="meta-label">Consumed by</div><div class="meta-value">AppointmentService</div></div>
+    <div class="meta-item"><div class="meta-label">Trigger</div><div class="meta-value">Webhook → auto-confirm</div></div>
+    <div class="meta-item"><div class="meta-label">Env vars</div><div class="meta-value">3 (key id / secret / webhook)</div></div>
+    <div class="meta-item"><div class="meta-label">Modes</div><div class="meta-value">Test → Live (KYC)</div></div>
+    <div class="meta-item"><div class="meta-label">Fees</div><div class="meta-value">~2% + 18% GST</div></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════ S1 -->
+<div class="section" id="s1">
+  <div class="section-header">
+    <div class="section-num">1</div>
+    <h2>What you are setting up</h2>
+  </div>
+
+  <p>When a booking is created (and payments are toggled on in your profile), the app creates a
+  <strong>Razorpay Payment Link</strong> and Razorpay sends it to the client by SMS and email.
+  When the client pays, Razorpay calls the app's <strong>webhook</strong>, the payment is recorded
+  against the appointment, and the appointment is auto-confirmed.</p>
+  <p>To make this work you need exactly three values from the Razorpay dashboard, captured as
+  environment variables on the Oracle VM:</p>
+
+  <table>
+    <tr><th>Environment variable</th><th>What it is</th><th>Where it comes from</th></tr>
+    <tr>
+      <td><code>RAZORPAY_KEY_ID</code></td>
+      <td>Public API key id (starts with <code>rzp_test_</code> or <code>rzp_live_</code>)</td>
+      <td>Dashboard → Account &amp; Settings → API Keys</td>
+    </tr>
+    <tr>
+      <td><code>RAZORPAY_KEY_SECRET</code></td>
+      <td>Secret paired with the key id — shown <strong>only once</strong> at generation</td>
+      <td>Same screen, at key generation time</td>
+    </tr>
+    <tr>
+      <td><code>RAZORPAY_WEBHOOK_SECRET</code></td>
+      <td>Secret you invent yourself; used to verify webhook authenticity (HMAC signature)</td>
+      <td>You type it into Dashboard → Webhooks when creating the webhook, and put the same value in <code>.env</code></td>
+    </tr>
+  </table>
+
+  <div class="callout ok">
+  <strong>Kill switch:</strong> if these variables are blank or missing, payments are silently disabled
+  across the whole app — bookings work exactly as before. There is also the per-profile toggle
+  ("Turn on payments") on the Therapist Profile page.
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════ S2 -->
+<div class="section" id="s2">
+  <div class="section-header">
+    <div class="section-num">2</div>
+    <h2>Create the account</h2>
+  </div>
+
+  <div class="step">
+  <h3><span class="pill">Step 1</span>Sign up</h3>
+  <ol>
+    <li>Go to <code>https://dashboard.razorpay.com/signup</code></li>
+    <li>Sign up with your email and phone number</li>
+    <li>Choose business type — for a solo practice, <strong>Individual / Proprietorship</strong> is the usual fit</li>
+  </ol>
+  </div>
+
+  <div class="step">
+  <h3><span class="pill">Step 2</span>KYC (needed for live payments only)</h3>
+  <p>You can integrate and test immediately in <strong>Test Mode</strong> without KYC.
+  To accept real money you must complete KYC activation:</p>
+  <ul>
+    <li>PAN (personal PAN is fine for individual)</li>
+    <li>Bank account details (where settlements land, typically T+2 days)</li>
+    <li>Address proof / Aadhaar</li>
+    <li>Business description — describe it as therapy/counselling services</li>
+  </ul>
+  <p>Approval usually takes a few working days. Do all your testing in Test Mode while you wait.</p>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════ S3 -->
+<div class="section" id="s3">
+  <div class="section-header">
+    <div class="section-num">3</div>
+    <h2>Generate API keys</h2>
+  </div>
+
+  <div class="step">
+  <h3><span class="pill">Step 3</span>Test keys first</h3>
+  <ol>
+    <li>In the dashboard, make sure the mode switch (top of the page) is on <strong>Test Mode</strong></li>
+    <li>Go to <strong>Account &amp; Settings → API Keys → Generate Test Key</strong></li>
+    <li>Copy both values immediately:
+      <ul>
+        <li><code>Key Id</code> → becomes <code>RAZORPAY_KEY_ID</code> (looks like <code>rzp_test_Ab12Cd34Ef56Gh</code>)</li>
+        <li><code>Key Secret</code> → becomes <code>RAZORPAY_KEY_SECRET</code></li>
+      </ul>
+    </li>
+  </ol>
+  <div class="callout">
+  The <strong>secret is shown only once</strong>. If you lose it, you must regenerate the key pair
+  (which invalidates the old one). Store it straight into the <code>.env</code> file.
+  </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════ S4 -->
+<div class="section" id="s4">
+  <div class="section-header">
+    <div class="section-num">4</div>
+    <h2>Configure the webhook</h2>
+  </div>
+
+  <div class="step">
+  <h3><span class="pill">Step 4</span>Register the webhook URL</h3>
+  <ol>
+    <li>Dashboard → <strong>Account &amp; Settings → Webhooks → Add New Webhook</strong></li>
+    <li><strong>Webhook URL:</strong><br>
+      <code>http://&lt;your-vm-public-ip-or-domain&gt;:8091/appointment/webhook/razorpay</code><br>
+      (the gateway strips <code>/appointment</code> and routes to AppointmentService)</li>
+    <li><strong>Secret:</strong> invent a long random string (e.g. output of <code>openssl rand -hex 24</code>)
+        — this exact value goes into <code>RAZORPAY_WEBHOOK_SECRET</code></li>
+    <li><strong>Active events</strong> — tick these four:
+      <ul>
+        <li><code>payment_link.paid</code> — marks the appointment paid and auto-confirms it</li>
+        <li><code>payment_link.cancelled</code></li>
+        <li><code>payment_link.expired</code></li>
+        <li><code>payment.failed</code> — records the failure reason (client can retry the same link)</li>
+      </ul>
+    </li>
+  </ol>
+  <div class="callout">
+  <strong>Reachability:</strong> Razorpay must be able to reach that URL from the internet.
+  On the Oracle VM this means port <code>8091</code> must be open in BOTH the Oracle Cloud
+  Security List (VCN) and the VM firewall (<code>iptables</code>/<code>ufw</code>).
+  Razorpay requires the webhook to respond within a few seconds — the app answers immediately
+  after the signature check, so this is fine.
+  For production, put this behind HTTPS (e.g. nginx + Let's Encrypt on a domain) — Razorpay
+  strongly recommends HTTPS webhook URLs and live mode may reject plain HTTP.
+  </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════ S5 -->
+<div class="section" id="s5">
+  <div class="section-header">
+    <div class="section-num">5</div>
+    <h2>Capture the environment variables</h2>
+  </div>
+
+  <div class="step">
+  <h3><span class="pill">Step 5</span>Add to <code>.env</code> on the Oracle VM</h3>
+  <p>Append to <code>~/TherapyConnect/.env</code>:</p>
+  <pre><code><span class="comment"># ── Razorpay (Test Mode) ─────────────────────────────</span>
+RAZORPAY_KEY_ID=rzp_test_XXXXXXXXXXXXXX
+RAZORPAY_KEY_SECRET=XXXXXXXXXXXXXXXXXXXXXXXX
+RAZORPAY_WEBHOOK_SECRET=XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX</code></pre>
+  <p>Only the <strong>appointment</strong> service reads these (wired in <code>docker-compose.yml</code>).
+  Recreate it after editing:</p>
+  <pre><code>cd ~/TherapyConnect
+docker compose up -d appointment</code></pre>
+  <div class="callout">
+  <code>.env</code> holds secrets — make sure it is in <code>.gitignore</code> and never committed.
+  </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════ S6 -->
+<div class="section" id="s6">
+  <div class="section-header">
+    <div class="section-num">6</div>
+    <h2>Test the flow (Test Mode)</h2>
+  </div>
+
+  <div class="step">
+  <h3><span class="pill">Step 6</span>End-to-end checklist</h3>
+  <ol>
+    <li>Turn payments <strong>on</strong> from the Therapist Profile page (this also creates the payment projection)</li>
+    <li>Make sure the client you book for has a valid email/phone (edit the client once if they were created before this feature — that refreshes the contact projection)</li>
+    <li>Book an appointment → the booking panel should show the payment link</li>
+    <li>Open the link yourself and pay with test credentials:
+      <ul>
+        <li>Card: <code>4111 1111 1111 1111</code>, any future expiry, any CVV</li>
+        <li>UPI: <code>success@razorpay</code> (or <code>failure@razorpay</code> to test a failed payment)</li>
+      </ul>
+    </li>
+    <li>Within a few seconds the appointment should flip to <strong>CONFIRMED</strong> and the update panel should show <strong>✓ Paid</strong></li>
+    <li>Also test: cancel an unpaid appointment (link should die), reschedule an unpaid appointment (new link should be issued)</li>
+  </ol>
+  <div class="callout">
+  In Test Mode, Razorpay generally does <strong>not</strong> deliver real SMS/email to the client —
+  verify delivery only after going live. The link itself and the webhook flow work fully in Test Mode.
+  </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════ S7 -->
+<div class="section" id="s7">
+  <div class="section-header">
+    <div class="section-num">7</div>
+    <h2>Going live</h2>
+  </div>
+
+  <div class="step">
+  <h3><span class="pill">Step 7</span>Switch to live keys</h3>
+  <ol>
+    <li>Wait for KYC activation approval</li>
+    <li>Switch dashboard to <strong>Live Mode</strong> → generate <strong>Live API keys</strong></li>
+    <li>Create the webhook again in Live Mode (webhooks are per-mode) with the same URL and a fresh secret</li>
+    <li>Replace the three values in <code>.env</code> with the live ones and <code>docker compose up -d appointment</code></li>
+    <li>Make one small real booking/payment to verify, then refund it from the dashboard if needed</li>
+  </ol>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════ S8 -->
+<div class="section" id="s8">
+  <div class="section-header">
+    <div class="section-num">8</div>
+    <h2>Fees and operational notes</h2>
+  </div>
+
+  <ul>
+    <li><strong>Fees:</strong> ~2% + 18% GST on the fee per domestic transaction (≈ ₹30.7 on a ₹1,300 session). No setup or monthly fee.</li>
+    <li><strong>Settlements:</strong> money lands in your bank account on a T+2 working-day cycle by default.</li>
+    <li><strong>Refunds:</strong> manual via the Razorpay dashboard (Payments → find by appointment id in notes → Refund). The app flags "manual refund may be required" in the appointment-service logs if a payment lands on a cancelled appointment.</li>
+    <li><strong>Key rotation:</strong> if a secret ever leaks, regenerate keys in the dashboard, update <code>.env</code>, restart the appointment service.</li>
+    <li><strong>Monitoring:</strong> the dashboard's Webhooks page shows delivery attempts and failures — first place to look if payments stop confirming appointments.</li>
+  </ul>
+</div>
+
+<footer class="page-footer">
+  <div>TherapyConnect — Razorpay Setup Guide</div>
+  <div>Payment links for appointment bookings · July 2026</div>
+</footer>
+
+</article>
+</main>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var root = document.documentElement;
+
+  function toggleTheme() {
+    var next = root.getAttribute("data-theme") === "dark" ? "light" : "dark";
+    root.setAttribute("data-theme", next);
+    localStorage.setItem("tc-theme", next);
+  }
+  function toggleSidebar() {
+    var c = document.body.classList.toggle("sidebar-collapsed");
+    localStorage.setItem("tc-razorpay-sidebar", c ? "collapsed" : "open");
+  }
+  function slug(s) {
+    return s.toLowerCase().replace(/[^\w\s-]/g, "").trim().replace(/\s+/g, "-").slice(0, 50);
+  }
+  // Clean heading label: text minus any .pill ("Step N") prefix
+  function headLabel(h) {
+    var clone = h.cloneNode(true);
+    var pill = clone.querySelector(".pill");
+    if (pill) pill.remove();
+    return clone.textContent.trim();
+  }
+
+  // ---- Topbar ----------------------------------------------------------
+  function buildTopbar() {
+    var bar = document.createElement("header");
+    bar.className = "topbar";
+    bar.innerHTML =
+      '<button class="icon-btn menu-toggle" id="menuToggle" aria-label="Menu">' +
+        '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>' +
+      '<button class="icon-btn sidebar-collapse-btn" id="sidebarCollapse" title="Toggle sidebar ([)" aria-label="Toggle sidebar">' +
+        '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="9" y1="4" x2="9" y2="20"/></svg></button>' +
+      '<a class="brand" href="#top"><span class="logo">TC</span><span>TherapyConnect <span style="color:var(--text-faint);font-weight:500">Payments</span></span></a>' +
+      '<div class="spacer"></div>' +
+      '<div class="search-box">' +
+        '<span class="search-ico"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span>' +
+        '<input id="searchInput" type="text" placeholder="Search guide…" autocomplete="off" aria-label="Search"/>' +
+        '<div class="search-results" id="searchResults"></div></div>' +
+      '<span class="version-pill">Razorpay</span>' +
+      '<button class="icon-btn" id="themeToggle" aria-label="Toggle theme">' +
+        '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>';
+    document.body.prepend(bar);
+    document.getElementById("themeToggle").addEventListener("click", toggleTheme);
+    document.getElementById("sidebarCollapse").addEventListener("click", toggleSidebar);
+    document.getElementById("menuToggle").addEventListener("click", function () {
+      document.querySelector(".sidebar").classList.toggle("open");
+      document.querySelector(".backdrop").classList.toggle("show");
+    });
+  }
+
+  // ---- Collect sections ------------------------------------------------
+  var sections = [];
+  function collectSections() {
+    var content = document.querySelector(".content");
+    content.querySelectorAll(".section").forEach(function (el) {
+      if (!el.id) el.id = slug(el.querySelector("h2") ? el.querySelector("h2").textContent : "section");
+      var numEl = el.querySelector(".section-num");
+      var h2 = el.querySelector("h2");
+      sections.push({ el: el, id: el.id, num: numEl ? numEl.textContent.trim() : "", title: h2 ? h2.textContent.trim() : el.id });
+    });
+  }
+
+  // ---- Sidebar ---------------------------------------------------------
+  function buildSidebar() {
+    var nav = document.createElement("nav");
+    nav.className = "sidebar";
+    nav.setAttribute("aria-label", "Guide navigation");
+    var html = '<div class="nav-title">Razorpay Setup</div>';
+    sections.forEach(function (s) {
+      html += '<a class="nav-link" href="#' + s.id + '" data-id="' + s.id + '">' +
+                '<span class="num">' + s.num + '</span><span>' + s.title + '</span></a>';
+    });
+    nav.innerHTML = html;
+    document.querySelector(".layout").prepend(nav);
+    var bd = document.createElement("div");
+    bd.className = "backdrop";
+    bd.addEventListener("click", function () { nav.classList.remove("open"); bd.classList.remove("show"); });
+    document.body.appendChild(bd);
+    nav.querySelectorAll("a.nav-link").forEach(function (a) {
+      a.addEventListener("click", function () {
+        if (window.innerWidth <= 1024) { nav.classList.remove("open"); bd.classList.remove("show"); }
+      });
+    });
+  }
+
+  // ---- Right "On this page" TOC ----------------------------------------
+  var tocPanel, tocLinks = [], tocHeads = [], activeSectionId = null;
+  function buildTOCShell() {
+    tocPanel = document.createElement("aside");
+    tocPanel.className = "toc-panel";
+    tocPanel.style.display = "none";
+    document.querySelector(".main").appendChild(tocPanel);
+  }
+  function renderTOCFor(section) {
+    var heads = [].slice.call(section.el.querySelectorAll("h3"));
+    tocHeads = heads;
+    if (!heads.length) { tocPanel.style.display = "none"; tocLinks = []; return; }
+    heads.forEach(function (h) { if (!h.id) h.id = section.id + "-" + slug(headLabel(h)); });
+    tocPanel.innerHTML = '<div class="toc-title">On this page</div>' +
+      heads.map(function (h) { return '<a href="#' + h.id + '">' + headLabel(h) + '</a>'; }).join("");
+    tocPanel.style.display = "";
+    tocLinks = [].slice.call(tocPanel.querySelectorAll("a"));
+  }
+
+  // ---- Scroll spy ------------------------------------------------------
+  var sideLinks = {};
+  function initSpy() {
+    document.querySelectorAll(".sidebar a.nav-link").forEach(function (a) { sideLinks[a.dataset.id] = a; });
+    var ticking = false;
+    function onScroll() {
+      if (ticking) return; ticking = true;
+      requestAnimationFrame(function () {
+        ticking = false;
+        var y = window.scrollY + 140;
+        var active = sections[0];
+        for (var i = 0; i < sections.length; i++) {
+          var top = sections[i].el.getBoundingClientRect().top + window.scrollY;
+          if (top <= y) active = sections[i];
+        }
+        if (active.id !== activeSectionId) {
+          activeSectionId = active.id;
+          Object.keys(sideLinks).forEach(function (id) { sideLinks[id].classList.toggle("active", id === active.id); });
+          renderTOCFor(active);
+        }
+        if (tocHeads.length) {
+          var ah = tocHeads[0];
+          for (var j = 0; j < tocHeads.length; j++) {
+            var t = tocHeads[j].getBoundingClientRect().top + window.scrollY;
+            if (t <= y) ah = tocHeads[j];
+          }
+          tocLinks.forEach(function (l) { l.classList.toggle("active", l.getAttribute("href") === "#" + ah.id); });
+        }
+      });
+    }
+    window.addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+  }
+
+  // ---- Breadcrumb ------------------------------------------------------
+  function buildBreadcrumb() {
+    var content = document.querySelector(".content");
+    var bc = document.createElement("div");
+    bc.className = "breadcrumbs";
+    bc.innerHTML = '<a href="#top">Setup Guides</a><span class="sep">/</span><span>Razorpay Payments</span>';
+    content.prepend(bc);
+  }
+
+  // ---- Search ----------------------------------------------------------
+  function wireSearch() {
+    var input = document.getElementById("searchInput");
+    var box = document.getElementById("searchResults");
+    var idx = sections.map(function (s) { return { s: s, text: (s.title + " " + s.el.textContent).toLowerCase() }; });
+    function run() {
+      var q = input.value.trim().toLowerCase();
+      if (!q) { box.classList.remove("show"); return; }
+      var terms = q.split(/\s+/);
+      var hits = idx.map(function (e) {
+        var score = 0;
+        terms.forEach(function (t) { if (e.text.indexOf(t) >= 0) score += e.s.title.toLowerCase().indexOf(t) >= 0 ? 3 : 1; });
+        return { e: e, score: score };
+      }).filter(function (x) { return x.score > 0; }).sort(function (a, b) { return b.score - a.score; }).slice(0, 8);
+      box.innerHTML = hits.length
+        ? hits.map(function (h) { return '<a href="#' + h.e.s.id + '"><span class="r-page">Section ' + h.e.s.num + '</span><span>' + h.e.s.title + '</span></a>'; }).join("")
+        : '<div class="no-res">No matches for “' + q + '”.</div>';
+      box.classList.add("show");
+    }
+    input.addEventListener("input", run);
+    input.addEventListener("focus", run);
+    document.addEventListener("click", function (e) { if (!e.target.closest(".search-box")) box.classList.remove("show"); });
+    input.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") { var f = box.querySelector("a"); if (f) { location.hash = f.getAttribute("href"); box.classList.remove("show"); } }
+      if (e.key === "Escape") box.classList.remove("show");
+    });
+  }
+
+  // ---- Boot ------------------------------------------------------------
+  document.addEventListener("DOMContentLoaded", function () {
+    collectSections();
+    buildTopbar();
+    buildSidebar();
+    buildBreadcrumb();
+    buildTOCShell();
+    wireSearch();
+    initSpy();
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "[" && !/^(input|textarea)$/i.test(e.target.tagName)) { e.preventDefault(); toggleSidebar(); }
+    });
+  });
+})();
+</script>
+</body>
+</html>
