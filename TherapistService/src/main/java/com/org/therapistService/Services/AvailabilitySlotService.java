@@ -57,29 +57,98 @@ public class AvailabilitySlotService {
 
 	private static final Logger logger = LoggerFactory.getLogger(AvailabilitySlotService.class);
 
+	/**
+	 * Regenerates availability day by day (manual generation and rule-change
+	 * propagation). Days that contain an active (SCHEDULED/CONFIRMED/
+	 * RESCHEDULED) appointment are skipped — their existing slots are left
+	 * untouched — so one booking never blocks regeneration of the whole range.
+	 * Each regenerated day publishes its own AvailabilitySlotsGenerated event;
+	 * the AppointmentService projection refuses to touch booked slots, and
+	 * skipping booked days here keeps both sides consistent.
+	 */
 	@Transactional
 	public List<TherapistAvailability> generateAvailabilitySlots(String therapistId, LocalDate startDate, LocalDate endDate) throws JsonProcessingException {
 		logger.info("inside generateTherapistAvailabilitySlots");
 
-		rejectIfActiveAppointmentsOverlap(therapistId, startDate.atStartOfDay(), endDate.plusDays(1).atStartOfDay());
-		therapistAvailabilityRepository.deleteInRange(therapistId, startDate.atStartOfDay(), endDate.plusDays(1).atStartOfDay());
+		List<TherapistAvailability> allSlotsInRange = new ArrayList<>();
+		List<LocalDate> skippedDays = new ArrayList<>();
 
-		List<TherapistAvailability> baseSlots = generateBaseSlotsFromRules(therapistId, startDate, endDate);
+		for (LocalDate date = startDate; !date.isAfter(endDate); date = date.plusDays(1)) {
+
+			LocalDateTime dayStart = date.atStartOfDay();
+			LocalDateTime dayEnd = date.plusDays(1).atStartOfDay();
+
+			if (hasActiveAppointmentsOverlap(therapistId, dayStart, dayEnd)) {
+				skippedDays.add(date);
+				allSlotsInRange.addAll(therapistAvailabilityRepository
+						.findByTherapistIdAndStartTimeGreaterThanEqualAndStartTimeLessThan(therapistId, dayStart, dayEnd));
+				continue;
+			}
+
+			// destructive sync: an empty day still publishes so the
+			// AppointmentService projection clears removed slots
+			allSlotsInRange.addAll(regenerateDay(therapistId, date, true));
+		}
+
+		if (!skippedDays.isEmpty()) {
+			logger.info("Slot generation for therapistId={} skipped days with active appointments: {}", therapistId, skippedDays);
+		}
+
+		return allSlotsInRange;
+	}
+
+	/**
+	 * Nightly horizon extension: generates ONLY days that have no slots yet
+	 * (normally just the day newly entering the window). Days that already
+	 * have slots are left exactly as they are — rule changes propagate
+	 * immediately at edit time via generateAvailabilitySlots, so re-chopping
+	 * unchanged days every night would only churn slotIds and events.
+	 */
+	@Transactional
+	public void generateMissingDays(String therapistId, LocalDate startDate, LocalDate endDate) throws JsonProcessingException {
+
+		for (LocalDate date = startDate; !date.isAfter(endDate); date = date.plusDays(1)) {
+
+			LocalDateTime dayStart = date.atStartOfDay();
+			LocalDateTime dayEnd = date.plusDays(1).atStartOfDay();
+
+			boolean dayHasSlots = !therapistAvailabilityRepository
+					.findByTherapistIdAndStartTimeGreaterThanEqualAndStartTimeLessThan(therapistId, dayStart, dayEnd)
+					.isEmpty();
+
+			if (dayHasSlots || hasActiveAppointmentsOverlap(therapistId, dayStart, dayEnd)) {
+				continue;
+			}
+
+			// no event when the day yields nothing (e.g. no rules for that
+			// weekday) — there is nothing to sync and nothing to clear
+			regenerateDay(therapistId, date, false);
+		}
+	}
+
+	private List<TherapistAvailability> regenerateDay(String therapistId, LocalDate date, boolean publishWhenEmpty) throws JsonProcessingException {
+
+		LocalDateTime dayStart = date.atStartOfDay();
+		LocalDateTime dayEnd = date.plusDays(1).atStartOfDay();
+
+		therapistAvailabilityRepository.deleteInRange(therapistId, dayStart, dayEnd);
+
+		List<TherapistAvailability> baseSlots = generateBaseSlotsFromRules(therapistId, date, date);
 		if (!baseSlots.isEmpty()) {
 			therapistAvailabilityRepository.saveAll(baseSlots);
 		}
 
-		applyAvailableOverridesForRange(therapistId, startDate, endDate);
+		applyAvailableOverridesForRange(therapistId, date, date);
 
-		List<TherapistAvailability> finalSlots = therapistAvailabilityRepository.findByTherapistIdAndStartTimeGreaterThanEqualAndStartTimeLessThan(
-				therapistId,
-				startDate.atStartOfDay(),
-				endDate.plusDays(1).atStartOfDay());
+		List<TherapistAvailability> daySlots = therapistAvailabilityRepository
+				.findByTherapistIdAndStartTimeGreaterThanEqualAndStartTimeLessThan(therapistId, dayStart, dayEnd);
 
-		AvailabilitySlotsGeneratedEvent availabilitySlotsGeneratedEvent = buildSlotsGeneratedEvent(therapistId, startDate, endDate, finalSlots);
-		outboxService.saveOutboxEvent("THERAPIST_AVAILABILITY", therapistId, "AvailabilitySlotsGenerated", availabilitySlotsGeneratedEvent);
+		if (!daySlots.isEmpty() || publishWhenEmpty) {
+			AvailabilitySlotsGeneratedEvent availabilitySlotsGeneratedEvent = buildSlotsGeneratedEvent(therapistId, date, date, daySlots);
+			outboxService.saveOutboxEvent("THERAPIST_AVAILABILITY", therapistId, "AvailabilitySlotsGenerated", availabilitySlotsGeneratedEvent);
+		}
 
-		return finalSlots;
+		return daySlots;
 	}
 
 	private List<TherapistAvailability> generateBaseSlotsFromRules(String therapistId, LocalDate startDate, LocalDate endDate) {
@@ -219,14 +288,16 @@ public class AvailabilitySlotService {
 		}
 	}
 
-	private void rejectIfActiveAppointmentsOverlap(String therapistId, LocalDateTime windowStart, LocalDateTime windowEnd) {
-		boolean hasOverlap = appointmentProjectionRepository.existsByTherapistIdAndStatusInAndStartTimeLessThanAndEndTimeGreaterThan(
+	private boolean hasActiveAppointmentsOverlap(String therapistId, LocalDateTime windowStart, LocalDateTime windowEnd) {
+		return appointmentProjectionRepository.existsByTherapistIdAndStatusInAndStartTimeLessThanAndEndTimeGreaterThan(
 				therapistId,
 				List.of(AppointmentStatus.SCHEDULED, AppointmentStatus.CONFIRMED, AppointmentStatus.RESCHEDULED),
 				windowEnd,
 				windowStart);
+	}
 
-		if (hasOverlap) {
+	private void rejectIfActiveAppointmentsOverlap(String therapistId, LocalDateTime windowStart, LocalDateTime windowEnd) {
+		if (hasActiveAppointmentsOverlap(therapistId, windowStart, windowEnd)) {
 			throw new IllegalStateException("Override window overlaps active appointments.");
 		}
 	}

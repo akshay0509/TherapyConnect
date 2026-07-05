@@ -23,6 +23,8 @@ public interface OutboxEventRepository extends JpaRepository<OutboxEvent, String
 
     Optional<OutboxEvent> findTopByPublishedFalseOrderByCreatedAtAsc();
 
+    long deleteByPublishedTrueAndCreatedAtBefore(LocalDateTime cutoff);
+
     @Transactional
     @Modifying
     @Query("UPDATE OutboxEvent o SET o.published = false WHERE o.createdAt >= :from")

@@ -15,6 +15,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
@@ -40,9 +41,19 @@ public class RazorpayLinkClient {
 
 	private static final String BASE_URL = "https://api.razorpay.com/v1";
 
-	private final RestTemplate restTemplate = new RestTemplate();
+	// Timeouts are mandatory: a default RestTemplate waits forever, and a
+	// blackholed Razorpay would pin every booking thread. A timeout here
+	// surfaces as the already-handled LINK_FAILED path.
+	private final RestTemplate restTemplate = buildRestTemplate();
 
 	private static final Logger logger = LoggerFactory.getLogger(RazorpayLinkClient.class);
+
+	private static RestTemplate buildRestTemplate() {
+		SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+		factory.setConnectTimeout(3000);
+		factory.setReadTimeout(5000);
+		return new RestTemplate(factory);
+	}
 
 	public boolean isConfigured() {
 		return keyId != null && !keyId.isBlank()

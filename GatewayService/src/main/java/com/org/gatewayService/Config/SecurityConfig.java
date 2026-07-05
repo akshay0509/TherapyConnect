@@ -15,6 +15,10 @@ public class SecurityConfig {
 		http
 			.csrf(csrf -> csrf.disable())
 			.authorizeHttpRequests(authz -> authz
+				// service-internal endpoints (e.g. /therapist/internal/...) must never
+				// be reachable through the public gateway; the gateway's own proxy
+				// calls them directly over the docker network, not through routes
+				.requestMatchers("/*/internal/**").denyAll()
 				.requestMatchers("/auth/**").permitAll()
 				.requestMatchers("/user/create-user").permitAll()
 				.requestMatchers("/user/forgot-username").permitAll()

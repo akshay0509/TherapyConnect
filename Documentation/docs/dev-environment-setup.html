@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TherapyConnect — Local Development Setup (dev profile)</title>
+<style>
+  :root { --ink:#1e293b; --muted:#64748b; --line:#e2e8f0; --bg:#f8fafc; --accent:#4f46e5; }
+  * { box-sizing:border-box; }
+  body { font-family:'Segoe UI',Arial,sans-serif; background:var(--bg); color:var(--ink); margin:0; line-height:1.65; }
+  .wrap { max-width:900px; margin:0 auto; padding:0 24px 80px; }
+  header { background:#1e293b; color:#f0f6fc; padding:32px 24px; margin-bottom:32px; }
+  header h1 { margin:0 0 6px; font-size:1.5rem; }
+  header p { margin:0; color:#94a3b8; font-size:0.95rem; }
+  h2 { font-size:1.25rem; border-bottom:2px solid var(--line); padding-bottom:8px; margin-top:42px; }
+  code, pre { font-family:Consolas,'Courier New',monospace; font-size:0.87em; }
+  code { background:#eef2f7; padding:1px 5px; border-radius:4px; }
+  pre { background:#0f172a; color:#e2e8f0; padding:14px 18px; border-radius:8px; overflow-x:auto; line-height:1.5; }
+  pre code { background:none; padding:0; color:inherit; }
+  table { border-collapse:collapse; width:100%; margin:16px 0; background:#fff; font-size:0.92rem; }
+  th, td { border:1px solid var(--line); padding:8px 12px; text-align:left; vertical-align:top; }
+  th { background:#f1f5f9; }
+  .note { background:#fff7ed; border:1px solid #fdba74; border-left:5px solid #f97316; border-radius:8px; padding:12px 18px; margin:16px 0; }
+  .ok { background:#f0fdf4; border:1px solid #86efac; border-left:5px solid #22c55e; border-radius:8px; padding:12px 18px; margin:16px 0; }
+  ol li, ul li { margin:6px 0; }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap" style="padding-bottom:0;">
+    <h1>Local Development Setup — the <code>dev</code> Spring Profile</h1>
+    <p>Run any service from STS with a single environment variable. Added 2026-07-05.</p>
+  </div>
+</header>
+<div class="wrap">
+
+<h2>1. What changed</h2>
+<p>Each Spring service now has an <code>application-dev.properties</code> next to its main
+<code>application.properties</code>. It contains every value that used to be supplied through
+per-service environment variables in the STS run configuration: local database URL and
+credentials, local Kafka, key file locations, dev admin credentials, and the frontend URL.</p>
+<p>The old way (a dozen env vars per run configuration) is replaced by exactly one:</p>
+<pre><code>SPRING_PROFILES_ACTIVE=dev</code></pre>
+
+<h2>2. How SPRING_PROFILES_ACTIVE works</h2>
+<p>Spring Boot always loads <code>application.properties</code>. When a profile named
+<code>dev</code> is active, it <em>additionally</em> loads <code>application-dev.properties</code>
+from the same location — and <strong>profile-specific files win</strong> whenever both define
+the same key.</p>
+<p>The main properties use placeholders like <code>spring.datasource.url=${DB_URL}</code>.
+Without the env var and without a profile, startup fails ("could not resolve placeholder").
+With the dev profile active, <code>application-dev.properties</code> defines
+<code>spring.datasource.url=jdbc:postgresql://localhost:5432/...</code> directly, which
+overrides the placeholder line entirely — the env var is never needed.</p>
+<p>Full precedence order (highest wins) for the sources used in this project:</p>
+<table>
+  <tr><th>Priority</th><th>Source</th><th>Used by</th></tr>
+  <tr><td>1 (highest)</td><td>OS environment variables</td><td>VM via docker-compose <code>environment:</code>; optional local overrides (e.g. real Gmail creds for one test run)</td></tr>
+  <tr><td>2</td><td><code>application-dev.properties</code> (profile file, only when active)</td><td>Local STS runs</td></tr>
+  <tr><td>3 (lowest)</td><td><code>application.properties</code></td><td>Everywhere — shared config, routes, resilience, Kafka serialization</td></tr>
+</table>
+<p>This is why production is untouched: the VM never sets <code>SPRING_PROFILES_ACTIVE</code>,
+so the dev file is inert there — and even if it were somehow activated, the compose
+environment variables sit at higher precedence and would still win.</p>
+
+<h2>3. One-time machine setup</h2>
+<ol>
+  <li><strong>Generate a dev-only JWT keypair</strong> at <code>D:\keys</code> (Git Bash):
+<pre><code>mkdir -p /d/keys && openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out /d/keys/gateway-private.pem && openssl rsa -pubout -in /d/keys/gateway-private.pem -out /d/keys/gateway-public.pem</code></pre>
+      This must be a <em>different</em> keypair from the one on the Oracle VM. Locally issued
+      tokens are then valid only against locally running services — dev and prod tokens can
+      never cross over.</li>
+  <li><strong>Postgres credentials are pre-filled</strong> — they were copied from the STS
+      launch configurations (Jul 2026), so they match the existing local databases:
+      <code>user</code>, <code>therapist</code>, <code>client</code>, <code>appointment</code>,
+      <code>notification</code>, <code>analytics</code>, and (gateway only) the default
+      <code>postgres</code> database. Nothing to do unless the local postgres login changes.</li>
+  <li><strong>Delete the old key from the source tree</strong> (C5 hygiene):
+      <code>GatewayService/src/main/resources/keys/gateway-private.pem</code>, then
+      <code>mvn clean</code>. Nothing references that location any more.</li>
+</ol>
+
+<h2>4. Per-service STS run configuration</h2>
+<ol>
+  <li>Open the run configuration → Environment tab.</li>
+  <li>Remove all previously configured variables (<code>DB_URL</code>, <code>KAFKA_BOOTSTRAP_SERVERS</code>, <code>JWT_PUBLIC_KEY</code>, …).</li>
+  <li>Add the single variable <code>SPRING_PROFILES_ACTIVE</code> = <code>dev</code>.</li>
+</ol>
+<p>Start order for a full local stack: local postgres and kafka running →
+DiscoveryService → GatewayService → whichever services you need (they register to
+<code>localhost:8761</code> by default).</p>
+
+<h2>5. Key layout in dev</h2>
+<table>
+  <tr><th>Service</th><th>Reads from <code>D:\keys</code></th><th>Purpose</th></tr>
+  <tr><td>GatewayService</td><td><code>gateway-private.pem</code> + <code>gateway-public.pem</code></td><td>Signs and validates JWTs</td></tr>
+  <tr><td>User / Therapist / Client / Appointment / Analytics</td><td><code>gateway-public.pem</code> only</td><td>Validate JWTs</td></tr>
+  <tr><td>NotificationService</td><td>—</td><td>No JWT validation (Kafka consumer only)</td></tr>
+  <tr><td>DiscoveryService</td><td>—</td><td>No security config, no dev file needed</td></tr>
+</table>
+<div class="note"><strong>Never</strong> place a private key under any service's
+<code>src/main/resources</code> — Maven copies resources into the JAR, which is exactly the
+exposure the C5 fix removed. Keys live outside the repo: <code>D:\keys</code> on dev,
+<code>~/TherapyConnect/keys</code> (mounted) on the VM.</div>
+
+<h2>6. Features that are off locally (by design)</h2>
+<table>
+  <tr><th>Feature</th><th>Dev behavior</th><th>To test it locally</th></tr>
+  <tr><td>Razorpay payment links</td><td>Keys empty → <code>isConfigured()</code> false → whole payment flow is a clean no-op</td><td>Set TEST-mode <code>RAZORPAY_*</code> env vars in AppointmentService's run config</td></tr>
+  <tr><td>Password-reset / username emails</td><td>Gmail creds empty → fails only at send time</td><td>Set <code>GOOGLE_*</code> + <code>GMAIL_FROM</code> env vars in UserService's run config</td></tr>
+  <tr><td>Google Calendar invites</td><td>Creds empty → fails only at API-call time</td><td>Set <code>GOOGLE_*</code> + <code>THERAPIST_EMAIL</code> env vars in NotificationService's run config</td></tr>
+</table>
+<p>Env vars set in a run configuration override the dev profile's empty defaults (priority 1
+beats priority 2), so enabling one of these for a session requires no file edits.</p>
+
+<h2>7. Frontend against the local stack</h2>
+<pre><code># auth-app/.env.local  (gitignored)
+VITE_API_BASE_URL=http://localhost:8091</code></pre>
+<p>Then <code>npm run dev</code> — the gateway's CORS config already allows
+<code>http://localhost:5173</code>.</p>
+
+<div class="ok"><strong>Summary:</strong> one env var per STS run config, one keypair at
+<code>D:\keys</code>, one credentials find-and-replace. The dev admin login is
+<code>admin</code> / <code>admin-dev-only</code>. Production configuration is entirely
+unaffected — the VM's compose env vars outrank everything in these files.</div>
+
+</div>
+</body>
+</html>

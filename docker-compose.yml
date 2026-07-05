@@ -8,6 +8,7 @@ services:
     image: postgres:16
     container_name: tc-postgres
     environment:
+      TZ: Asia/Kolkata
       POSTGRES_DB: postgres
       POSTGRES_USER: ${DB_USERNAME}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
@@ -33,6 +34,7 @@ services:
     image: apache/kafka:latest
     container_name: tc-kafka
     environment:
+      TZ: Asia/Kolkata
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
       KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
@@ -67,8 +69,12 @@ services:
       dockerfile: Dockerfile
     container_name: tc-discovery
     image: therapy-discovery:latest
+    environment:
+      TZ: Asia/Kolkata
     ports:
-      - "8761:8761"
+      # loopback only: the Eureka dashboard/API has no auth and leaks the full
+      # service topology — reach it via SSH tunnel if needed
+      - "127.0.0.1:8761:8761"
     volumes:
       - ./logs:/logs
     networks:
@@ -97,6 +103,7 @@ services:
     ports:
       - "8091:8091"
     environment:
+      TZ: Asia/Kolkata
       DB_URL: jdbc:postgresql://postgres:5432/gateway
       DB_USERNAME: ${DB_USERNAME}
       DB_PASSWORD: ${DB_PASSWORD}
@@ -135,6 +142,7 @@ services:
     container_name: tc-user
     image: therapy-user:latest
     environment:
+      TZ: Asia/Kolkata
       DB_URL: jdbc:postgresql://postgres:5432/user
       DB_USERNAME: ${DB_USERNAME}
       DB_PASSWORD: ${DB_PASSWORD}
@@ -175,6 +183,7 @@ services:
     container_name: tc-therapist
     image: therapy-therapist:latest
     environment:
+      TZ: Asia/Kolkata
       DB_URL: jdbc:postgresql://postgres:5432/therapist
       DB_USERNAME: ${DB_USERNAME}
       DB_PASSWORD: ${DB_PASSWORD}
@@ -211,6 +220,7 @@ services:
     container_name: tc-client
     image: therapy-client:latest
     environment:
+      TZ: Asia/Kolkata
       DB_URL: jdbc:postgresql://postgres:5432/client
       DB_USERNAME: ${DB_USERNAME}
       DB_PASSWORD: ${DB_PASSWORD}
@@ -246,6 +256,7 @@ services:
     container_name: tc-appointment
     image: therapy-appointment:latest
     environment:
+      TZ: Asia/Kolkata
       DB_URL: jdbc:postgresql://postgres:5432/appointment
       DB_USERNAME: ${DB_USERNAME}
       DB_PASSWORD: ${DB_PASSWORD}
@@ -284,6 +295,7 @@ services:
     container_name: tc-notification
     image: therapy-notification:latest
     environment:
+      TZ: Asia/Kolkata
       DB_URL: jdbc:postgresql://postgres:5432/notification
       DB_USERNAME: ${DB_USERNAME}
       DB_PASSWORD: ${DB_PASSWORD}
@@ -321,6 +333,7 @@ services:
     container_name: tc-analytics
     image: therapy-analytics:latest
     environment:
+      TZ: Asia/Kolkata
       DB_URL: jdbc:postgresql://postgres:5432/analytics
       DB_USERNAME: ${DB_USERNAME}
       DB_PASSWORD: ${DB_PASSWORD}
@@ -352,6 +365,8 @@ services:
   portainer:
     image: portainer/portainer-ce:latest
     container_name: tc-portainer
+    environment:
+      TZ: Asia/Kolkata
     ports:
       - "9000:9000"
     volumes:

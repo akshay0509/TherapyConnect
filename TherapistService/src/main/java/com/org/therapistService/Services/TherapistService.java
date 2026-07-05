@@ -157,9 +157,12 @@ public class TherapistService {
 		return dto;
 	}
 
+	@Transactional
 	public void createTherapistServices(TherapistServicesDto therapistServicesDto) {
 		TherapistServices therapistServices = therapistAssembler.assembleDtoToEntity(therapistServicesDto);
 		therapistServicesRepository.save(therapistServices);
+
+		regenerateFutureSlots(therapistServicesDto.getTherapistId());
 	}
 
 	@Transactional
@@ -172,7 +175,11 @@ public class TherapistService {
 		service.setPrice(therapistServicesDto.getPrice());
 		service.setActive(Boolean.TRUE.equals(therapistServicesDto.getIsActive()));
 
-		return therapistAssembler.assembleEntityToDto(therapistServicesRepository.save(service));
+		TherapistServicesDto result = therapistAssembler.assembleEntityToDto(therapistServicesRepository.save(service));
+
+		regenerateFutureSlots(therapistId);
+
+		return result;
 	}
 
 	@Transactional
@@ -180,6 +187,8 @@ public class TherapistService {
 		TherapistServices service = therapistServicesRepository.findByServiceIdAndTherapistId(serviceId, therapistId)
 				.orElseThrow(() -> new IllegalArgumentException("Therapist service not found."));
 		therapistServicesRepository.delete(service);
+
+		regenerateFutureSlots(therapistId);
 	}
 
 	public List<TherapistServicesDto> getAllTherapistServices(){
@@ -317,6 +326,7 @@ public class TherapistService {
 		outboxService.saveOutboxEvent("THERAPIST_AVAILABILITY", therapistId, "DeliveryModeDeleted", event);
 	}
 
+	@Transactional
 	public List<TherapistAvailabilityRulesDto> createTherapistAvailabilityRules(List<TherapistAvailabilityRulesDto> therapistAvailabilityRulesDtoList) {
 		if(therapistAvailabilityRulesDtoList.isEmpty()) {
 			return new ArrayList<>();
@@ -331,6 +341,9 @@ public class TherapistService {
 		for (TherapistAvailabilityRules entity : saved) {
 			result.add(therapistAssembler.assembleEntityToDto(entity));
 		}
+
+		regenerateFutureSlots(saved.get(0).getTherapistId());
+
 		return result;
 	}
 
@@ -339,6 +352,8 @@ public class TherapistService {
 		TherapistAvailabilityRules rule = therapistAvailabilityRulesRepository.findByRuleIdAndTherapistId(ruleId, therapistId)
 				.orElseThrow(() -> new IllegalArgumentException("Availability rule not found."));
 		therapistAvailabilityRulesRepository.delete(rule);
+
+		regenerateFutureSlots(therapistId);
 	}
 
 	@Transactional
@@ -349,7 +364,31 @@ public class TherapistService {
 		rule.setStartTime(dto.getStartTime());
 		rule.setEndTime(dto.getEndTime());
 		rule.setActive(Boolean.TRUE.equals(dto.getIsActive()));
-		return therapistAssembler.assembleEntityToDto(therapistAvailabilityRulesRepository.save(rule));
+		TherapistAvailabilityRulesDto result = therapistAssembler.assembleEntityToDto(therapistAvailabilityRulesRepository.save(rule));
+
+		regenerateFutureSlots(therapistId);
+
+		return result;
+	}
+
+	/**
+	 * Rule and service changes take effect immediately: the standard 7-day
+	 * window is regenerated right away (days with active appointments are
+	 * skipped by the generator, same as manual generation). Slots carry the
+	 * service's duration and price, so service edits need this as much as
+	 * rule edits do — the nightly job only extends the horizon and never
+	 * re-chops existing days. Runs in the same transaction as the change —
+	 * if regeneration fails, the edit rolls back with it, so the schedule
+	 * definition and the slots can never disagree.
+	 */
+	private void regenerateFutureSlots(String therapistId) {
+		LocalDate startDate = LocalDate.now();
+		try {
+			availabilitySlotService.generateAvailabilitySlots(therapistId, startDate, startDate.plusDays(6));
+		}
+		catch (JsonProcessingException e) {
+			throw new IllegalStateException("Slot regeneration after schedule change failed.", e);
+		}
 	}
 
 	public List<TherapistAvailabilityRulesDto> getAllTherapistAvailabilityRules(String therapistId){

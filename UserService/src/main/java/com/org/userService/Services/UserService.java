@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,10 +37,15 @@ public class UserService {
 
 	private static final Logger logger = LoggerFactory.getLogger(UserService.class);
 
+	private static final int MIN_PASSWORD_LENGTH = 8;
+	private static final Pattern EMAIL_PATTERN = Pattern.compile("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$");
+
 	private UserAssembler userAssembler = new UserAssembler();
 
 	public void createUser(UserDto userDto) {
 		logger.debug("inside createUser.");
+
+		validateNewUser(userDto);
 
 		if (userRepository.existsByEmail(userDto.getEmail())) {
 			throw new IllegalArgumentException("An account with this email already exists.");
@@ -53,6 +59,24 @@ public class UserService {
 		user.setPasswordHash(passwordHash);
 		userRepository.save(user);
 		logger.debug("exiting createUser.");
+	}
+
+	// /create-user is unauthenticated — these rules must live server-side,
+	// not only in the frontend form
+	private void validateNewUser(UserDto userDto) {
+		if (userDto.getUsername() == null || userDto.getUsername().isBlank()) {
+			throw new IllegalArgumentException("Username is required.");
+		}
+		if (userDto.getEmail() == null || !EMAIL_PATTERN.matcher(userDto.getEmail()).matches()) {
+			throw new IllegalArgumentException("A valid email address is required.");
+		}
+		validatePasswordPolicy(userDto.getPassword());
+	}
+
+	private void validatePasswordPolicy(String password) {
+		if (password == null || password.length() < MIN_PASSWORD_LENGTH) {
+			throw new IllegalArgumentException("Password must be at least " + MIN_PASSWORD_LENGTH + " characters.");
+		}
 	}
 
 	public AuthResponse validateUser(AuthRequest authRequest) {
@@ -111,6 +135,8 @@ public class UserService {
 		if (user == null || user.getResetPasswordTokenExpiresAt() == null || user.getResetPasswordTokenExpiresAt().isBefore(Instant.now())) {
 			throw new IllegalArgumentException("Invalid or expired reset token.");
 		}
+
+		validatePasswordPolicy(newPassword);
 
 		user.setPasswordHash(passwordEncoder.encode(newPassword));
 		user.setResetPasswordToken(null);

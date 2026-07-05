@@ -21,8 +21,15 @@ public interface TherapistAvailabilityRepository extends JpaRepository<Therapist
 	boolean existsBySlotId(String slotId);
 
 	Optional<TherapistAvailability> findBySlotIdAndTherapistId(String slotId, String therapistId);
-	
+
 	boolean existsByTherapistIdAndStatusAndStartTimeLessThanAndEndTimeGreaterThan(
+            String therapistId,
+            AvailabilityStatus status,
+            LocalDateTime endTime,
+            LocalDateTime startTime
+    );
+
+    List<TherapistAvailability> findByTherapistIdAndStatusAndStartTimeLessThanAndEndTimeGreaterThan(
             String therapistId,
             AvailabilityStatus status,
             LocalDateTime endTime,
@@ -35,6 +42,9 @@ public interface TherapistAvailabilityRepository extends JpaRepository<Therapist
             LocalDateTime endTime,
             LocalDateTime startTime
     );
+
+    // past AVAILABLE slots only — BOOKED rows anchor the calendar-history join
+    long deleteByStatusAndEndTimeBefore(AvailabilityStatus status, LocalDateTime cutoff);
 
 	@Modifying
 	@Query("""
@@ -104,7 +114,7 @@ public interface TherapistAvailabilityRepository extends JpaRepository<Therapist
             ORDER BY s.startTime
             """)
     List<AvailabilityResponseDto> findEffectiveSlotsWithAppointment(String therapistId);
-	
+
 	@Query("""
             SELECT new com.org.appointmentService.Dto.AvailabilityResponseDto(
             s.slotId,

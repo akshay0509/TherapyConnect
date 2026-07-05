@@ -28,6 +28,7 @@ import com.org.therapistService.Dto.PageResponseDto;
 import com.org.therapistService.Dto.PaymentSettingsDto;
 import com.org.therapistService.Dto.SessionDetailsDto;
 import com.org.therapistService.Dto.SessionNotesDto;
+import com.org.therapistService.Dto.TherapistAvailabilityDto;
 import com.org.therapistService.Dto.TherapistAvailabilityOverridesDto;
 import com.org.therapistService.Dto.TherapistAvailabilityRulesDto;
 import com.org.therapistService.Dto.TherapistClientsDto;
@@ -137,8 +138,8 @@ public class TherapistController {
 
 	//get a therapist availability
 	@GetMapping("{therapistId}/therapist-availability")
-	public void getTherapistAvailability(@PathVariable String therapistId) {
-		therapistService.getTherapistAvailability(therapistId);
+	public List<TherapistAvailabilityDto> getTherapistAvailability(@PathVariable String therapistId) {
+		return therapistService.getTherapistAvailability(therapistId);
 	}
 
 	//create a therapist — returns the created profile including the generated therapistId

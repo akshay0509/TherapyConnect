@@ -35,6 +35,9 @@ import jakarta.transaction.Transactional;
  * - If the therapist's paymentEnabled flag is off, or Razorpay keys are not
  *   configured, every method is a silent no-op.
  * - Webhook processing is idempotent: a PAID row is never transitioned again.
+ * - Methods that call Razorpay are deliberately NOT @Transactional: they end
+ *   in a single repository save, and a transaction would pin a DB connection
+ *   for the duration of the external HTTP call.
  */
 @Service
 public class PaymentService {
@@ -81,7 +84,6 @@ public class PaymentService {
 	 * or retries after an earlier failure. Never throws.
 	 * Returns the payment row, or empty when payments do not apply.
 	 */
-	@Transactional
 	public Optional<AppointmentPayment> ensurePaymentLink(String appointmentId, String therapistId) {
 
 		if (!isPaymentEnabledForTherapist(therapistId)) {
@@ -198,7 +200,6 @@ public class PaymentService {
 	 * always updated so a later webhook can't confirm a dead appointment,
 	 * even if the remote cancel call fails.
 	 */
-	@Transactional
 	public void cancelUnpaidLinkBestEffort(String appointmentId) {
 
 		appointmentPaymentRepository.findByAppointmentId(appointmentId).ifPresent(payment -> {

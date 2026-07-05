@@ -20,10 +20,14 @@ public class CorsConfig {
 
         CorsConfiguration config = new CorsConfiguration();
 
-        config.setAllowedOriginPatterns(List.of(
+        // Exact origins only. Never combine a wildcard origin pattern with
+        // allowCredentials=true: the refresh cookie is SameSite=None, so any
+        // origin matching the pattern could silently mint access tokens for a
+        // logged-in user via /auth/refresh.
+        config.setAllowedOrigins(List.of(
             frontendUrl,
-            "http://localhost:3000",
-            "https://*.vercel.app"
+            "http://localhost:5173",
+            "http://localhost:3000"
         ));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         config.setAllowedHeaders(List.of("*"));

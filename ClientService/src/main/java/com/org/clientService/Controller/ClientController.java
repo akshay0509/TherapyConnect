@@ -1,6 +1,9 @@
 package com.org.clientService.Controller;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -19,26 +22,34 @@ import com.org.clientService.Utility.SecurityUtils;
 @RestController
 public class ClientController {
 
+	private static final Logger logger = LoggerFactory.getLogger(ClientController.class);
+
 	@Autowired
 	private ClientService clientService;
-	
+
 	@GetMapping("/get/{clientId}")
 	public ClientDto getClients(@PathVariable String clientId){
 		String therapistId = SecurityUtils.getTherapistId();
 		return clientService.getClient(therapistId, clientId);
 	}
-	
+
 	@PostMapping("/create-client")
 	public ResponseEntity<String> createClient(@RequestBody ClientDto clientDto) {
+		// tenant id always comes from the JWT, never from the request body —
+		// otherwise any authenticated caller could create clients under
+		// another therapist
+		clientDto.setTherapistId(SecurityUtils.getTherapistId());
+
 		String clientId;
 		try {
 			clientId = clientService.createClient(clientDto);
 		} catch (JsonProcessingException e) {
-			return ResponseEntity.ok("failed");
+			logger.error("Failed to create client", e);
+			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Failed to create client.");
 		}
 		return ResponseEntity.ok(clientId);
 	}
-	
+
 	@PutMapping("/update/{clientId}")
 	public ResponseEntity<ClientDto> updateClient(@PathVariable String clientId, @RequestBody ClientDto clientDto) throws JsonProcessingException {
 		String therapistId = SecurityUtils.getTherapistId();

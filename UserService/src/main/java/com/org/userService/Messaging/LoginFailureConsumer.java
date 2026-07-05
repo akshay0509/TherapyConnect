@@ -36,7 +36,13 @@ public class LoginFailureConsumer {
 						)
 				);
 
+		// null for unknown usernames and already locked/disabled accounts —
+		// the audit row above must still be committed for those failures
 		User user = userRepository.findByUsernameAndIsEnabledTrueAndIsAccountLockedFalse(loginFailureEvent.getUsername());
+		if (user == null) {
+			return;
+		}
+
 		int failedAttempts = user.getFailedAttempts() + 1;
 		user.setFailedAttempts(failedAttempts);
 

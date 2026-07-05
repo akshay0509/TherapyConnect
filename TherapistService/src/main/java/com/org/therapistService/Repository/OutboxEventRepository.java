@@ -1,5 +1,6 @@
 package com.org.therapistService.Repository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -11,4 +12,6 @@ import com.org.therapistService.Entity.OutboxEvent;
 public interface OutboxEventRepository extends JpaRepository<OutboxEvent, String>{
 
 	List<OutboxEvent> findTop100ByPublishedFalseOrderByCreatedAtAsc();
+
+	long deleteByPublishedTrueAndCreatedAtBefore(LocalDateTime cutoff);
 }
