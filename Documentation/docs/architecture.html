@@ -58,7 +58,8 @@ flowchart TB
     end
     GOOG["Google Calendar / Gmail"]
 
-    UI -->|HTTPS| GW
+    UI -->|HTTPS :443| NGINX["nginx (host)<br/>TLS · X-Real-IP"]
+    NGINX -->|127.0.0.1:8091| GW
     GW -.register/discover.-> EUR
     US & TS & CS & AS & NS & AN -.register.-> EUR
     GW -->|REST lb://| US

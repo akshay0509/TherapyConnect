@@ -27,7 +27,7 @@
         <details class="endpoint" open>
           <summary><span class="badge post">POST</span><span class="path">/auth/login</span><span class="ep-desc">Authenticate &amp; issue tokens</span></summary>
           <div class="ep-body">
-            <p><strong>Auth:</strong> public · rate-limited to <strong>10 req/min</strong> (HTTP 429 via <code>loginRateLimitFallback</code>).</p>
+            <p><strong>Auth:</strong> public · rate-limited to <strong>10 attempts / 60s per client IP</strong> (custom <code>LoginRateLimiter</code>, HTTP 429 when exceeded).</p>
             <p><strong>Request</strong></p>
             <pre><span class="pre-label">AuthRequest</span><code>{ "username": "jdoe", "password": "••••••••" }</code></pre>
             <p><strong>Responses</strong></p>
@@ -43,7 +43,7 @@
         <details class="endpoint">
           <summary><span class="badge post">POST</span><span class="path">/auth/admin-login</span><span class="ep-desc">Admin console login</span></summary>
           <div class="ep-body">
-            <p><strong>Auth:</strong> public · rate-limited to <strong>5 req/min</strong> (<code>adminLoginRateLimiter</code>, stricter than user login since there is no lockout).</p>
+            <p><strong>Auth:</strong> public · rate-limited to <strong>5 attempts / 60s per client IP</strong> (<code>LoginRateLimiter</code>, stricter than user login since there is no account lockout).</p>
             <p><strong>Request:</strong> <code>{ "username": "…", "password": "…" }</code> — checked against the <code>ADMIN_USERNAME</code>/<code>ADMIN_PASSWORD</code> env credentials with a <strong>constant-time</strong> comparison.</p>
             <p><strong>Responses:</strong> <code>200</code> <code>{ "token": "&lt;jwt&gt;" }</code> — an <strong>8-hour</strong> JWT with <code>authorities:["ADMIN"]</code> and <code>userId:"admin"</code> (no refresh token) · <code>401</code> invalid · <code>429</code> rate-limited.</p>
           </div>

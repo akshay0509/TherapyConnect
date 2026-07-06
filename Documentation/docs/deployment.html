@@ -43,13 +43,18 @@ docker compose up --build -d</code></pre>
               <tr><td><code>tc-postgres</code></td><td>postgres:16</td><td>— (internal)</td><td>One instance, 7 databases (see below).</td></tr>
               <tr><td><code>tc-kafka</code></td><td>apache/kafka:latest</td><td>— (internal)</td><td>KRaft single-node broker+controller; auto-create topics on.</td></tr>
               <tr><td><code>tc-discovery</code></td><td>therapy-discovery</td><td><code>127.0.0.1:8761</code></td><td>Eureka — bound to loopback only (dashboard is unauthenticated).</td></tr>
-              <tr><td><code>tc-gateway</code></td><td>therapy-gateway</td><td><code>8091</code></td><td>The only publicly published app port.</td></tr>
+              <tr><td><code>tc-gateway</code></td><td>therapy-gateway</td><td><code>127.0.0.1:8091</code></td><td>Loopback-only; a host <strong>nginx</strong> (TLS, <code>443</code>) reverse-proxies to it.</td></tr>
               <tr><td><code>tc-user … tc-analytics</code></td><td>therapy-*</td><td>— (internal)</td><td>The six domain services; reachable only via the gateway/Eureka.</td></tr>
               <tr><td><code>tc-portainer</code></td><td>portainer-ce</td><td><code>9000</code></td><td>Container management UI.</td></tr>
             </tbody>
           </table>
         </div>
         <div class="callout warn"><p style="margin:0"><strong>Eureka is loopback-only.</strong> The dashboard/API has no auth and leaks the full topology, so <code>tc-discovery</code> publishes to <code>127.0.0.1:8761</code> — reach it via an SSH tunnel, not the public internet. Postgres and Kafka are never published.</p></div>
+
+        <div class="callout info">
+          <div class="callout-title">Edge: nginx reverse proxy (host)</div>
+          <p>The gateway itself is now bound to <code>127.0.0.1:8091</code> — <strong>not</strong> internet-reachable at the Docker layer. A host-level <strong>nginx</strong> terminates TLS on <code>443</code> and reverse-proxies to <code>127.0.0.1:8091</code>, setting <code>X-Real-IP</code> to the real client address. This does two things: it puts the whole API behind HTTPS, and it makes <code>X-Real-IP</code> un-spoofable (nobody can bypass nginx to forge it), which is the precondition for the gateway's per-IP login rate limiting. Keep the firewall open to only <code>443</code> + <code>22</code>. <em>Note:</em> nginx's <code>proxy_pass</code> must target IPv4 <code>127.0.0.1:8091</code> — an IPv6 <code>[::1]:8091</code> target won't reach an IPv4-only bind.</p>
+        </div>
 
         <h2 id="databases">Databases</h2>
         <p>One PostgreSQL instance hosts <strong>seven separate databases</strong>, created on first boot by <code>postgres-init/init-databases.sql</code> (mounted into the container's init directory): <code>gateway</code>, <code>user</code>, <code>therapist</code>, <code>client</code>, <code>appointment</code>, <code>notification</code>, <code>analytics</code>. Each service's <code>DB_URL</code> targets its own database (e.g. <code>jdbc:postgresql://postgres:5432/appointment</code>); tables are then created by Hibernate (<code>ddl-auto=update</code>). The services share one credential pair.</p>
@@ -78,8 +83,9 @@ SPRING_APPLICATION_JSON: '{"eureka":{"client":{"serviceUrl":{"defaultZone":"http
         <div class="mermaid">
 flowchart LR
     A["postgres + kafka<br/>(healthchecks)"] --> B["discovery :8761"]
-    B --> C["gateway :8091<br/>user · therapist · client<br/>appointment · notification · analytics"]
-    C --> D["auth-app (Vercel)"]
+    B --> C["gateway 127.0.0.1:8091<br/>user · therapist · client<br/>appointment · notification · analytics"]
+    C --> N["host nginx :443 (TLS, X-Real-IP)"]
+    N --> D["auth-app (Vercel)"]
         </div>
         <div class="callout success"><p style="margin:0"><strong>Resilient to partial startup:</strong> gateway circuit breakers return <code>SERVICE_UNAVAILABLE</code> rather than hanging, and Kafka consumers (<code>auto-offset-reset=earliest</code>) replay anything emitted while they were down. <code>restart: unless-stopped</code> plus enabled Docker auto-start means the stack self-recovers after a reboot.</p></div>
 
@@ -101,14 +107,14 @@ docker compose down -v               # DESTROYS postgres_data + kafka_data</code
         </ul>
 
         <h2 id="frontend">Frontend (Vercel)</h2>
-        <p>The React SPA in <code>auth-app/</code> is built and hosted by Vercel from the repo (root directory <code>auth-app</code>, Vite preset). It calls only the gateway via <code>VITE_API_BASE_URL</code> (e.g. the VM's public host on <code>:8091</code>). Because the SPA is HTTPS and the gateway may be plain HTTP, the refresh cookie uses <code>SameSite=None; Secure</code> to survive the cross-site call — front a domain with HTTPS for production.</p>
+        <p>The React SPA in <code>auth-app/</code> is built and hosted by Vercel from the repo (root directory <code>auth-app</code>, Vite preset). It calls only the gateway via <code>VITE_API_BASE_URL</code> — the nginx HTTPS endpoint (<code>443</code>) in front of the gateway. The refresh cookie is <code>SameSite=None; Secure</code> to survive the cross-site call from the Vercel origin, which requires the backend to be served over TLS (now handled by nginx).</p>
 
         <h2 id="prod-notes">Production hardening still open</h2>
         <ul>
           <li>Switch <code>ddl-auto=update</code> → <code>validate</code> and introduce versioned migrations (Flyway/Liquibase).</li>
           <li>Move secrets from <code>.env</code> to a secret manager; the gateway signing key is already env-only (no longer on the classpath).</li>
           <li>Raise Kafka replication above 1 and add a CI pipeline (none yet) running <code>mvn verify</code>.</li>
-          <li>Put the gateway behind HTTPS (nginx + Let's Encrypt) so payments/webhooks and cookies run over TLS.</li>
+          <li>TLS is now terminated by the host nginx (443) in front of the loopback-bound gateway — keep the Let's Encrypt certificate auto-renewing and the firewall limited to 443 + 22.</li>
         </ul>
 
       </article>

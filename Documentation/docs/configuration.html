@@ -93,12 +93,14 @@ routes[3] /user/**            → lb://USER-SERVICE
 routes[4] /appointment/**     → lb://APPOINTMENT-SERVICE
 routes[5] /analytics/**       → lb://ANALYTICS-SERVICE
 
-# Rate limiter
-resilience4j.ratelimiter.instances.loginRateLimiter.limitForPeriod=10
-resilience4j.ratelimiter.instances.loginRateLimiter.limitRefreshPeriod=1m
+# Login rate limiting — custom per-client-IP fixed window (LoginRateLimiter, Caffeine)
+security.login.rate-limit.per-ip=10
+security.admin-login.rate-limit.per-ip=5
+security.login.rate-limit.window-seconds=60
 
-# Circuit breakers (userService, therapistService)
+# Circuit breakers (userService, therapistService) — still Resilience4j
 failureRateThreshold=50  slidingWindowSize=10  waitDurationInOpenState=30s</code></pre>
+        <p style="font-size:13px;color:var(--text-muted)">The login/admin-login throttle moved off the Resilience4j global <code>@RateLimiter</code> (which one IP could exhaust to lock everyone out) to a per-IP limiter keyed on the nginx <code>X-Real-IP</code>. Resilience4j is still used for the inter-service circuit breakers.</p>
 
         <h2 id="profiles">Profiles, feature flags &amp; logging</h2>
         <ul>

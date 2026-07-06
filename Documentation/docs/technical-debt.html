@@ -27,6 +27,8 @@
             <li><strong>Docker/Compose + Actuator health now exist</strong> — full <code>docker-compose.yml</code>, per-service Dockerfiles, healthchecks, and a Portainer UI.</li>
             <li><strong>Databases are now physically separate</strong> (one per service) instead of co-mingled.</li>
             <li><strong>Internal endpoints are denied at the gateway</strong> (<code>/*/internal/**</code>).</li>
+            <li><strong>Login rate limiting is now per-client-IP</strong> — the old global Resilience4j bucket (one source could exhaust it and lock out all users) was replaced by a per-IP limiter keyed on the un-spoofable nginx <code>X-Real-IP</code>.</li>
+            <li><strong>TLS at the edge</strong> — the gateway is bound to loopback behind a host nginx that terminates HTTPS, so the API (payments, webhooks, <code>SameSite=None</code> cookie) runs over TLS.</li>
           </ul>
         </div>
 
@@ -40,7 +42,7 @@
             <tr><td>4</td><td>Security</td><td>Secrets in <code>.env</code>; <code>/user/validate-user</code> reachable service-side</td><td><span class="badge put">Medium</span></td></tr>
             <tr><td>5</td><td>Reliability</td><td>No DLQ / consumer retry policy</td><td><span class="badge put">Medium</span></td></tr>
             <tr><td>6</td><td>Payments</td><td>Refunds are manual; over-payment on terminal appointments only logged</td><td><span class="badge put">Medium</span></td></tr>
-            <tr><td>7</td><td>Ops</td><td>No CI pipeline; Kafka replication factor 1; HTTP (no TLS termination)</td><td><span class="badge put">Medium</span></td></tr>
+            <tr><td>7</td><td>Ops</td><td>No CI pipeline; Kafka single node at replication factor 1</td><td><span class="badge put">Medium</span></td></tr>
             <tr><td>8</td><td>Quality</td><td>Debug <code>System.out</code>, swallowed errors, thin tests</td><td><span class="badge patch">Low</span></td></tr>
           </tbody>
         </table></div>
@@ -83,8 +85,8 @@
 
         <h2 id="ops-debt">Operations &amp; tooling</h2>
         <div class="card">
-          <h4>7 · CI, replication, and TLS <span class="badge put">Medium</span></h4>
-          <p>Docker Compose, per-service images, healthchecks and Actuator are now in place. Still open: <strong>no CI pipeline</strong> (nothing runs <code>mvn verify</code> on push); Kafka runs a single node at <strong>replication factor 1</strong> (no redundancy); and the gateway is plain <strong>HTTP</strong> — payments, webhooks, and the <code>SameSite=None</code> cookie should run behind TLS (nginx + Let's Encrypt). <strong>Fix:</strong> add CI, raise replication for a multi-broker cluster, and terminate TLS at the edge.</p>
+          <h4>7 · CI &amp; broker redundancy <span class="badge put">Medium</span></h4>
+          <p>Docker Compose, per-service images, healthchecks, Actuator, and TLS (host nginx → loopback gateway) are now in place. Still open: <strong>no CI pipeline</strong> (nothing runs <code>mvn verify</code> on push), and Kafka runs a <strong>single node at replication factor 1</strong> (no redundancy — a broker loss is data loss). <strong>Fix:</strong> add CI, and move to a multi-broker cluster with replication ≥ 3 for the durable topics.</p>
         </div>
 
         <h2 id="quality-debt">Code quality</h2>

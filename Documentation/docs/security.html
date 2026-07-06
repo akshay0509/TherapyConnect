@@ -73,7 +73,7 @@ sequenceDiagram
           <li><strong>Login:</strong> <code>POST /auth/admin-login</code> checks the submitted username/password against the <code>ADMIN_USERNAME</code>/<code>ADMIN_PASSWORD</code> env values using a <strong>constant-time</strong> comparison (<code>MessageDigest.isEqual</code>) to avoid timing leaks.</li>
           <li><strong>Token:</strong> an <strong>8-hour</strong> RS256 JWT with <code>authorities:["ADMIN"]</code> and <code>userId:"admin"</code>. No refresh token — admins re-login when it expires.</li>
           <li><strong>Authorization:</strong> the gateway's <code>JwtAuthenticationConverter</code> reads the <code>authorities</code> claim verbatim (no <code>ROLE_</code> prefix); <code>/admin/**</code> is gated by <code>hasAuthority("ADMIN")</code>.</li>
-          <li><strong>Rate limit:</strong> <code>adminLoginRateLimiter</code> — 5/min (stricter than the 10/min user login, since admin has no lockout).</li>
+          <li><strong>Rate limit:</strong> the per-IP <code>LoginRateLimiter</code> caps admin login at <strong>5 attempts / 60s per IP</strong> (stricter than the 10 for user login) — the primary brute-force control here, since the admin credential has no account lockout behind it.</li>
         </ul>
         <div class="callout warn"><p style="margin:0">The admin account is a single static credential pair from the environment. Rotate it, keep it out of VCS, and consider promoting to per-admin accounts + MFA before exposing the console beyond a trusted network.</p></div>
 
@@ -93,7 +93,7 @@ sequenceDiagram
         <div class="grid cols-2">
           <div class="card">
             <h4>🚦 Login rate limiting</h4>
-            <p style="font-size:13.5px;color:var(--text-muted)">Resilience4j <code>@RateLimiter("loginRateLimiter")</code>: 10 requests/min, 0s wait → fast <strong>429</strong> via <code>loginRateLimitFallback</code>.</p>
+            <p style="font-size:13.5px;color:var(--text-muted)">Custom <strong>per-client-IP</strong> fixed-window <code>LoginRateLimiter</code> (Caffeine): 10 login / 5 admin attempts per 60s per IP → <strong>429</strong>. Replaced the old global Resilience4j bucket, which one source could exhaust to lock everyone out.</p>
           </div>
           <div class="card">
             <h4>🔒 Account lockout</h4>
@@ -107,6 +107,13 @@ sequenceDiagram
             <h4>🕵️ Login auditing</h4>
             <p style="font-size:13.5px;color:var(--text-muted)">Every attempt (success/failure, IP, UA, reason) recorded in <code>USER_LOGIN_AUDIT</code>.</p>
           </div>
+        </div>
+
+        <h2 id="client-ip">Client IP trust (behind nginx)</h2>
+        <p>Rate-limit keys and login-audit records use the <em>real</em> client IP, resolved by <code>ClientIpUtil</code> from the <code>X-Real-IP</code> header that the host's nginx reverse proxy sets to its own peer address. <code>X-Real-IP</code> is used deliberately instead of <code>X-Forwarded-For</code> — nginx builds XFF by appending to a client-supplied value, so its left-most entry is spoofable; <code>X-Real-IP</code> is overwritten by nginx and can't be forged. It falls back to <code>getRemoteAddr()</code> in local dev with no proxy.</p>
+        <div class="callout warn">
+          <div class="callout-title">Security precondition</div>
+          <p>This trust holds only while the gateway port (<code>8091</code>) is <strong>not</strong> directly reachable from the internet — the Compose file binds it to <code>127.0.0.1:8091</code> and only nginx (<code>443</code>) is public. If <code>8091</code> were exposed, an attacker could bypass nginx and forge <code>X-Real-IP</code>, defeating the per-IP throttle. Keep the firewall/security list restricted to <code>443</code> + <code>22</code>.</p>
         </div>
 
         <h2 id="enum">Account-enumeration resistance</h2>

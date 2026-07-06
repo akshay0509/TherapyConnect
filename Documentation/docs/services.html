@@ -48,7 +48,7 @@
           <li><strong>Token issuance</strong> — <code>JwtUtil</code> signs RS256 access tokens (15-min TTL); <code>RefreshTokensService</code> manages rotating 7-day refresh tokens (roles preserved) in a <code>SameSite=None</code> httpOnly cookie.</li>
           <li><strong>Authorization</strong> — <code>JwtAuthenticationConverter</code> maps the <code>authorities</code> claim; <code>/admin/**</code> requires <code>ADMIN</code>; <code>/*/internal/**</code> is denied at the edge.</li>
           <li><strong>Admin dashboard</strong> — <code>AdminServicesController</code> (<code>/admin/services</code>) reports per-service health from Eureka + actuator.</li>
-          <li><strong>Resilience</strong> — Resilience4j rate limiters on login (10/min) and admin login (5/min), plus circuit breakers around the User and Therapist proxy calls.</li>
+          <li><strong>Resilience</strong> — a custom per-IP <code>LoginRateLimiter</code> throttles login (10/60s) and admin login (5/60s) by client IP; Resilience4j circuit breakers wrap the User and Therapist proxy calls.</li>
           <li><strong>Login eventing</strong> — publishes <code>auth-login-success</code>/<code>auth-login-failure</code> directly to Kafka (no outbox). Declares all Kafka topics via <code>TopicsConfig</code>.</li>
         </ul>
         <div class="kv">
