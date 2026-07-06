@@ -25,11 +25,11 @@ import com.org.gatewayService.Entity.RefreshTokens;
 import com.org.gatewayService.Messaging.LoginEventProducer;
 import com.org.gatewayService.Proxy.TherapistServiceProxy;
 import com.org.gatewayService.Proxy.UserServiceProxy;
+import com.org.gatewayService.Services.LoginRateLimiter;
 import com.org.gatewayService.Services.RefreshTokensService;
 import com.org.gatewayService.Utility.ClientIpUtil;
 import com.org.gatewayService.Utility.JwtUtil;
 
-import io.github.resilience4j.ratelimiter.annotation.RateLimiter;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 
@@ -54,9 +54,22 @@ public class AuthController {
 	@Autowired
 	private RefreshTokensService refreshTokensService;
 
+	@Autowired
+	private LoginRateLimiter loginRateLimiter;
+
 	@PostMapping("/login")
-	@RateLimiter(name = "loginRateLimiter", fallbackMethod = "loginRateLimitFallback")
 	public ResponseEntity<Map<String, String>> login(@RequestBody AuthRequest authRequest, HttpServletRequest httpRequest) {
+
+		String clientIp = ClientIpUtil.resolve(httpRequest);
+
+		// Per-IP throttle (replaces the old global bucket) — checked before the
+		// downstream credential validation so a noisy source can't spend that
+		// work either. One IP hitting its limit no longer affects other users.
+		if (!loginRateLimiter.allowLogin(clientIp)) {
+			logger.warn("Login rate limit exceeded from {}", clientIp);
+			return ResponseEntity.status(429).body(Map.of("error", "Too many login attempts. Please try again later."));
+		}
+
 		AuthResponse authResponse = userServiceProxy.validateUser(authRequest);
 
 		if(!authResponse.isAuthenticated()) {
@@ -64,7 +77,7 @@ public class AuthController {
 			LoginFailureEvent loginFailureEvent = new LoginFailureEvent();
 			loginFailureEvent.setUserId(authResponse.getUserId());
 			loginFailureEvent.setUsername(authRequest.getUsername());
-			loginFailureEvent.setIpAddress(ClientIpUtil.resolve(httpRequest));
+			loginFailureEvent.setIpAddress(clientIp);
 			loginFailureEvent.setUserAgent(httpRequest.getHeader("User-Agent"));
 			loginFailureEvent.setTimestamp(Instant.now());
 			loginFailureEvent.setReason(authResponse.getFailureReason().name());
@@ -76,7 +89,7 @@ public class AuthController {
 		LoginSuccessEvent loginSuccessEvent = new LoginSuccessEvent();
 		loginSuccessEvent.setUserId(authResponse.getUserId());
 		loginSuccessEvent.setUsername(authRequest.getUsername());
-		loginSuccessEvent.setIpAddress(ClientIpUtil.resolve(httpRequest));
+		loginSuccessEvent.setIpAddress(clientIp);
 		loginSuccessEvent.setUserAgent(httpRequest.getHeader("User-Agent"));
 		loginSuccessEvent.setTimestamp(Instant.now());
 
@@ -97,12 +110,6 @@ public class AuthController {
 		return ResponseEntity.ok()
 				.header(HttpHeaders.SET_COOKIE, buildRefreshCookie(refreshToken.getToken()).toString())
 				.body(Map.of("token", accessToken));
-	}
-
-	public ResponseEntity<Map<String, String>> loginRateLimitFallback(
-			AuthRequest authRequest, HttpServletRequest httpRequest, Throwable t) {
-		logger.warn("Login rate limit exceeded from {}", ClientIpUtil.resolve(httpRequest));
-		return ResponseEntity.status(429).body(Map.of("error", "Too many login attempts. Please try again later."));
 	}
 
 	@PostMapping("/refresh")

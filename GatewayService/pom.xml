@@ -121,6 +121,13 @@
             <artifactId>events</artifactId>
         </dependency>
 
+        <!-- Keyed (per-IP) login rate limiting — LoginRateLimiter. Version is
+             managed by the Spring Boot dependency BOM via the parent. -->
+        <dependency>
+            <groupId>com.github.ben-manes.caffeine</groupId>
+            <artifactId>caffeine</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>

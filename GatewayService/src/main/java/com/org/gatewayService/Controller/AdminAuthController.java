@@ -14,10 +14,10 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.org.gatewayService.Services.LoginRateLimiter;
 import com.org.gatewayService.Utility.ClientIpUtil;
 import com.org.gatewayService.Utility.JwtUtil;
 
-import io.github.resilience4j.ratelimiter.annotation.RateLimiter;
 import jakarta.servlet.http.HttpServletRequest;
 
 @RestController
@@ -35,27 +35,34 @@ public class AdminAuthController {
     @Autowired
     private JwtUtil jwtUtil;
 
+    @Autowired
+    private LoginRateLimiter loginRateLimiter;
+
     @PostMapping("/admin-login")
-    @RateLimiter(name = "adminLoginRateLimiter", fallbackMethod = "adminLoginRateLimitFallback")
     public ResponseEntity<Map<String, String>> adminLogin(@RequestBody Map<String, String> credentials,
             HttpServletRequest httpRequest) {
+
+        String clientIp = ClientIpUtil.resolve(httpRequest);
+
+        // Stricter per-IP throttle than regular login: the admin credential is a
+        // single env-var pair with no account lockout behind it, so the IP
+        // limiter is the primary brute-force control here.
+        if (!loginRateLimiter.allowAdminLogin(clientIp)) {
+            logger.warn("Admin login rate limit exceeded from {}", clientIp);
+            return ResponseEntity.status(429).body(Map.of("error", "Too many login attempts. Please try again later."));
+        }
+
         String username = credentials.get("username");
         String password = credentials.get("password");
 
         if (!constantTimeEquals(adminUsername, username) || !constantTimeEquals(adminPassword, password)) {
-            logger.warn("Failed admin login attempt for username: {} from {}", username, ClientIpUtil.resolve(httpRequest));
+            logger.warn("Failed admin login attempt for username: {} from {}", username, clientIp);
             return ResponseEntity.status(401).body(Map.of("error", "Invalid credentials"));
         }
 
         String token = jwtUtil.generateAdminToken(username);
-        logger.info("Admin login successful from {}", ClientIpUtil.resolve(httpRequest));
+        logger.info("Admin login successful from {}", clientIp);
         return ResponseEntity.ok(Map.of("token", token));
-    }
-
-    public ResponseEntity<Map<String, String>> adminLoginRateLimitFallback(
-            Map<String, String> credentials, HttpServletRequest httpRequest, Throwable t) {
-        logger.warn("Admin login rate limit exceeded from {}", ClientIpUtil.resolve(httpRequest));
-        return ResponseEntity.status(429).body(Map.of("error", "Too many login attempts. Please try again later."));
     }
 
     // String.equals short-circuits on the first differing character, which
