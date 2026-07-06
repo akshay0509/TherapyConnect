@@ -150,6 +150,8 @@ sequenceDiagram
               <tr><td><code>AppointmentProjection</code> (Therapist)</td><td>AppointmentService</td><td><code>therapist-appointment-events</code></td><td>Dashboards, earnings, session history, slot-conflict checks.</td></tr>
               <tr><td><code>TherapistClients</code> (Therapist)</td><td>ClientService</td><td><code>client-events</code></td><td>Therapist's client roster &amp; names/status.</td></tr>
               <tr><td><code>ClientProjection</code> (Notification)</td><td>ClientService</td><td><code>client-events</code></td><td>Client email for calendar invites.</td></tr>
+              <tr><td><code>ClientContactProjection</code> (Appointment)</td><td>ClientService</td><td><code>client-events</code></td><td>Client email/phone for Razorpay payment-link notify.</td></tr>
+              <tr><td><code>TherapistPaymentProjection</code> (Appointment)</td><td>TherapistService</td><td><code>therapist-availability-events</code> (TherapistEvent)</td><td>Whether the therapist collects payment.</td></tr>
               <tr><td><code>Analytics*Projection</code> (Analytics)</td><td>Appointment/Client</td><td>appointment + client events</td><td>Daily rollups, DSF/earnings, retention.</td></tr>
             </tbody>
           </table>
@@ -178,9 +180,14 @@ flowchart LR
         <h2 id="shared">Shared <code>events</code> library</h2>
         <p>The <code>Events</code> Maven module (<code>com.org:events</code>) is a dependency of every service and contains <em>only</em> the event POJOs and their enums (<code>AppointmentEvent</code>, <code>ClientEvent</code>, <code>AvailabilityEvent</code>, <code>LoginSuccessEvent</code>, status enums, …). This gives producers and consumers a single shared contract and is the one piece of code intentionally coupled across the whole system. Changing a class here ripples to every service — treat it as a versioned API.</p>
 
-        <div class="callout danger">
-          <div class="callout-title">Architectural risk to know</div>
-          <p>All services share one set of datasource credentials (<code>DB_URL</code>/<code>DB_USERNAME</code>/<code>DB_PASSWORD</code> env vars). "Database per service" is logical, not physical — there is no enforced isolation preventing one service from reading another's tables. See <a href="technical-debt.html">Technical Debt</a>.</p>
+        <div class="callout warn">
+          <div class="callout-title">Database isolation — partial</div>
+          <p>Each service now connects to its <em>own</em> physical database within a single PostgreSQL instance (created by <code>postgres-init</code>), so tables are no longer co-mingled. However all services still share one credential pair (<code>DB_USERNAME</code>/<code>DB_PASSWORD</code>), so the isolation is by database, not by least-privilege user. Per-service credentials remain a hardening item — see <a href="technical-debt.html">Technical Debt</a>.</p>
+        </div>
+
+        <div class="callout info">
+          <div class="callout-title">Beyond the therapist workflow</div>
+          <p>Two capabilities sit alongside the core domain: an <strong>admin console</strong> (separate credential-based login at the gateway, <code>ADMIN</code>-gated <code>/admin/**</code> endpoints for user management, login audit, service health and outbox replay) and <strong>Razorpay payments</strong> (AppointmentService owns the payment-link lifecycle; an HMAC-verified webhook auto-confirms paid appointments). Both are optional and fail closed when unconfigured. See <a href="workflows.html#payment">Workflows</a> and <a href="security.html#admin-auth">Security</a>.</p>
         </div>
 
       </article>

@@ -44,7 +44,7 @@ sequenceDiagram
             <tr><td><code>sub</code></td><td>username</td><td><code>SecurityUtils.getUsername()</code></td></tr>
             <tr><td><code>aud</code></td><td><code>therapist-service</code></td><td>—</td></tr>
             <tr><td><code>scope</code></td><td><code>["read","write"]</code></td><td>—</td></tr>
-            <tr><td><code>authorities</code></td><td>roles set</td><td>(present at login; empty on refresh)</td></tr>
+            <tr><td><code>authorities</code></td><td>roles set (e.g. <code>THERAPIST</code>, or <code>ADMIN</code>)</td><td>Gateway <code>hasAuthority(...)</code>; preserved across refresh</td></tr>
             <tr><td><code>userId</code></td><td><code>USR…</code></td><td><code>SecurityUtils.getUserId()</code></td></tr>
             <tr><td><code>therapistId</code></td><td><code>THP…</code></td><td><code>SecurityUtils.getTherapistId()</code> — drives all tenant scoping</td></tr>
           </tbody>
@@ -59,23 +59,35 @@ sequenceDiagram
         <h2 id="refresh">Refresh tokens</h2>
         <p>Opaque UUID tokens stored in <code>REFRESH_TOKENS</code> (not JWTs), delivered as a hardened cookie and <strong>rotated on every use</strong>.</p>
         <ul>
-          <li><strong>Cookie:</strong> <code>httpOnly</code>, <code>secure</code>, <code>SameSite=Strict</code>, path scoped to <code>/auth/refresh</code>, 7-day max-age.</li>
+          <li><strong>Cookie:</strong> <code>httpOnly</code>, <code>secure</code>, <code>SameSite=None</code>, path scoped to <code>/auth/refresh</code>, 7-day max-age. (<code>SameSite=None</code> so the cookie survives the cross-site call from the Vercel-hosted SPA to the backend — it requires <code>Secure</code>.)</li>
           <li><strong>Rotation:</strong> <code>/auth/refresh</code> deletes the presented token and issues a new one (creating a token deletes any prior tokens for the username — single active session per user).</li>
+          <li><strong>Roles preserved:</strong> the row now stores the user's <code>roles</code> (and back-fills <code>therapistId</code> if it was null at first login), so refreshed JWTs carry full authorities.</li>
           <li><strong>Revocation:</strong> <code>/auth/logout</code> deletes the user's tokens and expires the cookie.</li>
           <li><strong>Expiry check:</strong> <code>isExpiredOrRevoked</code> rejects revoked or past-<code>expiryDate</code> tokens.</li>
         </ul>
-        <div class="callout warn"><p style="margin:0">Because roles aren't persisted on the refresh row, JWTs minted by <code>/auth/refresh</code> carry an <strong>empty authorities</strong> claim. Any future role-based authorization must account for this (extend the schema or re-fetch roles).</p></div>
+        <div class="callout success"><p style="margin:0"><strong>Fixed:</strong> earlier builds minted refresh tokens with an <em>empty</em> authorities claim because roles weren't stored. The <code>roles</code> column resolves that — role-based authorization (e.g. the ADMIN authority) now works across refreshes.</p></div>
+
+        <h2 id="admin-auth">Admin authentication</h2>
+        <p>The admin console is a separate, credential-based path — not tied to the user table.</p>
+        <ul>
+          <li><strong>Login:</strong> <code>POST /auth/admin-login</code> checks the submitted username/password against the <code>ADMIN_USERNAME</code>/<code>ADMIN_PASSWORD</code> env values using a <strong>constant-time</strong> comparison (<code>MessageDigest.isEqual</code>) to avoid timing leaks.</li>
+          <li><strong>Token:</strong> an <strong>8-hour</strong> RS256 JWT with <code>authorities:["ADMIN"]</code> and <code>userId:"admin"</code>. No refresh token — admins re-login when it expires.</li>
+          <li><strong>Authorization:</strong> the gateway's <code>JwtAuthenticationConverter</code> reads the <code>authorities</code> claim verbatim (no <code>ROLE_</code> prefix); <code>/admin/**</code> is gated by <code>hasAuthority("ADMIN")</code>.</li>
+          <li><strong>Rate limit:</strong> <code>adminLoginRateLimiter</code> — 5/min (stricter than the 10/min user login, since admin has no lockout).</li>
+        </ul>
+        <div class="callout warn"><p style="margin:0">The admin account is a single static credential pair from the environment. Rotate it, keep it out of VCS, and consider promoting to per-admin accounts + MFA before exposing the console beyond a trusted network.</p></div>
 
         <h2 id="filterchains">Public vs protected routes</h2>
         <div class="table-wrap"><table>
           <thead><tr><th>Service</th><th>Public (permitAll)</th><th>Everything else</th></tr></thead>
           <tbody>
-            <tr><td>Gateway</td><td><code>/auth/**</code>, <code>/user/create-user</code></td><td>authenticated (JWT)</td></tr>
-            <tr><td>User</td><td><code>**/validate-user</code>, <code>/create-user</code>, <code>/forgot-password</code>, <code>/reset-password</code></td><td>authenticated</td></tr>
-            <tr><td>Therapist / Client / Appointment / Analytics</td><td>—</td><td>all authenticated</td></tr>
+            <tr><td>Gateway</td><td><code>/auth/**</code>, <code>/user/create-user</code>, <code>/user/forgot-username</code>, <code>/user/forgot-password</code>, <code>/user/reset-password</code></td><td><code>/admin/**</code> → <code>ADMIN</code>; <code>/*/internal/**</code> → <strong>denied</strong>; everything else authenticated (JWT)</td></tr>
+            <tr><td>User</td><td><code>**/validate-user</code>, <code>/create-user</code>, <code>/forgot-username</code>, <code>/forgot-password</code>, <code>/reset-password</code></td><td>authenticated</td></tr>
+            <tr><td>Appointment</td><td><code>/webhook/**</code> (Razorpay — HMAC-verified)</td><td>authenticated</td></tr>
+            <tr><td>Therapist / Client / Analytics</td><td>—</td><td>all authenticated</td></tr>
           </tbody>
         </table></div>
-        <p>CSRF is disabled across services (stateless API; tokens are bearer/JWT, refresh cookie is <code>SameSite=Strict</code>). CORS is configured at the gateway (<code>CorsConfig</code>) for the SPA origin.</p>
+        <p>The gateway explicitly <strong>denies <code>/*/internal/**</code></strong> so service-internal endpoints (e.g. <code>/therapist/internal/...</code>) can never be reached from the public edge — the gateway's own proxy calls them directly over the Docker network. CSRF is disabled across services (stateless API; tokens are bearer/JWT, refresh cookie is <code>SameSite=None; Secure</code>). CORS is configured at the gateway (<code>CorsConfig</code>) for the SPA origin.</p>
 
         <h2 id="abuse">Abuse &amp; failure protection</h2>
         <div class="grid cols-2">
@@ -114,16 +126,26 @@ Wiring   : JPA @Convert(SessionNotesEncryptor) — transparent on read/write</co
         <div class="table-wrap"><table>
           <thead><tr><th>Secret</th><th>Where</th><th>Notes</th></tr></thead>
           <tbody>
-            <tr><td>RSA private key</td><td>Gateway <code>classpath:keys/gateway-private.pem</code></td><td>Token signing. Keep out of VCS in prod.</td></tr>
-            <tr><td>RSA public key</td><td>All services <code>classpath:keys/gateway-public.pem</code></td><td>Token verification.</td></tr>
-            <tr><td>DB credentials</td><td><code>DB_URL/USERNAME/PASSWORD</code> env</td><td>Shared across services.</td></tr>
+            <tr><td>RSA private key</td><td>Gateway <code>${JWT_PRIVATE_KEY}</code> → <code>file:/app/keys/…</code> (mounted volume)</td><td>Token signing. <strong>Env-only</strong> — no classpath default, so it's never baked into the JAR/image.</td></tr>
+            <tr><td>RSA public key</td><td>All services <code>${JWT_PUBLIC_KEY}</code> (mounted volume)</td><td>Token verification.</td></tr>
+            <tr><td>DB credentials</td><td><code>DB_URL/USERNAME/PASSWORD</code> env</td><td>Shared across services (now separate databases).</td></tr>
+            <tr><td>Admin credentials</td><td><code>ADMIN_USERNAME/PASSWORD</code> env</td><td>Admin console login.</td></tr>
             <tr><td>Notes key</td><td><code>APP_ENCRYPTION_SECRET</code> env</td><td>AES key (Base64).</td></tr>
             <tr><td>Google OAuth</td><td><code>GOOGLE_CLIENT_ID/SECRET/REFRESH_TOKEN</code> env</td><td>Calendar + Gmail.</td></tr>
+            <tr><td>Razorpay</td><td><code>RAZORPAY_KEY_ID/SECRET/WEBHOOK_SECRET</code> env</td><td>Payment links + webhook HMAC. Blank ⇒ payments disabled.</td></tr>
           </tbody>
         </table></div>
+
+        <h2 id="webhook-sec">Payment webhook verification</h2>
+        <p>The Razorpay webhook (<code>POST /webhook/razorpay</code>) is unauthenticated by JWT — authenticity comes from the <code>X-Razorpay-Signature</code> header, an HMAC-SHA256 of the <em>raw</em> request body keyed by <code>RAZORPAY_WEBHOOK_SECRET</code>, hex-encoded and compared in constant time. A missing/invalid signature is rejected with <code>401</code>; only after it passes is the body processed.</p>
+
+        <div class="callout success">
+          <div class="callout-title">Resolved since the first review</div>
+          <p>The signing key is no longer on the classpath (env/volume only); refreshed tokens keep their roles; internal endpoints are denied at the gateway; and the outbox topics no longer rely on <code>trusted.packages=*</code> (type headers are off, nothing is resolved from headers).</p>
+        </div>
         <div class="callout danger">
-          <div class="callout-title">Hardening checklist (pre-production)</div>
-          <p>Move the signing key to a KMS/secret manager (not the JAR classpath); narrow Kafka <code>trusted.packages</code> from <code>*</code>; restrict <code>/user/validate-user</code> to gateway-only network paths; add per-service DB credentials; consider short-lived service tokens instead of propagating the user JWT. Tracked in <a href="technical-debt.html">Technical Debt</a>.</p>
+          <div class="callout-title">Hardening still open</div>
+          <p>Restrict <code>/user/validate-user</code> to gateway-only network paths; give each service its own DB credentials; move the static admin credential to per-admin accounts + MFA; consider short-lived service tokens instead of propagating the user JWT; front the gateway with HTTPS so payments and the <code>SameSite=None</code> cookie run over TLS. Tracked in <a href="technical-debt.html">Technical Debt</a>.</p>
         </div>
 
       </article>

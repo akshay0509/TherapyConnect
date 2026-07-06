@@ -26,6 +26,7 @@ import com.org.gatewayService.Messaging.LoginEventProducer;
 import com.org.gatewayService.Proxy.TherapistServiceProxy;
 import com.org.gatewayService.Proxy.UserServiceProxy;
 import com.org.gatewayService.Services.RefreshTokensService;
+import com.org.gatewayService.Utility.ClientIpUtil;
 import com.org.gatewayService.Utility.JwtUtil;
 
 import io.github.resilience4j.ratelimiter.annotation.RateLimiter;
@@ -63,7 +64,7 @@ public class AuthController {
 			LoginFailureEvent loginFailureEvent = new LoginFailureEvent();
 			loginFailureEvent.setUserId(authResponse.getUserId());
 			loginFailureEvent.setUsername(authRequest.getUsername());
-			loginFailureEvent.setIpAddress(httpRequest.getRemoteAddr());
+			loginFailureEvent.setIpAddress(ClientIpUtil.resolve(httpRequest));
 			loginFailureEvent.setUserAgent(httpRequest.getHeader("User-Agent"));
 			loginFailureEvent.setTimestamp(Instant.now());
 			loginFailureEvent.setReason(authResponse.getFailureReason().name());
@@ -75,7 +76,7 @@ public class AuthController {
 		LoginSuccessEvent loginSuccessEvent = new LoginSuccessEvent();
 		loginSuccessEvent.setUserId(authResponse.getUserId());
 		loginSuccessEvent.setUsername(authRequest.getUsername());
-		loginSuccessEvent.setIpAddress(httpRequest.getRemoteAddr());
+		loginSuccessEvent.setIpAddress(ClientIpUtil.resolve(httpRequest));
 		loginSuccessEvent.setUserAgent(httpRequest.getHeader("User-Agent"));
 		loginSuccessEvent.setTimestamp(Instant.now());
 
@@ -100,7 +101,7 @@ public class AuthController {
 
 	public ResponseEntity<Map<String, String>> loginRateLimitFallback(
 			AuthRequest authRequest, HttpServletRequest httpRequest, Throwable t) {
-		logger.warn("Login rate limit exceeded from {}", httpRequest.getRemoteAddr());
+		logger.warn("Login rate limit exceeded from {}", ClientIpUtil.resolve(httpRequest));
 		return ResponseEntity.status(429).body(Map.of("error", "Too many login attempts. Please try again later."));
 	}
 

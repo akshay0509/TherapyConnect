@@ -14,77 +14,101 @@
       <article class="content">
 
         <h1>Deployment</h1>
-        <p class="subtitle">Build tooling, required infrastructure, startup ordering and how to run the platform locally.</p>
+        <p class="subtitle">Build tooling, the Docker Compose stack, startup ordering, and how to run the platform.</p>
+
+        <div class="callout success">
+          <div class="callout-title">Containerized</div>
+          <p>The platform now ships a full <code>docker-compose.yml</code> that runs the entire backend — infrastructure, discovery, all services, and a Portainer management UI — on one host. A companion runbook (<a href="../SystemSetupGuide.html">System Setup Guide</a>) covers provisioning an Oracle Cloud VM end-to-end.</p>
+        </div>
 
         <h2 id="build">Build</h2>
-        <p>A multi-module Maven build rooted at the parent POM (<code>com.org:therapy-platform-parent:1.0.0-SNAPSHOT</code>, packaging <code>pom</code>). Modules: <code>Events</code>, <code>DiscoveryService</code>, <code>GatewayService</code>, <code>UserService</code>, <code>TherapistService</code>, <code>ClientService</code>, <code>AppointmentService</code>, <code>NotificationService</code>, <code>AnalyticsService</code>. The React <code>auth-app</code> is built separately with Vite.</p>
-        <pre><span class="pre-label">build all backend modules</span><code># from repo root (Events must install first as a dependency)
-mvn clean install
+        <p>A multi-module Maven build rooted at the parent POM (<code>com.org:therapy-platform-parent:1.0.0-SNAPSHOT</code>, packaging <code>pom</code>). Modules: <code>Events</code>, <code>DiscoveryService</code>, <code>GatewayService</code>, <code>UserService</code>, <code>TherapistService</code>, <code>ClientService</code>, <code>AppointmentService</code>, <code>NotificationService</code>, <code>AnalyticsService</code>. The React <code>auth-app</code> is deployed separately (Vercel).</p>
+        <p>Each service's <code>Dockerfile</code> is a thin JAR-copy image (<code>FROM therapy-jdk25 · COPY target/*.jar app.jar</code>), so <strong>Maven must produce the JARs before <code>docker compose build</code></strong>.</p>
+        <pre><span class="pre-label">build</span><code># 1) build the shared JDK 25 base image once (Ubuntu 24.04 + Microsoft JDK 25)
+docker build -t therapy-jdk25 -f Dockerfile.base .
 
-# or build a single service (uses the wrapper)
-cd AppointmentService
-./mvnw clean package        # mvnw.cmd on Windows</code></pre>
-        <div class="callout info"><p style="margin:0"><strong>Build order matters:</strong> <code>Events</code> is a dependency of every service, so it must be installed to the local Maven repo before (or as part of) building the others. A root <code>mvn install</code> handles this via the reactor.</p></div>
+# 2) compile all services (Events installs first via the reactor)
+mvn clean package -DskipTests
 
-        <h2 id="infra">Required infrastructure</h2>
-        <div class="grid cols-3">
-          <div class="card"><h4>🐘 PostgreSQL</h4><p style="font-size:13.5px;color:var(--text-muted)">Reachable at <code>DB_URL</code>. Schema auto-created by Hibernate on first boot.</p></div>
-          <div class="card"><h4>🔀 Apache Kafka</h4><p style="font-size:13.5px;color:var(--text-muted)">Brokers at <code>KAFKA_BOOTSTRAP_SERVERS</code>. Topics auto-created by the gateway.</p></div>
-          <div class="card"><h4>🔎 Eureka</h4><p style="font-size:13.5px;color:var(--text-muted)">The DiscoveryService itself — start it before the others.</p></div>
+# 3) build + start the whole stack
+docker compose up --build -d</code></pre>
+        <div class="callout info"><p style="margin:0"><strong>Base image:</strong> every service image is <code>FROM therapy-jdk25</code>. Build it once from <code>Dockerfile.base</code> before building service images. It pulls the <code>aarch64</code> JDK — on x86 hosts swap the JDK URL in <code>Dockerfile.base</code>.</p></div>
+
+        <h2 id="stack">The Compose stack</h2>
+        <p>All containers join one bridge network (<code>therapy-net</code>) and set <code>TZ=Asia/Kolkata</code>. Services reach each other by container name; only the gateway (and Portainer) are published to the host.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Container</th><th>Image</th><th>Host port</th><th>Purpose</th></tr></thead>
+            <tbody>
+              <tr><td><code>tc-postgres</code></td><td>postgres:16</td><td>— (internal)</td><td>One instance, 7 databases (see below).</td></tr>
+              <tr><td><code>tc-kafka</code></td><td>apache/kafka:latest</td><td>— (internal)</td><td>KRaft single-node broker+controller; auto-create topics on.</td></tr>
+              <tr><td><code>tc-discovery</code></td><td>therapy-discovery</td><td><code>127.0.0.1:8761</code></td><td>Eureka — bound to loopback only (dashboard is unauthenticated).</td></tr>
+              <tr><td><code>tc-gateway</code></td><td>therapy-gateway</td><td><code>8091</code></td><td>The only publicly published app port.</td></tr>
+              <tr><td><code>tc-user … tc-analytics</code></td><td>therapy-*</td><td>— (internal)</td><td>The six domain services; reachable only via the gateway/Eureka.</td></tr>
+              <tr><td><code>tc-portainer</code></td><td>portainer-ce</td><td><code>9000</code></td><td>Container management UI.</td></tr>
+            </tbody>
+          </table>
         </div>
+        <div class="callout warn"><p style="margin:0"><strong>Eureka is loopback-only.</strong> The dashboard/API has no auth and leaks the full topology, so <code>tc-discovery</code> publishes to <code>127.0.0.1:8761</code> — reach it via an SSH tunnel, not the public internet. Postgres and Kafka are never published.</p></div>
+
+        <h2 id="databases">Databases</h2>
+        <p>One PostgreSQL instance hosts <strong>seven separate databases</strong>, created on first boot by <code>postgres-init/init-databases.sql</code> (mounted into the container's init directory): <code>gateway</code>, <code>user</code>, <code>therapist</code>, <code>client</code>, <code>appointment</code>, <code>notification</code>, <code>analytics</code>. Each service's <code>DB_URL</code> targets its own database (e.g. <code>jdbc:postgresql://postgres:5432/appointment</code>); tables are then created by Hibernate (<code>ddl-auto=update</code>). The services share one credential pair.</p>
+
+        <h2 id="keys-secrets">Keys &amp; secrets</h2>
+        <p>The <code>./keys</code> directory is mounted read-only into services at <code>/app/keys</code>. The gateway receives both RSA keys via <code>JWT_PRIVATE_KEY</code>/<code>JWT_PUBLIC_KEY</code> (as <code>file:</code> references); every other service gets only the public key. All secrets come from a root <code>.env</code> consumed by Compose:</p>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Group</th><th>Variables</th></tr></thead>
+          <tbody>
+            <tr><td>Database</td><td><code>DB_USERNAME</code>, <code>DB_PASSWORD</code></td></tr>
+            <tr><td>Admin console</td><td><code>ADMIN_USERNAME</code>, <code>ADMIN_PASSWORD</code></td></tr>
+            <tr><td>Notes encryption</td><td><code>APP_ENCRYPTION_SECRET</code></td></tr>
+            <tr><td>Google (Calendar + Gmail)</td><td><code>GOOGLE_CLIENT_ID/SECRET/REFRESH_TOKEN</code>, <code>THERAPIST_EMAIL</code>, <code>GMAIL_FROM</code></td></tr>
+            <tr><td>Payments (optional)</td><td><code>RAZORPAY_KEY_ID/SECRET/WEBHOOK_SECRET</code> — blank disables payments globally</td></tr>
+            <tr><td>Frontend</td><td><code>FRONTEND_URL</code></td></tr>
+          </tbody>
+        </table></div>
+
+        <h2 id="eureka-binding">Eureka binding gotcha</h2>
+        <p>Each service sets both <code>EUREKA_CLIENT_SERVICEURL_DEFAULTZONE</code> <em>and</em> <code>SPRING_APPLICATION_JSON</code> with the same <code>defaultZone</code>. The JSON form is what reliably binds the Eureka <code>defaultZone</code> inside containers — the plain env var alone did not always take, so both are set.</p>
+        <pre><span class="pre-label">compose (per service)</span><code>EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery:8761/eureka/
+SPRING_APPLICATION_JSON: '{"eureka":{"client":{"serviceUrl":{"defaultZone":"http://discovery:8761/eureka/"}}}}'</code></pre>
 
         <h2 id="order">Startup order</h2>
-        <p>Because services register with Eureka and the gateway routes via discovery, bring components up in this order:</p>
+        <p>Compose <code>depends_on … condition: service_healthy</code> enforces ordering: Postgres and Kafka expose healthchecks, Discovery waits on them, and every app service waits on Postgres + Kafka + Discovery being healthy before starting.</p>
         <div class="mermaid">
 flowchart LR
-    A["1 · PostgreSQL + Kafka"] --> B["2 · DiscoveryService :8761"]
-    B --> C["3 · Domain services<br/>User, Therapist, Client,<br/>Appointment, Notification, Analytics"]
-    C --> D["4 · GatewayService :8091<br/>(creates Kafka topics)"]
-    D --> E["5 · auth-app (Vite) :5173"]
+    A["postgres + kafka<br/>(healthchecks)"] --> B["discovery :8761"]
+    B --> C["gateway :8091<br/>user · therapist · client<br/>appointment · notification · analytics"]
+    C --> D["auth-app (Vercel)"]
         </div>
-        <ol>
-          <li><strong>Infra</strong> — PostgreSQL and Kafka must be up first.</li>
-          <li><strong>Discovery</strong> — Eureka registry on 8761.</li>
-          <li><strong>Domain services</strong> — start in any order; they register with Eureka and begin consuming Kafka. (Therapist should be available for the gateway's login therapistId lookup.)</li>
-          <li><strong>Gateway</strong> — declares topics and starts routing/auth.</li>
-          <li><strong>Frontend</strong> — <code>npm run dev</code> in <code>auth-app</code>.</li>
-        </ol>
-        <div class="callout success"><p style="margin:0">The system is <strong>resilient to partial startup</strong>: circuit breakers on the gateway return <code>SERVICE_UNAVAILABLE</code> rather than hanging, and Kafka consumers with <code>auto-offset-reset=earliest</code> catch up on events emitted while they were down.</p></div>
+        <div class="callout success"><p style="margin:0"><strong>Resilient to partial startup:</strong> gateway circuit breakers return <code>SERVICE_UNAVAILABLE</code> rather than hanging, and Kafka consumers (<code>auto-offset-reset=earliest</code>) replay anything emitted while they were down. <code>restart: unless-stopped</code> plus enabled Docker auto-start means the stack self-recovers after a reboot.</p></div>
 
-        <h2 id="run">Running a service</h2>
-        <pre><span class="pre-label">run locally</span><code># Discovery first
-cd DiscoveryService && ./mvnw spring-boot:run
+        <h2 id="run">Everyday commands</h2>
+        <pre><span class="pre-label">operations</span><code>docker compose up -d                 # start everything (built images)
+docker compose up --build -d         # rebuild changed images + start
+docker compose ps                    # container status / health
+docker compose logs -f gateway       # follow one service
+docker compose build appointment && docker compose up -d appointment  # ship one service
+docker compose down                  # stop (keeps volumes/data)
+docker compose down -v               # DESTROYS postgres_data + kafka_data</code></pre>
+        <div class="callout danger"><p style="margin:0">Never run <code>docker compose down -v</code> against a live system — <code>-v</code> deletes the named volumes (<code>postgres_data</code>, <code>kafka_data</code>) and all data with them.</p></div>
 
-# then each domain service (ensure its .env is populated)
-cd UserService && ./mvnw spring-boot:run
-cd TherapistService && ./mvnw spring-boot:run
-# ... Client, Appointment, Notification, Analytics ...
-
-# gateway last
-cd GatewayService && ./mvnw spring-boot:run
-
-# frontend
-cd auth-app && npm install && npm run dev</code></pre>
-
-        <h2 id="frontend">Frontend build</h2>
-        <pre><span class="pre-label">auth-app</span><code>npm run dev       # Vite dev server on :5173
-npm run build     # production bundle to dist/
-npm run preview   # serve the built bundle</code></pre>
-        <p>Configure the API base (gateway <code>http://&lt;host&gt;:8091</code>) via the app's <code>.env</code> (see <code>.env.example</code>). The SPA calls only the gateway.</p>
-
-        <h2 id="containers">Containerization &amp; CI/CD</h2>
-        <div class="callout warn">
-          <div class="callout-title">⚠️ Not yet present</div>
-          <p>The repository currently has <strong>no Dockerfiles, Docker Compose, Kubernetes manifests or CI pipeline</strong>. Each service is a self-contained Spring Boot fat JAR (built by <code>spring-boot-maven-plugin</code>) and can be containerized with a standard JRE base image. Recommended next steps: a <code>docker-compose.yml</code> for Postgres + Kafka + Eureka + services for local parity, then per-service images and a CI build that runs <code>mvn verify</code>.</p>
-        </div>
-
-        <h2 id="prod-notes">Production considerations</h2>
+        <h2 id="observability">Observability &amp; management</h2>
         <ul>
-          <li>Switch <code>spring.jpa.hibernate.ddl-auto</code> from <code>update</code> to <code>validate</code> and introduce versioned migrations (Flyway/Liquibase).</li>
-          <li>Externalize the RSA signing key and all secrets to a secret manager; stop shipping keys on the classpath.</li>
-          <li>Set Kafka topic replication &gt; 1 and tune partitions for throughput (currently 3/1).</li>
-          <li>Disable <code>show-sql</code> and raise log levels for production.</li>
-          <li>Add health/readiness probes (Spring Boot Actuator is not currently wired) before orchestration.</li>
+          <li><strong>Actuator health</strong> — each service exposes <code>management.endpoints.web.exposure.include=health</code>. The admin dashboard's <code>GET /admin/services</code> pings these to report per-service status.</li>
+          <li><strong>Portainer</strong> (<code>:9000</code>) — container/stack management UI, mounted onto the Docker socket.</li>
+          <li><strong>JSON file logging</strong> — every container caps logs (<code>max-size</code>/<code>max-file</code>) so disk can't fill; a shared <code>./logs</code> volume is mounted for app logs.</li>
+        </ul>
+
+        <h2 id="frontend">Frontend (Vercel)</h2>
+        <p>The React SPA in <code>auth-app/</code> is built and hosted by Vercel from the repo (root directory <code>auth-app</code>, Vite preset). It calls only the gateway via <code>VITE_API_BASE_URL</code> (e.g. the VM's public host on <code>:8091</code>). Because the SPA is HTTPS and the gateway may be plain HTTP, the refresh cookie uses <code>SameSite=None; Secure</code> to survive the cross-site call — front a domain with HTTPS for production.</p>
+
+        <h2 id="prod-notes">Production hardening still open</h2>
+        <ul>
+          <li>Switch <code>ddl-auto=update</code> → <code>validate</code> and introduce versioned migrations (Flyway/Liquibase).</li>
+          <li>Move secrets from <code>.env</code> to a secret manager; the gateway signing key is already env-only (no longer on the classpath).</li>
+          <li>Raise Kafka replication above 1 and add a CI pipeline (none yet) running <code>mvn verify</code>.</li>
+          <li>Put the gateway behind HTTPS (nginx + Let's Encrypt) so payments/webhooks and cookies run over TLS.</li>
         </ul>
 
       </article>

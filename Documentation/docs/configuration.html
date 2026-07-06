@@ -17,18 +17,23 @@
         <p class="subtitle">Environment variables, application properties, key infrastructure settings and the startup process.</p>
 
         <h2 id="env">Environment variables</h2>
-        <p>Each backend service reads secrets/infra from the environment (supplied via a per-service <code>.env</code> file in development). Properties reference them with <code>${VAR}</code> placeholders.</p>
+        <p>Each backend service reads secrets/infra from the environment. In the Docker Compose deployment these come from a single root <code>.env</code> and are injected per service (with the per-service <code>DB_URL</code>, JWT key paths, Eureka zone, and <code>TZ=Asia/Kolkata</code> set in the compose file). Properties reference them with <code>${VAR}</code> placeholders.</p>
         <div class="table-wrap"><table>
           <thead><tr><th>Variable</th><th>Used by</th><th>Purpose</th></tr></thead>
           <tbody>
-            <tr><td><code>DB_URL</code></td><td>all DB services</td><td>JDBC URL (PostgreSQL).</td></tr>
-            <tr><td><code>DB_USERNAME</code> / <code>DB_PASSWORD</code></td><td>all DB services</td><td>Datasource credentials.</td></tr>
-            <tr><td><code>KAFKA_BOOTSTRAP_SERVERS</code></td><td>all (except Discovery)</td><td>Kafka brokers.</td></tr>
+            <tr><td><code>DB_URL</code></td><td>all DB services</td><td>JDBC URL — points at that service's own database (<code>jdbc:postgresql://postgres:5432/&lt;db&gt;</code>).</td></tr>
+            <tr><td><code>DB_USERNAME</code> / <code>DB_PASSWORD</code></td><td>all DB services</td><td>Datasource credentials (shared).</td></tr>
+            <tr><td><code>KAFKA_BOOTSTRAP_SERVERS</code></td><td>all (except Discovery)</td><td>Kafka brokers (<code>kafka:9092</code>).</td></tr>
+            <tr><td><code>EUREKA_CLIENT_SERVICEURL_DEFAULTZONE</code> + <code>SPRING_APPLICATION_JSON</code></td><td>all</td><td>Eureka zone — set <em>both</em>; the JSON form is what reliably binds inside containers.</td></tr>
+            <tr><td><code>JWT_PRIVATE_KEY</code></td><td>Gateway</td><td><code>file:</code> ref to the mounted private key (no classpath default).</td></tr>
+            <tr><td><code>JWT_PUBLIC_KEY</code></td><td>all</td><td><code>file:</code> ref to the mounted public key.</td></tr>
+            <tr><td><code>ADMIN_USERNAME</code> / <code>ADMIN_PASSWORD</code></td><td>Gateway</td><td>Admin console credentials.</td></tr>
             <tr><td><code>APP_ENCRYPTION_SECRET</code></td><td>Therapist</td><td>Base64 AES key for session-notes encryption.</td></tr>
+            <tr><td><code>RAZORPAY_KEY_ID</code> / <code>KEY_SECRET</code> / <code>WEBHOOK_SECRET</code></td><td>Appointment</td><td>Payment links + webhook HMAC. Blank ⇒ payments globally disabled.</td></tr>
             <tr><td><code>GOOGLE_CLIENT_ID</code> / <code>GOOGLE_CLIENT_SECRET</code> / <code>GOOGLE_REFRESH_TOKEN</code></td><td>Notification, User</td><td>OAuth creds for Calendar &amp; Gmail.</td></tr>
             <tr><td><code>THERAPIST_EMAIL</code></td><td>Notification</td><td>Calendar owner / attendee.</td></tr>
-            <tr><td><code>GMAIL_FROM</code></td><td>User</td><td>Sender address for reset emails.</td></tr>
-            <tr><td><code>FRONTEND_URL</code></td><td>User</td><td>Base URL in reset links (default <code>http://localhost:5173</code>).</td></tr>
+            <tr><td><code>GMAIL_FROM</code></td><td>User</td><td>Sender address for reset/username emails.</td></tr>
+            <tr><td><code>FRONTEND_URL</code></td><td>User, Gateway</td><td>Base URL in emails + CORS origin (default <code>http://localhost:5173</code>).</td></tr>
           </tbody>
         </table></div>
 
@@ -40,9 +45,10 @@
             <tr><td>Gateway</td><td><code>8091</code></td><td>Appointment</td><td><code>5005</code></td></tr>
             <tr><td>Client</td><td><code>5001</code></td><td>Analytics</td><td><code>5006</code></td></tr>
             <tr><td>Therapist</td><td><code>5002</code></td><td>Frontend (Vite)</td><td><code>5173</code></td></tr>
-            <tr><td>User</td><td><code>5003</code></td><td>—</td><td>—</td></tr>
+            <tr><td>User</td><td><code>5003</code></td><td>Portainer</td><td><code>9000</code></td></tr>
           </tbody>
         </table></div>
+        <p style="font-size:13px;color:var(--text-muted)">In Docker Compose only the Gateway (<code>8091</code>) and Portainer (<code>9000</code>) are published to the host; Discovery is bound to <code>127.0.0.1:8761</code> (loopback); the six domain services and Postgres/Kafka have no host ports.</p>
 
         <h2 id="common">Common Spring properties</h2>
         <p>Shared patterns across services' <code>application.properties</code>:</p>
@@ -69,8 +75,14 @@ logging.config=classpath:log4j2.xml
 logging.level.root=ERROR</code></pre>
 
         <h2 id="kafka-cfg">Kafka serialization config</h2>
-        <p>Producers use <code>StringSerializer</code> keys + <code>JsonSerializer</code> values with type headers enabled. Consumers wrap delegates in <code>ErrorHandlingDeserializer</code> and set <code>auto-offset-reset=earliest</code>. Trusted packages are typically <code>*</code> (User narrows to <code>com.org.events.login</code>).</p>
-        <div class="callout warn"><p style="margin:0"><code>spring.json.trusted.packages=*</code> trusts all types during deserialization — fine for a closed internal bus, but should be narrowed before exposure. Analytics also sets <code>spring.jackson.serialization.write-dates-as-timestamps=false</code> for ISO date output.</p></div>
+        <p>Producers use <code>StringSerializer</code> keys + <code>JsonSerializer</code> values; consumers wrap delegates in <code>ErrorHandlingDeserializer</code> and set <code>auto-offset-reset=earliest</code>. For the outbox/domain topics, <strong>type headers are off</strong>:</p>
+        <pre><span class="pre-label">domain-topic services (appointment/therapist/client/notification/analytics)</span><code># producers
+spring.kafka.producer.properties.spring.json.add.type.headers=false
+# consumers — deserialize to JsonNode and dispatch on the eventType field
+spring.kafka.consumer.properties.spring.json.use.type.headers=false
+spring.kafka.consumer.properties.spring.json.value.default.type=com.fasterxml.jackson.databind.JsonNode
+spring.kafka.consumer.properties.reconnect.backoff.max.ms=10000</code></pre>
+        <p>Because nothing is resolved from headers, <code>trusted.packages</code> no longer applies to these topics. The <strong>login pipeline is the exception</strong>: UserService keeps <code>use.type.headers=true</code> and <code>trusted.packages=com.org.events.login</code>. Analytics sets <code>spring.jackson.serialization.write-dates-as-timestamps=false</code> for ISO dates. Actuator health is exposed everywhere via <code>management.endpoints.web.exposure.include=health</code>.</p>
 
         <h2 id="gateway-cfg">Gateway routing &amp; resilience config</h2>
         <pre><span class="pre-label">gateway application.properties (excerpt)</span><code># Route table (prefix → service, StripPrefix=1)

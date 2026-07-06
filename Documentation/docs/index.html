@@ -42,8 +42,10 @@
           <li><strong>Book &amp; manage appointments</strong> — schedule, confirm, reschedule, complete, cancel or abandon sessions against available slots.</li>
           <li><strong>Auto-sync calendars</strong> — confirmed appointments create Google Calendar invites (with Meet links for online sessions) for therapist and client.</li>
           <li><strong>Track the business</strong> — dashboards for earnings, completion/cancellation rates, service breakdowns and client retention.</li>
+          <li><strong>Collect payments</strong> — optional Razorpay payment links per booking; a signed webhook auto-confirms paid appointments.</li>
           <li><strong>Encrypted session notes</strong> — clinical notes are stored AES-GCM encrypted at the field level.</li>
         </ul>
+        <p>A separate <strong>admin console</strong> (its own credential-based login) adds cross-service user management, a login-audit view, a live service-health grid, and an outbox-replay tool.</p>
 
         <h2 id="map">Documentation map</h2>
         <div class="grid cols-2">
@@ -102,7 +104,7 @@
 
         <div class="callout warn">
           <div class="callout-title">⚠️ Status</div>
-          <p>This is an actively-developed codebase with development-grade defaults (<code>ddl-auto=update</code>, broad Kafka trusted packages, secrets via <code>.env</code>). See <a href="technical-debt.html">Technical Debt</a> for the production-readiness gaps that should be closed before deployment.</p>
+          <p>Actively developed and now containerized (Docker Compose + Portainer, per-service databases, env-only signing key). Development-grade defaults remain (<code>ddl-auto=update</code>, single DB credential, static admin credential, plain HTTP). See <a href="technical-debt.html">Technical Debt</a> for what's resolved and what's still open before production.</p>
         </div>
 
       </article>

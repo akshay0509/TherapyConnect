@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.org.gatewayService.Utility.ClientIpUtil;
 import com.org.gatewayService.Utility.JwtUtil;
 
 import io.github.resilience4j.ratelimiter.annotation.RateLimiter;
@@ -42,18 +43,18 @@ public class AdminAuthController {
         String password = credentials.get("password");
 
         if (!constantTimeEquals(adminUsername, username) || !constantTimeEquals(adminPassword, password)) {
-            logger.warn("Failed admin login attempt for username: {}", username);
+            logger.warn("Failed admin login attempt for username: {} from {}", username, ClientIpUtil.resolve(httpRequest));
             return ResponseEntity.status(401).body(Map.of("error", "Invalid credentials"));
         }
 
         String token = jwtUtil.generateAdminToken(username);
-        logger.info("Admin login successful");
+        logger.info("Admin login successful from {}", ClientIpUtil.resolve(httpRequest));
         return ResponseEntity.ok(Map.of("token", token));
     }
 
     public ResponseEntity<Map<String, String>> adminLoginRateLimitFallback(
             Map<String, String> credentials, HttpServletRequest httpRequest, Throwable t) {
-        logger.warn("Admin login rate limit exceeded from {}", httpRequest.getRemoteAddr());
+        logger.warn("Admin login rate limit exceeded from {}", ClientIpUtil.resolve(httpRequest));
         return ResponseEntity.status(429).body(Map.of("error", "Too many login attempts. Please try again later."));
     }
 

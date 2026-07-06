@@ -17,14 +17,18 @@
         <p class="subtitle">Kafka is the primary integration fabric. This page documents the topics, event schemas, who produces and consumes each, and how the outbox publishes them.</p>
 
         <h2 id="topics">Topics</h2>
-        <p>All topics are declared by the Gateway's <code>TopicsConfig</code> as <strong>3 partitions / 1 replica</strong> (dev settings). Messages are JSON-serialized with Spring's <code>JsonSerializer</code>; type headers are added by producers, and consumers either trust the headers or deserialize generically into a <code>JsonNode</code> and branch on an <code>eventType</code> field.</p>
+        <p>Topics are auto-created by the Kafka broker (KRaft, single node); the Gateway's <code>TopicsConfig</code> also declares the core set at <strong>3 partitions / 1 replica</strong>. Messages are JSON-serialized with Spring's <code>JsonSerializer</code>.</p>
+        <div class="callout warn">
+          <div class="callout-title">Type headers are OFF for outbox topics</div>
+          <p>The domain topics (<code>client-events</code>, <code>therapist-availability-events</code>, <code>therapist-appointment-events</code>) now run with Kafka <strong>type headers disabled end-to-end</strong>: producers set <code>add.type.headers=false</code> and consumers set <code>use.type.headers=false</code> with <code>value.default.type=JsonNode</code>. Every consumer deserializes to a generic <code>JsonNode</code> and dispatches on the payload's <code>eventType</code> string — so <code>__TypeId__</code> is never read and <code>trusted.packages</code> no longer applies. <strong>Exception:</strong> the login pipeline (<code>auth-login-*</code>) still uses typed headers (<code>use.type.headers=true</code>, <code>trusted.packages=com.org.events.login</code>). Don't re-add typed-header/trusted-package restrictions to the outbox topics.</p>
+        </div>
         <div class="table-wrap"><table>
           <thead><tr><th>Topic</th><th>Producer(s)</th><th>Consumer(s)</th><th>Carries</th></tr></thead>
           <tbody>
             <tr><td><code>auth-login-success</code></td><td>Gateway</td><td>User</td><td>LoginSuccessEvent</td></tr>
             <tr><td><code>auth-login-failure</code></td><td>Gateway</td><td>User</td><td>LoginFailureEvent</td></tr>
-            <tr><td><code>client-events</code></td><td>Client</td><td>Therapist, Notification, Analytics</td><td>ClientEvent</td></tr>
-            <tr><td><code>therapist-availability-events</code></td><td>Therapist</td><td>Appointment, Notification</td><td>AvailabilityEvent, AvailabilitySlots*Event, CalendarBlockEvent, DeliveryModeEvent</td></tr>
+            <tr><td><code>client-events</code></td><td>Client</td><td>Therapist, Notification, Analytics, Appointment</td><td>ClientEvent</td></tr>
+            <tr><td><code>therapist-availability-events</code></td><td>Therapist</td><td>Appointment, Notification</td><td>AvailabilityEvent, AvailabilitySlots*Event, CalendarBlockEvent, DeliveryModeEvent, <strong>TherapistEvent</strong></td></tr>
             <tr><td><code>therapist-appointment-events</code></td><td>Appointment</td><td>Therapist, Notification, Analytics</td><td>AppointmentEvent</td></tr>
             <tr><td><code>email-reminder-events</code></td><td>Therapist*</td><td>(reminder pipeline)</td><td>EmailReminderEvent</td></tr>
           </tbody>
@@ -63,7 +67,7 @@ flowchart LR
           <tbody>
             <tr><td>User</td><td><code>user-service-login-events</code></td><td>auth-login-*</td></tr>
             <tr><td>Therapist</td><td><code>therapist-service-appointment-events</code></td><td>appointment + client events</td></tr>
-            <tr><td>Appointment</td><td><code>appointment-service-availability-events</code> / <code>appointment-availability-slot-projection-group</code></td><td>availability events</td></tr>
+            <tr><td>Appointment</td><td><code>appointment-availability-slot-projection-group</code> (slots), <code>appointment-therapist-payment-projection-group</code> (payment settings), <code>appointment-client-contact-projection-group</code> (contact)</td><td>availability + client events</td></tr>
             <tr><td>Notification</td><td><code>notification-service-events</code></td><td>appointment + availability + client</td></tr>
             <tr><td>Analytics</td><td><code>analytics-service-events</code></td><td>appointment + client</td></tr>
           </tbody>
@@ -94,8 +98,15 @@ updatedAt, cancelledBy, reason</code></pre>
 
         <details class="collapse"><summary><code>ClientEvent</code> — topic <code>client-events</code></summary>
           <div class="collapse-body">
-            <p>Types: <code>ClientCreated</code>, <code>ClientUpdated</code>, <code>ClientStatusUpdated</code>. Fields: eventId, eventType, occurredAt, clientId, therapistId, email, firstName, lastName, <code>status</code> (ACTIVE/TERMINATED), <code>dsf</code>.</p>
-            <p><strong>Consumed by:</strong> Therapist (updates <code>THERAPIST_CLIENTS</code> name/status), Notification (<code>ClientProjection</code> email), Analytics (DSF projection).</p>
+            <p>Types: <code>ClientCreated</code>, <code>ClientUpdated</code>, <code>ClientStatusUpdated</code>. Fields: eventId, eventType, occurredAt, clientId, therapistId, email, <code>phoneNumber</code>, firstName, lastName, <code>status</code> (ACTIVE/TERMINATED), <code>dsf</code>.</p>
+            <p><strong>Consumed by:</strong> Therapist (updates <code>THERAPIST_CLIENTS</code> name/status), Notification (<code>ClientProjection</code> email), Analytics (DSF projection), and Appointment (<code>ClientContactProjection</code> email/phone for Razorpay notify).</p>
+          </div>
+        </details>
+
+        <details class="collapse"><summary><code>TherapistEvent</code> — topic <code>therapist-availability-events</code></summary>
+          <div class="collapse-body">
+            <p>Types: <code>TherapistCreated</code>, <code>TherapistPaymentSettingsUpdated</code>. Fields: eventId, eventType, occurredAt, therapistId, <code>timezone</code>, <code>paymentEnabled</code>.</p>
+            <p><strong>Consumed by:</strong> Appointment's <code>TherapistPaymentSettingsConsumer</code> (group <code>appointment-therapist-payment-projection-group</code>) — upserts <code>THERAPIST_PAYMENT_PROJECTION</code> so booking knows whether to create Razorpay links.</p>
           </div>
         </details>
 
@@ -135,6 +146,7 @@ public void publishPendingEvents() {
           <li><strong>Appointment availability consumer</strong> — <code>existsBySlotId</code> before insert; never deletes a <code>BOOKED</code> slot (throws <code>AvailabilityProjectionConflictException</code> on a destructive sync that would hit booked slots).</li>
           <li><strong>Notification</strong> — checks for an existing <code>AppointmentCalendarEvent</code> mapping before creating a Google event; skips reschedule if no prior invite.</li>
           <li><strong>Therapist appointment consumer</strong> — upserts the projection by appointmentId; warns and no-ops if a status/reschedule event arrives for an unknown appointment.</li>
+          <li><strong>Razorpay webhook</strong> — not Kafka, but idempotent all the same: a <code>PAID</code> payment row is never transitioned again, so duplicate <code>payment_link.paid</code> deliveries are safe (Razorpay retries until it gets a 200).</li>
         </ul>
 
       </article>

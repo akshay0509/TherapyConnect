@@ -40,8 +40,8 @@
           <li>Start PostgreSQL and Kafka.</li>
           <li>Populate each service's <code>.env</code> (<code>DB_URL</code>, <code>DB_USERNAME</code>, <code>DB_PASSWORD</code>, <code>KAFKA_BOOTSTRAP_SERVERS</code>, plus <code>APP_ENCRYPTION_SECRET</code> for Therapist and Google vars for Notification/User). Generate an RSA key pair into each service's <code>resources/keys/</code> (private only in the gateway).</li>
           <li><code>mvn clean install</code> at the root (installs <code>Events</code> first).</li>
-          <li>Run in order: Discovery → domain services → Gateway → frontend (see <a href="deployment.html">Deployment</a>).</li>
-          <li>Create a user via <code>POST /user/create-user</code>, then log in at <code>POST /auth/login</code>.</li>
+          <li>Run in order: Discovery → domain services → Gateway → frontend. The fastest path is the Docker Compose stack — build the <code>therapy-jdk25</code> base image, <code>mvn clean package</code>, then <code>docker compose up --build -d</code> (see <a href="deployment.html">Deployment</a>).</li>
+          <li>Create a user via <code>POST /user/create-user</code>, then log in at <code>POST /auth/login</code>. For the admin console, log in at <code>POST /auth/admin-login</code> with the <code>ADMIN_*</code> env credentials.</li>
         </ol>
         <div class="callout info"><p style="margin:0">Need an AES key for notes? Any Base64-encoded 16/24/32-byte value works for <code>APP_ENCRYPTION_SECRET</code> in dev. Lose it and existing encrypted notes become unreadable.</p></div>
 
@@ -83,7 +83,7 @@
         <ul>
           <li><strong>Event not arriving?</strong> Check the producer's <code>OUTBOX_EVENT</code> table — is the row <code>published=true</code>? If not, the scheduler or Kafka is the problem.</li>
           <li><strong>Consumer stuck?</strong> <code>ErrorHandlingDeserializer</code> isolates poison messages; check logs for deserialization errors. <code>auto-offset-reset=earliest</code> means a fresh group replays everything.</li>
-          <li><strong>403/401 on a backend call?</strong> The JWT may lack the expected claim (e.g. <code>therapistId</code> absent → <code>SecurityUtils</code> throws). Tokens from <code>/auth/refresh</code> have empty authorities.</li>
+          <li><strong>403/401 on a backend call?</strong> The JWT may lack the expected claim (e.g. <code>therapistId</code> absent → <code>SecurityUtils</code> throws). Note <code>/*/internal/**</code> is denied at the gateway, and <code>/admin/**</code> needs the <code>ADMIN</code> authority.</li>
           <li><strong>Trace a request</strong> in therapist-service via the MDC trace id added by <code>MdcFilter</code>.</li>
           <li><strong>Booking conflicts?</strong> Remember <code>markSlotAsBooked</code>/<code>markSlotAsAvailable</code> are conditional updates — a 0-row result is the signal a race or terminal state was hit.</li>
         </ul>

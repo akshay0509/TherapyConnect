@@ -21,6 +21,11 @@
           <p>There are no Flyway/Liquibase migrations. Tables are created/altered by Hibernate at startup from the entity classes below. The entity is therefore the source of truth for the schema. Relationships between services' tables are <em>logical</em> (foreign keys by ID string), not enforced DB constraints across services.</p>
         </div>
 
+        <div class="callout info">
+          <div class="callout-title">Database per service</div>
+          <p>One PostgreSQL 16 instance hosts <strong>seven separate databases</strong> — <code>gateway</code>, <code>user</code>, <code>therapist</code>, <code>client</code>, <code>appointment</code>, <code>notification</code>, <code>analytics</code> — created on first boot by <code>postgres-init/init-databases.sql</code>. Each service connects only to its own database (<code>jdbc:postgresql://postgres:5432/&lt;db&gt;</code>). Isolation is now physical at the database level, though the services still share one credential pair.</p>
+        </div>
+
         <h2 id="ids">ID conventions</h2>
         <p>Most entities use a string primary key with a service-specific prefix, generated in a JPA <code>@PrePersist</code> hook from a truncated UUID. This makes IDs self-describing across the event bus.</p>
         <div class="table-wrap"><table>
@@ -33,6 +38,7 @@
             <tr><td><code>NOT</code></td><td>SessionNotes</td><td><code>NOT...</code></td></tr>
             <tr><td><code>EVNT</code></td><td>Event id (in payload)</td><td><code>EVNT...</code></td></tr>
             <tr><td><code>OUT</code></td><td>OutboxEvent</td><td><code>OUT...</code></td></tr>
+            <tr><td><code>PAY</code></td><td>AppointmentPayment</td><td><code>PAY...</code></td></tr>
           </tbody>
         </table></div>
 
@@ -77,13 +83,13 @@ erDiagram
         <p>Append-only audit of every login attempt (success and failure), with indexes on <code>userId</code>, <code>username</code> and <code>loginAt</code>. Written by the login consumers.</p>
 
         <h2 id="gateway-data">GatewayService — <code>REFRESH_TOKENS</code></h2>
-        <p>One active refresh token per user (creating a new one deletes prior tokens for that username). Stores <code>userId</code> and <code>therapistId</code> so <code>/auth/refresh</code> can reissue a JWT without extra service calls. Columns: <code>id</code> PK, <code>token</code> (unique), <code>username</code>, <code>expiryDate</code> (LocalDate, +7 days), <code>revoked</code>, <code>userId</code>, <code>therapistId</code>.</p>
+        <p>One active refresh token per user (creating a new one deletes prior tokens for that username). Stores <code>userId</code>, <code>therapistId</code> <strong>and <code>roles</code></strong> so <code>/auth/refresh</code> can reissue a fully-scoped JWT without extra service calls. Columns: <code>id</code> PK, <code>token</code> (unique), <code>username</code>, <code>expiryDate</code> (LocalDate, +7 days), <code>revoked</code>, <code>userId</code>, <code>therapistId</code>, <code>roles</code>. (The <code>roles</code> column was added to fix refreshed tokens losing their authorities.)</p>
 
         <h2 id="therapist-data">TherapistService tables</h2>
         <div class="table-wrap"><table>
           <thead><tr><th>Table</th><th>Key fields</th><th>Purpose</th></tr></thead>
           <tbody>
-            <tr><td><code>THERAPIST</code></td><td><code>therapistId</code> PK, <code>userId</code> (unique)</td><td>Profile; links to a User account.</td></tr>
+            <tr><td><code>THERAPIST</code></td><td><code>therapistId</code> PK, <code>userId</code> (unique), <code>timezone</code>, <code>paymentEnabled</code></td><td>Profile. <code>paymentEnabled</code> gates Razorpay collection; <code>timezone</code> is the therapist's zone. Changes emit <code>TherapistEvent</code>.</td></tr>
             <tr><td><code>THERAPIST_SERVICES</code></td><td>serviceId, duration, price, type</td><td>Offered services; drives slot duration &amp; pricing.</td></tr>
             <tr><td><code>THERAPY_DELIVERY_MODE</code></td><td>modeId, serviceId, modeType, address, price, isActive</td><td>Online/offline delivery options per service.</td></tr>
             <tr><td><code>THERAPIST_AVAILABILITY_RULES</code></td><td>dayOfWeek, startTime, endTime, isActive</td><td>Weekly recurring availability.</td></tr>
@@ -109,10 +115,13 @@ erDiagram
             <tr><td><code>THERAPIST_AVAILABILITY</code> <span class="tag">projection</span></td><td>slotId PK, status (AVAILABLE/BOOKED), serviceId, fee</td><td>Local copy of slots to book against.</td></tr>
             <tr><td><code>THERAPIST_AVAILABILITY_OVERRIDE</code> <span class="tag">projection</span></td><td>override window, available</td><td>Blocks bookings during unavailable windows.</td></tr>
             <tr><td><code>THERAPY_DELIVERY_MODE</code> <span class="tag">projection</span></td><td>modeId, price, modeType, address, isActive</td><td>Pricing &amp; mode validation at booking.</td></tr>
+            <tr><td><code>APPOINTMENT_PAYMENT</code></td><td><code>paymentId</code> PK (PAY), appointmentId (unique), therapistId, amount, currency, <code>status</code>, razorpayLinkId, paymentLinkUrl, razorpayPaymentId, clientNotified, failureReason</td><td>Razorpay payment-link lifecycle per appointment. <code>status</code> is <code>PaymentStatus</code>.</td></tr>
+            <tr><td><code>THERAPIST_PAYMENT_PROJECTION</code> <span class="tag">projection</span></td><td>therapistId PK, paymentEnabled</td><td>Whether the therapist collects payment; from <code>TherapistEvent</code>.</td></tr>
+            <tr><td><code>ClientContactProjection</code> <span class="tag">projection</span></td><td>clientId PK, firstName, lastName, email, phoneNumber</td><td>Contact for Razorpay SMS/email notify; from <code>client-events</code>.</td></tr>
             <tr><td><code>OUTBOX_EVENT</code></td><td>see below</td><td>Outbound appointment events.</td></tr>
           </tbody>
         </table></div>
-        <p>Appointment statuses: <code>SCHEDULED</code> → <code>CONFIRMED</code> → <code>COMPLETED</code>, with <code>RESCHEDULED</code>, and terminal <code>CANCELLED</code> / <code>ABANDONED</code>. See the <a href="workflows.html">state machine</a>.</p>
+        <p>Appointment statuses: <code>SCHEDULED</code> → <code>CONFIRMED</code> → <code>COMPLETED</code>, with <code>RESCHEDULED</code>, and terminal <code>CANCELLED</code> / <code>ABANDONED</code>. See the <a href="workflows.html">state machine</a>. Payment statuses: <code>LINK_CREATED</code>, <code>LINK_FAILED</code>, <code>PAID</code>, <code>EXPIRED</code>, <code>CANCELLED</code> — a <code>payment_link.paid</code> webhook flips a <code>SCHEDULED</code>/<code>RESCHEDULED</code> appointment to <code>CONFIRMED</code> automatically.</p>
 
         <h2 id="client-data">ClientService — <code>CLIENT</code></h2>
         <p>Fields: <code>clientId</code> PK (CLT), therapistId, firstName, lastName, dob, age, phone numbers, email, pronouns, gender, createdAt, <code>status</code> (ACTIVE/TERMINATED), <code>dsf</code> (sliding-fee flag). Plus its own <code>OUTBOX_EVENT</code>.</p>

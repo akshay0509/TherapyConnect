@@ -101,7 +101,14 @@ services:
     container_name: tc-gateway
     image: therapy-gateway:latest
     ports:
-      - "8091:8091"
+      # loopback only: nginx (on the host) reverse-proxies to the gateway over
+      # 127.0.0.1:8091, so binding to loopback keeps 8091 unreachable from the
+      # internet at the Docker layer. This is what makes the X-Real-IP the
+      # gateway trusts un-spoofable — nobody can bypass nginx to forge it —
+      # instead of relying solely on the Oracle Cloud security list.
+      # REQUIRES the nginx proxy_pass target to be 127.0.0.1:8091 (it was
+      # [::1]:8091 = IPv6 loopback, which an IPv4-only bind does NOT serve).
+      - "127.0.0.1:8091:8091"
     environment:
       TZ: Asia/Kolkata
       DB_URL: jdbc:postgresql://postgres:5432/gateway

@@ -18,7 +18,7 @@
 
         <div class="callout info">
           <div class="callout-title">Conventions</div>
-          <p>All paths except <code>/auth/**</code> and <code>/user/create-user</code> require <code>Authorization: Bearer &lt;jwt&gt;</code>. The <code>therapistId</code> / <code>userId</code> are read from JWT claims server-side via <code>SecurityUtils</code> — clients never send them in the body (a field marked <em>“from JWT”</em> below is populated by the server and ignored if sent). The gateway routes by prefix: <code>/therapist/*</code> → therapist-service, <code>/appointment/*</code> → appointment-service, <code>/client/*</code> → client-service, <code>/user/*</code> → user-service, <code>/analytics/*</code> → analytics-service.</p>
+          <p>Public paths: <code>/auth/**</code>, <code>/user/create-user</code>, <code>/user/forgot-username</code>, <code>/user/forgot-password</code>, <code>/user/reset-password</code>, and the Razorpay <code>/webhook/**</code>. <code>/admin/**</code> requires <strong>ADMIN</strong> authority; everything else needs a valid <code>Authorization: Bearer &lt;jwt&gt;</code>. Service-internal routes (<code>/*/internal/**</code>) are <strong>denied at the gateway</strong> and only reachable service-to-service. The <code>therapistId</code> / <code>userId</code> are read from JWT claims server-side via <code>SecurityUtils</code> — clients never send them in the body (a field marked <em>“from JWT”</em> is populated by the server). The gateway routes by prefix: <code>/therapist/*</code> → therapist-service, <code>/appointment/*</code> → appointment-service, <code>/client/*</code> → client-service, <code>/user/*</code> → user-service, <code>/analytics/*</code> → analytics-service.</p>
         </div>
 
         <!-- ============================ AUTH ============================ -->
@@ -32,7 +32,7 @@
             <pre><span class="pre-label">AuthRequest</span><code>{ "username": "jdoe", "password": "••••••••" }</code></pre>
             <p><strong>Responses</strong></p>
             <ul>
-              <li><code>200</code> — <code>{ "token": "&lt;jwt&gt;" }</code> plus <code>Set-Cookie: refresh_token</code> (httpOnly, Secure, SameSite=Strict, path <code>/auth/refresh</code>, 7-day).</li>
+              <li><code>200</code> — <code>{ "token": "&lt;jwt&gt;" }</code> plus <code>Set-Cookie: refresh_token</code> (httpOnly, Secure, SameSite=None, path <code>/auth/refresh</code>, 7-day).</li>
               <li><code>401</code> — <code>{ "failureReason": "INVALID_CREDENTIALS | ACCOUNT_LOCKED | ACCOUNT_DISABLED | SERVICE_UNAVAILABLE" }</code></li>
               <li><code>429</code> — <code>{ "error": "Too many login attempts…" }</code></li>
             </ul>
@@ -41,12 +41,20 @@
         </details>
 
         <details class="endpoint">
+          <summary><span class="badge post">POST</span><span class="path">/auth/admin-login</span><span class="ep-desc">Admin console login</span></summary>
+          <div class="ep-body">
+            <p><strong>Auth:</strong> public · rate-limited to <strong>5 req/min</strong> (<code>adminLoginRateLimiter</code>, stricter than user login since there is no lockout).</p>
+            <p><strong>Request:</strong> <code>{ "username": "…", "password": "…" }</code> — checked against the <code>ADMIN_USERNAME</code>/<code>ADMIN_PASSWORD</code> env credentials with a <strong>constant-time</strong> comparison.</p>
+            <p><strong>Responses:</strong> <code>200</code> <code>{ "token": "&lt;jwt&gt;" }</code> — an <strong>8-hour</strong> JWT with <code>authorities:["ADMIN"]</code> and <code>userId:"admin"</code> (no refresh token) · <code>401</code> invalid · <code>429</code> rate-limited.</p>
+          </div>
+        </details>
+
+        <details class="endpoint">
           <summary><span class="badge post">POST</span><span class="path">/auth/refresh</span><span class="ep-desc">Rotate refresh token, issue new access token</span></summary>
           <div class="ep-body">
             <p><strong>Auth:</strong> <code>refresh_token</code> cookie · <strong>Request:</strong> none (cookie only).</p>
             <p><strong>Responses:</strong> <code>200</code> <code>{ "token": "&lt;jwt&gt;" }</code> + new rotated cookie · <code>401</code> <code>{ "error": "No refresh token" | "Invalid or expired refresh token" }</code>.</p>
-            <p><strong>Side effects:</strong> deletes the presented token and issues a fresh one (rotation).</p>
-            <div class="callout warn" style="margin:10px 0 0"><p style="margin:0">Known gap: roles aren’t stored on the refresh-token row, so tokens minted here carry an <strong>empty authorities</strong> claim. See <a href="technical-debt.html">Technical Debt</a>.</p></div>
+            <p><strong>Side effects:</strong> deletes the presented token and issues a fresh one (rotation). Now <strong>preserves the user's roles</strong> (persisted on the refresh-token row) and back-fills <code>therapistId</code> if it was null at login — so refreshed tokens carry full authorities. The cookie is <code>SameSite=None; Secure</code> for the cross-site SPA.</p>
           </div>
         </details>
 
@@ -83,7 +91,7 @@
             <p><strong>Auth:</strong> public · <strong>Request</strong></p>
             <pre><span class="pre-label">UserDto</span><code>{ "username": "jdoe", "email": "jdoe@x.com",
   "password": "••••••••", "userRole": "THERAPIST" }</code></pre>
-            <p><strong>Response:</strong> <code>200</code> (empty body). BCrypt-hashes the password; generates a <code>USR…</code> id.</p>
+            <p><strong>Response:</strong> <code>200</code> <code>{ "message": "User created successfully." }</code>, or <code>400 { "error": … }</code> if the username/email already exists. BCrypt-hashes the password; generates a <code>USR…</code> id. <code>userRole</code> ∈ {<code>CLIENT</code>, <code>THERAPIST</code>, <code>ADMIN</code>}.</p>
           </div>
         </details>
 
@@ -96,6 +104,14 @@
   "roles": ["THERAPIST"], "accountStatus": { "enabled": true, "locked": false },
   "failureReason": null }</code></pre>
             <p>On failure: <code>authenticated=false</code> and <code>failureReason</code> = <code>INVALID_CREDENTIALS | ACCOUNT_DISABLED | ACCOUNT_LOCKED</code>.</p>
+          </div>
+        </details>
+
+        <details class="endpoint">
+          <summary><span class="badge post">POST</span><span class="path">/user/forgot-username</span><span class="ep-desc">Email the username</span></summary>
+          <div class="ep-body">
+            <p><strong>Auth:</strong> public · <strong>Request:</strong> <code>{ "email": "…" }</code> · <strong>Response:</strong> <code>200</code> generic message ("If an account with that email exists, your username has been sent.").</p>
+            <p><strong>Side effects:</strong> looks up the account by email and emails the username via the Gmail API; silent no-op for unknown emails (no enumeration).</p>
           </div>
         </details>
 
@@ -139,7 +155,14 @@
           <summary><span class="badge post">POST</span><span class="path">/therapist/create-therapist</span><span class="ep-desc">Create profile for current user</span></summary>
           <div class="ep-body">
             <p><strong>Auth:</strong> JWT (<code>userId</code> from token) · <strong>Request:</strong> <code>TherapistDto</code> (firstName, lastName, dob, phoneNumber, email, gender, yearsOfExperience).</p>
-            <p><strong>Response:</strong> <code>200</code>. Links the new <code>THP…</code> record to the JWT’s userId (unique).</p>
+            <p><strong>Response:</strong> <code>200</code>. Links the new <code>THP…</code> record to the JWT’s userId (unique). Emits <code>TherapistCreated</code>.</p>
+          </div>
+        </details>
+        <details class="endpoint">
+          <summary><span class="badge put">PUT</span><span class="path">/therapist/payment-settings</span><span class="ep-desc">Toggle payment collection</span></summary>
+          <div class="ep-body">
+            <p><strong>Auth:</strong> JWT · <strong>Request:</strong> <code>{ "paymentEnabled": true }</code> (400 if null) · <strong>Response:</strong> updated <code>TherapistDto</code>.</p>
+            <p><strong>Side effects:</strong> sets the therapist's <code>paymentEnabled</code> flag and emits <code>TherapistPaymentSettingsUpdated</code>, which AppointmentService projects to decide whether bookings generate Razorpay links. See <a href="workflows.html#payment">the payment workflow</a>.</p>
           </div>
         </details>
 
@@ -321,9 +344,10 @@
           <summary><span class="badge post">POST</span><span class="path">/appointment/create-appointment</span><span class="ep-desc">Book a slot</span></summary>
           <div class="ep-body">
             <p><strong>Auth:</strong> JWT (<code>therapistId</code> from token) · <strong>Request</strong></p>
-            <pre><span class="pre-label">BookAppointmentRequest</span><code>{ "slotId": "SLT…", "clientId": "CLT…", "modeId": "…", "clientName": "Jane" }</code></pre>
-            <p><strong>Response:</strong> <code>200</code> <code>appointmentId</code>. <strong>Errors:</strong> <code>SlotNotAvailableException</code> (unknown/blocked slot or invalid mode), <code>SlotAlreadyBookedException</code> (lost the race).</p>
-            <p><strong>Flow:</strong> validates slot + unavailable overrides + active delivery mode (→ price), atomically <code>markSlotAsBooked</code> (0 rows ⇒ already booked), persists the appointment, emits <code>AppointmentCreated</code> via the outbox.</p>
+            <pre><span class="pre-label">BookAppointmentRequest</span><code>{ "slotId": "SLT…", "clientId": "CLT…", "modeId": "…",
+  "clientName": "Jane", "customPrice": 1500.00 }   // customPrice optional — overrides the mode's default fee</code></pre>
+            <p><strong>Response:</strong> <code>200</code> <code>BookAppointmentResponse</code> — <code>{ appointmentId, paymentStatus, paymentLinkUrl, clientNotified }</code>. The payment fields are populated only when the therapist has payments enabled (otherwise null). <strong>Errors:</strong> <code>SlotNotAvailableException</code> (unknown/blocked slot or invalid mode), <code>SlotAlreadyBookedException</code> (lost the race).</p>
+            <p><strong>Flow:</strong> validates slot + unavailable overrides + active delivery mode (→ price, or <code>customPrice</code> override), atomically <code>markSlotAsBooked</code> (0 rows ⇒ already booked), persists the appointment, emits <code>AppointmentCreated</code>. After commit it best-effort creates a Razorpay payment link (never fails the booking — worst case <code>paymentStatus=LINK_FAILED</code>, retry via <code>/payments/{id}/link</code>).</p>
           </div>
         </details>
         <details class="endpoint">
@@ -331,7 +355,7 @@
           <div class="ep-body">
             <p><strong>Auth:</strong> JWT · <strong>Request</strong></p>
             <pre><span class="pre-label">UpdateAppointmentStatusRequest</span><code>{ "appointmentId": "…", "status": "CONFIRMED", "reason": null }</code></pre>
-            <p><strong>Allowed targets:</strong> <code>CONFIRMED | COMPLETED | CANCELLED | ABANDONED</code>. Terminal states are immutable. <code>CANCELLED</code> releases the slot. Emits the matching event (<code>AppointmentConfirmed</code>, …). <strong>Errors:</strong> <code>InvalidAppointmentStatusTransitionException</code>, <code>AppointmentNotFoundException</code>.</p>
+            <p><strong>Allowed targets:</strong> <code>CONFIRMED | COMPLETED | CANCELLED | ABANDONED</code>. Terminal states are immutable. <code>CANCELLED</code> releases the slot. Emits the matching event (<code>AppointmentConfirmed</code>, …). <strong>Payments:</strong> <code>CANCELLED</code>/<code>ABANDONED</code> best-effort cancel any unpaid payment link (<code>COMPLETED</code> is excluded so a post-session payment can still be collected). <strong>Errors:</strong> <code>InvalidAppointmentStatusTransitionException</code>, <code>AppointmentNotFoundException</code>.</p>
           </div>
         </details>
         <details class="endpoint">
@@ -339,7 +363,7 @@
           <div class="ep-body">
             <p><strong>Auth:</strong> JWT · <strong>Request</strong></p>
             <pre><span class="pre-label">RescheduleAppointmentRequest</span><code>{ "appointmentId": "…", "newSlotId": "SLT…", "modeId": "…"?, "reason": "…"? }</code></pre>
-            <p><strong>Response:</strong> <code>200</code> "Appointment rescheduled". Books the new slot, releases the old, re-prices by mode, sets status <code>RESCHEDULED</code>, emits <code>AppointmentRescheduled</code> (with old/new slot + times). Rejects reschedules of terminal appointments or to the same slot.</p>
+            <p><strong>Response:</strong> <code>200</code> "Appointment rescheduled". Books the new slot, releases the old, re-prices by mode, sets status <code>RESCHEDULED</code>, emits <code>AppointmentRescheduled</code> (with old/new slot + times). Rejects reschedules of terminal appointments or to the same slot. <strong>Payments:</strong> since the fee may change, any unpaid link is cancelled and a fresh one issued at the new fee (a <code>PAID</code> payment is left untouched).</p>
           </div>
         </details>
         <details class="endpoint">
@@ -357,6 +381,60 @@
         <details class="endpoint">
           <summary><span class="badge get">GET</span><span class="path">/appointment/search</span><span class="ep-desc">Filtered appointment search</span></summary>
           <div class="ep-body"><p><strong>Auth:</strong> JWT · <strong>Query:</strong> <code>clientName?</code>, <code>status?</code> (repeatable <code>AppointmentStatus</code>), <code>fromDate</code>, <code>toDate</code> · <strong>Response:</strong> <code>List&lt;AppointmentScheduleAppointmentDto&gt;</code>. Empty status ⇒ all statuses.</p></div>
+        </details>
+
+        <!-- ============================ PAYMENTS ============================ -->
+        <h2 id="payments-api">Payments <span class="badge neutral">appointment-service · /payments &amp; /webhook</span></h2>
+        <p>Razorpay Payment Links. Active only when the therapist has payments enabled <em>and</em> Razorpay keys are configured (otherwise a silent no-op — the platform's global kill switch). See the <a href="workflows.html#payment">payment workflow</a> and the <a href="../RazorpaySetupGuide.html">Razorpay Setup Guide</a>.</p>
+        <details class="endpoint">
+          <summary><span class="badge get">GET</span><span class="path">/payments/{appointmentId}</span><span class="ep-desc">Payment status for an appointment</span></summary>
+          <div class="ep-body"><p><strong>Auth:</strong> JWT (scoped to <code>therapistId</code>) · <strong>Response:</strong> <code>PaymentInfoDto</code> — <code>{ appointmentId, status, amount, currency, paymentLinkUrl, razorpayPaymentId, clientNotified, failureReason, updatedAt }</code>, or <code>404</code> if none. <code>status</code> ∈ {<code>LINK_CREATED, LINK_FAILED, PAID, EXPIRED, CANCELLED</code>}.</p></div>
+        </details>
+        <details class="endpoint">
+          <summary><span class="badge post">POST</span><span class="path">/payments/{appointmentId}/link</span><span class="ep-desc">Create / retry the payment link</span></summary>
+          <div class="ep-body">
+            <p><strong>Auth:</strong> JWT · <strong>Response:</strong> <code>200</code> <code>PaymentInfoDto</code>, or <code>422</code> when payments don't apply (disabled, terminal appointment, or no positive fee). Idempotent: reuses an existing <code>LINK_CREATED</code>/<code>PAID</code> link; re-issues after a <code>LINK_FAILED</code>/<code>EXPIRED</code>/<code>CANCELLED</code>. This is the recovery path when link creation failed during booking.</p>
+          </div>
+        </details>
+        <details class="endpoint">
+          <summary><span class="badge post">POST</span><span class="path">/webhook/razorpay</span><span class="ep-desc">Razorpay webhook (public)</span></summary>
+          <div class="ep-body">
+            <p><strong>Auth:</strong> <em>none</em> — authenticity is the <code>X-Razorpay-Signature</code> HMAC-SHA256 over the raw body (constant-time compared against <code>RAZORPAY_WEBHOOK_SECRET</code>). Invalid/missing signature → <code>401</code>.</p>
+            <p><strong>Events handled:</strong> <code>payment_link.paid</code> (mark PAID → auto-confirm the appointment + emit <code>AppointmentConfirmed</code>), <code>payment_link.cancelled</code>, <code>payment_link.expired</code>, <code>payment.failed</code> (records the reason; link stays active for retry). Always returns <code>200</code> after the signature check — processing is idempotent, so retries can't help and shouldn't be triggered.</p>
+            <p><strong>Public URL:</strong> registered in the Razorpay dashboard as <code>{host}:8091/appointment/webhook/razorpay</code> (the gateway strips <code>/appointment</code>).</p>
+          </div>
+        </details>
+
+        <!-- ============================ ADMIN ============================ -->
+        <h2 id="admin-api">Admin <span class="badge neutral">/admin · requires ADMIN authority</span></h2>
+        <p>The admin console authenticates via <a href="#auth"><code>POST /auth/admin-login</code></a> (8-hour token, <code>authorities:["ADMIN"]</code>). Every <code>/admin/**</code> route requires that authority at the gateway; these endpoints are spread across services.</p>
+        <details class="endpoint">
+          <summary><span class="badge get">GET</span><span class="path">/admin/services</span><span class="ep-desc">Service health dashboard (gateway)</span></summary>
+          <div class="ep-body"><p><strong>Response:</strong> a list of <code>{ name, status, instances }</code> for the gateway plus the six domain services, resolved from Eureka and by pinging each service's <code>/actuator/health</code> (short timeouts). Status ∈ <code>UP / DEGRADED / DOWN / UNREACHABLE</code>.</p></div>
+        </details>
+        <details class="endpoint">
+          <summary><span class="badge get">GET</span><span class="path">/admin/users</span><span class="ep-desc">List all users (user-service)</span></summary>
+          <div class="ep-body"><p><strong>Response:</strong> <code>List&lt;AdminUserDto&gt;</code> (userId, username, email, role, enabled, accountLocked, failedAttempts, lastLoginTime, createdAt), newest first.</p></div>
+        </details>
+        <details class="endpoint">
+          <summary><span class="badge put">PUT</span><span class="path">/admin/users/{userId}/status</span><span class="ep-desc">Enable / lock a user</span></summary>
+          <div class="ep-body"><p><strong>Request:</strong> <code>{ "enabled": bool?, "locked": bool? }</code>. Unlocking also resets the failed-attempt counter. <code>400</code> if the user isn't found.</p></div>
+        </details>
+        <details class="endpoint">
+          <summary><span class="badge put">PUT</span><span class="path">/admin/users/{userId}/reset-password</span><span class="ep-desc">Force-reset a password</span></summary>
+          <div class="ep-body"><p><strong>Request:</strong> <code>{ "newPassword": "…" }</code> (min 8 chars). BCrypt-hashes it and invalidates any pending self-service reset token.</p></div>
+        </details>
+        <details class="endpoint">
+          <summary><span class="badge get">GET</span><span class="path">/admin/audit</span><span class="ep-desc">Recent login audit (user-service)</span></summary>
+          <div class="ep-body"><p><strong>Response:</strong> the 100 most recent <code>UserLoginAudit</code> rows (success + failure, IP, user-agent, reason).</p></div>
+        </details>
+        <details class="endpoint">
+          <summary><span class="badge get">GET</span><span class="path">/admin/health</span><span class="ep-desc">Service self-report (appointment &amp; analytics)</span></summary>
+          <div class="ep-body"><p>AppointmentService returns an <code>AdminHealthDto</code>; AnalyticsService reports rollup freshness — <code>{ status: OK | BEHIND | NO_DATA, lastProcessedDate, daysBehind, serverTime }</code>.</p></div>
+        </details>
+        <details class="endpoint">
+          <summary><span class="badge post">POST</span><span class="path">/admin/outbox/replay</span><span class="ep-desc">Replay outbox events (appointment-service)</span></summary>
+          <div class="ep-body"><p><strong>Request:</strong> <code>{ "from": "YYYY-MM-DDTHH:MM:SS" }</code> (defaults to midnight today; <code>400</code> on bad format). Re-publishes outbox events from that time — an operational recovery tool if a consumer missed messages.</p></div>
         </details>
 
         <!-- ============================ CLIENT ============================ -->

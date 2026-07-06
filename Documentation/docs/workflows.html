@@ -129,7 +129,46 @@ stateDiagram-v2
           </tbody>
         </table></div>
 
-        <h2 id="analytics-flow">6 · Analytics rollups</h2>
+        <h2 id="payment">6 · Payment collection (Razorpay)</h2>
+        <p>When the therapist has payments enabled and Razorpay keys are configured, booking creates a payment link and a successful payment auto-confirms the appointment. Payment can never block or fail a booking — every Razorpay call is wrapped and failures are recorded on the payment row.</p>
+        <div class="mermaid">
+sequenceDiagram
+    autonumber
+    participant T as Therapist (UI)
+    participant AS as AppointmentService
+    participant RZ as Razorpay
+    participant CL as Client
+    participant K as Kafka
+    participant NS as Notification
+    T->>AS: POST /create-appointment
+    AS->>AS: book (status SCHEDULED) — commits first
+    AS->>RZ: create payment link (amount, notes.appointmentId)
+    RZ-->>CL: SMS / email with link
+    AS-->>T: BookAppointmentResponse { paymentLinkUrl, paymentStatus }
+    CL->>RZ: pays the link
+    RZ->>AS: POST /webhook/razorpay (X-Razorpay-Signature)
+    AS->>AS: verify HMAC → mark PAID (idempotent)
+    AS->>AS: auto-confirm (SCHEDULED/RESCHEDULED → CONFIRMED)
+    AS->>K: AppointmentConfirmed (outbox)
+    K-->>NS: create Google Calendar invite
+        </div>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Trigger</th><th>Payment action</th></tr></thead>
+          <tbody>
+            <tr><td>Booking</td><td>Create link (reuse if one already <code>LINK_CREATED</code>/<code>PAID</code>). Response carries <code>paymentStatus</code>, <code>paymentLinkUrl</code>, <code>clientNotified</code>.</td></tr>
+            <tr><td>Link failed at booking</td><td><code>paymentStatus=LINK_FAILED</code>; therapist retries via <code>POST /payments/{id}/link</code>.</td></tr>
+            <tr><td><code>payment_link.paid</code> webhook</td><td>Mark <code>PAID</code>, auto-confirm the appointment, emit <code>AppointmentConfirmed</code>. If the appointment was already terminal, log for <strong>manual refund</strong>.</td></tr>
+            <tr><td>Cancel / abandon</td><td>Best-effort cancel the unpaid link (local status set to <code>CANCELLED</code> regardless, so a late webhook can't confirm a dead appointment). <code>COMPLETED</code> is excluded so post-session payment still works.</td></tr>
+            <tr><td>Reschedule</td><td>Fee may change → cancel the unpaid link and issue a fresh one; a <code>PAID</code> payment is left untouched.</td></tr>
+            <tr><td><code>payment.failed</code></td><td>Record the failure reason; the link stays active so the client can retry.</td></tr>
+          </tbody>
+        </table></div>
+        <div class="callout info"><p style="margin:0"><strong>Kill switch &amp; enablement:</strong> if Razorpay keys are blank <em>or</em> the therapist's <code>paymentEnabled</code> projection (from <code>TherapistEvent</code>) is off, every payment method is a silent no-op and bookings behave exactly as before. See the <a href="../RazorpaySetupGuide.html">Razorpay Setup Guide</a>.</p></div>
+
+        <h2 id="admin-flow">7 · Admin operations</h2>
+        <p>The admin console authenticates separately (<code>POST /auth/admin-login</code> → 8-hour <code>ADMIN</code> token) and drives <code>ADMIN</code>-gated endpoints across services: a live service-health grid (Gateway <code>/admin/services</code> via Eureka + actuator), user management (list, enable/lock, force-reset password, login audit), rollup-freshness health (Analytics), and an <strong>outbox replay</strong> tool (Appointment <code>/admin/outbox/replay</code>) to re-publish events from a given time if a consumer missed them.</p>
+
+        <h2 id="analytics-flow">8 · Analytics rollups</h2>
         <p>Analytics consumes appointment events and maintains daily aggregates + retention projections. Only certain event types affect counters:</p>
         <div class="table-wrap"><table>
           <thead><tr><th>Event</th><th>Effect</th></tr></thead>
@@ -142,7 +181,7 @@ stateDiagram-v2
         </table></div>
         <p>Retention queries derive retained (&gt;1 session), churned (no session in 30 days), retention rate, average sessions/client, and a session-frequency histogram (1, 2-3, 4-6, 7-10, 10+).</p>
 
-        <h2 id="client-create">7 · Creating a client (cross-service)</h2>
+        <h2 id="client-create">9 · Creating a client (cross-service)</h2>
         <div class="mermaid">
 sequenceDiagram
     autonumber
@@ -160,10 +199,12 @@ sequenceDiagram
     TS-->>T: 200 clientId
     K-->>NS: ClientCreated → ClientProjection (email)
     K-->>AN: ClientCreated → DSF projection
+    K-->>AS: ClientCreated → ClientContactProjection (email/phone)
         </div>
+        <p>The <code>ClientCreated</code> event now also carries the client's <code>phoneNumber</code>, which AppointmentService projects into <code>ClientContactProjection</code> so Razorpay can notify the client by SMS/email.</p>
 
-        <h2 id="password">8 · Password reset</h2>
-        <p>Gateway → User. User issues a 30-minute token and emails a link via the Gmail API; reset consumes the token. Always returns a generic response to avoid account enumeration. Email-send failures are logged (token stays valid for retry), not surfaced to the caller.</p>
+        <h2 id="password">10 · Password reset &amp; forgot username</h2>
+        <p>Gateway → User. <strong>Forgot password:</strong> User issues a 30-minute token and emails a reset link via the Gmail API; reset consumes the token. <strong>Forgot username:</strong> User looks up the account by email and emails the username. Both always return a generic response to avoid account enumeration, and email-send failures are logged (not surfaced to the caller).</p>
 
       </article>
     </main>

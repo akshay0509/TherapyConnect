@@ -18,38 +18,41 @@
 
         <div class="callout info"><p style="margin:0">This is a capability-rich system with thoughtful patterns (outbox, CQRS, circuit breakers, field encryption, race-safe booking). The items below are about <em>hardening</em>, not redesign.</p></div>
 
-        <h2 id="severity">Priority overview</h2>
+        <div class="callout success">
+          <div class="callout-title">✅ Resolved since the first review</div>
+          <ul style="margin:6px 0 0">
+            <li><strong>Refresh tokens now preserve roles</strong> (a <code>roles</code> column was added) — refreshed JWTs carry full authorities.</li>
+            <li><strong>Signing key is env-only</strong> — the gateway loads it from <code>${JWT_PRIVATE_KEY}</code> (a mounted volume), with no classpath default baked into the image.</li>
+            <li><strong>Kafka <code>trusted.packages=*</code> is moot</strong> on the outbox topics — type headers are off and nothing is resolved from headers (login pipeline aside).</li>
+            <li><strong>Docker/Compose + Actuator health now exist</strong> — full <code>docker-compose.yml</code>, per-service Dockerfiles, healthchecks, and a Portainer UI.</li>
+            <li><strong>Databases are now physically separate</strong> (one per service) instead of co-mingled.</li>
+            <li><strong>Internal endpoints are denied at the gateway</strong> (<code>/*/internal/**</code>).</li>
+          </ul>
+        </div>
+
+        <h2 id="severity">Priority overview (still open)</h2>
         <div class="table-wrap"><table>
           <thead><tr><th>#</th><th>Area</th><th>Issue</th><th>Severity</th></tr></thead>
           <tbody>
-            <tr><td>1</td><td>Security</td><td>Refresh-issued JWTs have empty authorities</td><td><span class="badge delete">High</span></td></tr>
-            <tr><td>2</td><td>Security</td><td>Kafka <code>trusted.packages=*</code></td><td><span class="badge put">Medium</span></td></tr>
-            <tr><td>3</td><td>Security</td><td>Signing key + secrets on classpath / <code>.env</code></td><td><span class="badge delete">High</span></td></tr>
-            <tr><td>4</td><td>Data</td><td><code>ddl-auto=update</code>, no migrations</td><td><span class="badge delete">High</span></td></tr>
-            <tr><td>5</td><td>Data</td><td>Shared DB credentials across services</td><td><span class="badge put">Medium</span></td></tr>
-            <tr><td>6</td><td>Reliability</td><td>No DLQ / consumer retry policy</td><td><span class="badge put">Medium</span></td></tr>
-            <tr><td>7</td><td>Ops</td><td>No Docker/CI/Actuator health checks</td><td><span class="badge put">Medium</span></td></tr>
+            <tr><td>1</td><td>Data</td><td><code>ddl-auto=update</code>, no migrations</td><td><span class="badge delete">High</span></td></tr>
+            <tr><td>2</td><td>Security</td><td>Single static admin credential (no MFA / per-admin accounts)</td><td><span class="badge put">Medium</span></td></tr>
+            <tr><td>3</td><td>Security</td><td>Shared DB credential pair (isolation is per-DB, not per-user)</td><td><span class="badge put">Medium</span></td></tr>
+            <tr><td>4</td><td>Security</td><td>Secrets in <code>.env</code>; <code>/user/validate-user</code> reachable service-side</td><td><span class="badge put">Medium</span></td></tr>
+            <tr><td>5</td><td>Reliability</td><td>No DLQ / consumer retry policy</td><td><span class="badge put">Medium</span></td></tr>
+            <tr><td>6</td><td>Payments</td><td>Refunds are manual; over-payment on terminal appointments only logged</td><td><span class="badge put">Medium</span></td></tr>
+            <tr><td>7</td><td>Ops</td><td>No CI pipeline; Kafka replication factor 1; HTTP (no TLS termination)</td><td><span class="badge put">Medium</span></td></tr>
             <tr><td>8</td><td>Quality</td><td>Debug <code>System.out</code>, swallowed errors, thin tests</td><td><span class="badge patch">Low</span></td></tr>
           </tbody>
         </table></div>
 
         <h2 id="security-debt">Security</h2>
         <div class="card">
-          <h4>1 · Refresh tokens drop roles <span class="badge delete">High</span></h4>
-          <p><code>AuthController.refresh</code> mints the new JWT with <code>Set.of()</code> for authorities (roles aren't stored on the <code>REFRESH_TOKENS</code> row — noted in a code comment). Any role-based authorization added later would silently fail for refreshed sessions.</p>
-          <p><strong>Fix:</strong> persist roles on the refresh row (or re-fetch from UserService on refresh) and re-populate the claim.</p>
+          <h4>2 · Single static admin credential <span class="badge put">Medium</span></h4>
+          <p>The admin console authenticates against one <code>ADMIN_USERNAME</code>/<code>ADMIN_PASSWORD</code> env pair (constant-time compared, rate-limited 5/min, 8-hour token — good). But it's a single shared secret with no MFA, per-admin identity, or audit of admin actions beyond logs. <strong>Fix:</strong> per-admin accounts, MFA, and an admin-action audit trail before exposing the console beyond a trusted network.</p>
         </div>
         <div class="card">
-          <h4>2 · Broad Kafka deserialization trust <span class="badge put">Medium</span></h4>
-          <p>Most consumers set <code>spring.json.trusted.packages=*</code>. Acceptable on a closed internal bus, but risky if the bus is ever shared. <strong>Fix:</strong> narrow to <code>com.org.events.*</code> (as UserService already does for login events).</p>
-        </div>
-        <div class="card">
-          <h4>3 · Secret management <span class="badge delete">High</span></h4>
-          <p>The RSA <strong>private signing key</strong> is loaded from <code>classpath:keys/gateway-private.pem</code>, and DB/Google/AES secrets come from per-service <code>.env</code> files. <strong>Fix:</strong> move to a secret manager/KMS; never bake keys into JARs; rotate the notes key with envelope encryption.</p>
-        </div>
-        <div class="card">
-          <h4>Other security notes <span class="badge patch">Low/Med</span></h4>
-          <p><code>/user/validate-user</code> is <code>permitAll</code> (intended gateway-only — restrict by network/mTLS). The user JWT is propagated to downstream services rather than using short-lived service tokens. Consider audience/issuer validation enforcement on resource servers.</p>
+          <h4>4 · Secrets &amp; internal trust <span class="badge put">Medium</span></h4>
+          <p>The gateway signing key is now env/volume-only (good), but DB/Google/AES/Razorpay/admin secrets still live in a root <code>.env</code>. <code>/user/validate-user</code> is <code>permitAll</code> on the user service (denied at the gateway, but reachable service-side) and the user JWT is propagated downstream rather than using short-lived service tokens. <strong>Fix:</strong> secret manager/KMS; restrict <code>validate-user</code> by network/mTLS; consider service tokens + issuer/audience enforcement.</p>
         </div>
 
         <h2 id="data-debt">Data &amp; schema</h2>
@@ -58,8 +61,8 @@
           <p>Every service runs <code>spring.jpa.hibernate.ddl-auto=update</code>. This is convenient in dev but unsafe in production — it can't drop/rename safely, offers no review trail, and risks divergence. <strong>Fix:</strong> adopt Flyway or Liquibase, switch to <code>validate</code>, and baseline the current schema.</p>
         </div>
         <div class="card">
-          <h4>5 · One DB credential set <span class="badge put">Medium</span></h4>
-          <p>All services share <code>DB_URL/USERNAME/PASSWORD</code>. "Database per service" is logical only; nothing prevents cross-table reads, undermining isolation. <strong>Fix:</strong> separate schemas/databases with per-service users and least-privilege grants.</p>
+          <h4>3 · One DB credential set <span class="badge put">Medium</span></h4>
+          <p>Databases are now physically separate (one per service in the shared Postgres instance), but all services connect with the <em>same</em> <code>DB_USERNAME</code>/<code>DB_PASSWORD</code>, so any service could still reach another's database. <strong>Fix:</strong> per-service DB users with grants scoped to their own database.</p>
         </div>
 
         <h2 id="reliability-debt">Reliability &amp; messaging</h2>
@@ -72,10 +75,16 @@
           <p>The 2s poller has no locking; running multiple instances of a producing service could double-publish (consumers absorb it, but it's wasteful). <strong>Fix:</strong> use <code>SELECT … FOR UPDATE SKIP LOCKED</code> or a leader/sharded poller when scaling horizontally.</p>
         </div>
 
+        <h2 id="payments-debt">Payments</h2>
+        <div class="card">
+          <h4>6 · Refunds &amp; edge cases are manual <span class="badge put">Medium</span></h4>
+          <p>The payment flow is defensively built (never blocks booking, idempotent webhook, best-effort link cancel). But <strong>refunds are entirely manual</strong> via the Razorpay dashboard, and a payment that lands on an already-cancelled appointment is only <em>logged</em> ("manual refund may be required"), not reconciled. <strong>Fix:</strong> an automated refund path (or at least an alert/queue) for over-payments, and a reconciliation report of PAID-vs-appointment-status mismatches.</p>
+        </div>
+
         <h2 id="ops-debt">Operations &amp; tooling</h2>
         <div class="card">
-          <h4>7 · No containers, CI, or health probes <span class="badge put">Medium</span></h4>
-          <p>No Dockerfiles, Compose, K8s manifests, or CI pipeline; Spring Boot Actuator isn't wired, so there are no <code>/health</code>/<code>/ready</code> endpoints for orchestration. <strong>Fix:</strong> add Actuator, a Compose file for local infra, per-service images, and a CI build running <code>mvn verify</code>.</p>
+          <h4>7 · CI, replication, and TLS <span class="badge put">Medium</span></h4>
+          <p>Docker Compose, per-service images, healthchecks and Actuator are now in place. Still open: <strong>no CI pipeline</strong> (nothing runs <code>mvn verify</code> on push); Kafka runs a single node at <strong>replication factor 1</strong> (no redundancy); and the gateway is plain <strong>HTTP</strong> — payments, webhooks, and the <code>SameSite=None</code> cookie should run behind TLS (nginx + Let's Encrypt). <strong>Fix:</strong> add CI, raise replication for a multi-broker cluster, and terminate TLS at the edge.</p>
         </div>
 
         <h2 id="quality-debt">Code quality</h2>
