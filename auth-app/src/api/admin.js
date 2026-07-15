@@ -52,6 +52,24 @@ export async function getServicesHealth() {
   return data;
 }
 
+// ── Kafka / DLQ monitoring (gateway AdminClient) ──
+export async function getKafkaOverview() {
+  const { data } = await adminApi.get("/admin/kafka");
+  return data;
+}
+
+export async function getDltMessages(topic, limit = 20) {
+  const { data } = await adminApi.get(`/admin/kafka/dlt/${encodeURIComponent(topic)}/messages`, {
+    params: { limit },
+  });
+  return data;
+}
+
+export async function replayDlt(topic) {
+  const { data } = await adminApi.post(`/admin/kafka/dlt/${encodeURIComponent(topic)}/replay`);
+  return data;
+}
+
 // ── User management ──
 export async function getUsers() {
   const { data } = await adminApi.get("/user/admin/users");

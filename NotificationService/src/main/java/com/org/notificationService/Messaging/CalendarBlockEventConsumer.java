@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.api.client.googleapis.json.GoogleJsonResponseException;
 import com.org.events.Therapist.TherapistEvent;
 import com.org.events.TherapistAvailability.CalendarBlockEvent;
 import com.org.notificationService.Entity.AvailabilityBlockCalendarEvent;
@@ -41,9 +42,11 @@ public class CalendarBlockEventConsumer {
 
     private static final Logger logger = LoggerFactory.getLogger(CalendarBlockEventConsumer.class);
 
+    // Failures must propagate so the DefaultErrorHandler can retry and
+    // dead-letter them to <topic>.DLT — see AppointmentEventConsumer
     @KafkaListener(topics = topic, groupId = "${spring.kafka.consumer.group-id}")
     @Transactional
-    public void listen(JsonNode payload) {
+    public void listen(JsonNode payload) throws Exception {
 
         String eventType = payload.get("eventType").asText();
 
@@ -71,7 +74,7 @@ public class CalendarBlockEventConsumer {
         logger.info("Upserted TherapistProjection for therapistId={} timezone={} email={}", event.getTherapistId(), event.getTimezone(), projection.getEmail());
     }
 
-    private void createBlock(CalendarBlockEvent calendarBlockEvent) {
+    private void createBlock(CalendarBlockEvent calendarBlockEvent) throws Exception {
 
         if (!Boolean.TRUE.equals(calendarBlockEvent.getSyncToGoogleCalendar())) {
             return;
@@ -90,24 +93,20 @@ public class CalendarBlockEventConsumer {
                 })
                 .orElse(FALLBACK_ZONE);
 
-        try {
-            String googleCalendarEventId = googleCalendarService.createAvailabilityBlockEvent(
-            		calendarBlockEvent.getReason() != null && !calendarBlockEvent.getReason().isBlank() ? calendarBlockEvent.getReason() : "Unavailable",
-                    "Blocked time",
-                    calendarBlockEvent.getStartTime(),
-                    calendarBlockEvent.getEndTime(),
-                    zone);
+        String googleCalendarEventId = googleCalendarService.createAvailabilityBlockEvent(
+        		calendarBlockEvent.getReason() != null && !calendarBlockEvent.getReason().isBlank() ? calendarBlockEvent.getReason() : "Unavailable",
+                "Blocked time",
+                calendarBlockEvent.getStartTime(),
+                calendarBlockEvent.getEndTime(),
+                zone);
 
-            AvailabilityBlockCalendarEvent mapping = new AvailabilityBlockCalendarEvent();
-            mapping.setBlockId(calendarBlockEvent.getBlockId());
-            mapping.setGoogleCalendarEventId(googleCalendarEventId);
-            availabilityBlockCalendarEventRepository.save(mapping);
-        } catch (Exception e) {
-            logger.error("Failed to create Google Calendar block for blockId={}", calendarBlockEvent.getBlockId(), e);
-        }
+        AvailabilityBlockCalendarEvent mapping = new AvailabilityBlockCalendarEvent();
+        mapping.setBlockId(calendarBlockEvent.getBlockId());
+        mapping.setGoogleCalendarEventId(googleCalendarEventId);
+        availabilityBlockCalendarEventRepository.save(mapping);
     }
 
-    private void deleteBlock(CalendarBlockEvent calendarBlockEvent) {
+    private void deleteBlock(CalendarBlockEvent calendarBlockEvent) throws Exception {
 
         Optional<AvailabilityBlockCalendarEvent> mapping = availabilityBlockCalendarEventRepository.findById(calendarBlockEvent.getBlockId());
         if (mapping.isEmpty()) {
@@ -117,9 +116,13 @@ public class CalendarBlockEventConsumer {
 
         try {
             googleCalendarService.deleteCalendarEvent(mapping.get().getGoogleCalendarEventId(), false);
-            availabilityBlockCalendarEventRepository.delete(mapping.get());
-        } catch (Exception e) {
-            logger.error("Failed to delete Google Calendar block for blockId={}", calendarBlockEvent.getBlockId(), e);
+        } catch (GoogleJsonResponseException e) {
+            // already deleted on Google's side — treat as success, clean up mapping
+            if (e.getStatusCode() != 404 && e.getStatusCode() != 410) {
+                throw e;
+            }
+            logger.warn("Calendar block already gone for blockId={}; removing mapping", calendarBlockEvent.getBlockId());
         }
+        availabilityBlockCalendarEventRepository.delete(mapping.get());
     }
 }

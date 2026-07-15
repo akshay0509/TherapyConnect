@@ -621,3 +621,62 @@
   background: rgba(239, 68, 68, 0.3);
   border-color: rgba(239, 68, 68, 0.5);
 }
+
+/* ── Kafka / DLQ ─────────────────────────────────────────────── */
+.groupsSubTitle {
+  margin: 22px 0 10px;
+  font-family: 'Syne', sans-serif;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.dialogWide {
+  width: 760px;
+  max-width: 94vw;
+}
+
+.dltMsgList {
+  max-height: 55vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.dltMsg {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+
+.dltMsgMeta {
+  font-size: 0.75rem;
+  color: #64748b;
+  margin-bottom: 6px;
+}
+
+.dltMsgError {
+  font-size: 0.8rem;
+  color: #f87171;
+  margin-bottom: 8px;
+  word-break: break-word;
+}
+
+.dltPayload {
+  margin: 0;
+  padding: 10px;
+  background: rgba(0,0,0,0.35);
+  border-radius: 8px;
+  font-size: 0.72rem;
+  line-height: 1.5;
+  color: #cbd5e1;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 180px;
+  overflow-y: auto;
+}

@@ -26,8 +26,11 @@ public class KafkaConsumerConfig {
     DefaultErrorHandler analyticsErrorHandler() {
         DeadLetterPublishingRecoverer recoverer = new DeadLetterPublishingRecoverer(
                 kafkaTemplate,
+                // partition -1 lets the producer pick: the auto-created .DLT topic
+                // has fewer partitions than the 3-partition source topics, so
+                // targeting record.partition() fails for partitions 1 and 2
                 (ConsumerRecord<?, ?> record, Exception ex) ->
-                        new org.apache.kafka.common.TopicPartition(record.topic() + ".DLT", record.partition()));
+                        new org.apache.kafka.common.TopicPartition(record.topic() + ".DLT", -1));
 
         return new DefaultErrorHandler(recoverer, new FixedBackOff(5000L, 2L));
     }

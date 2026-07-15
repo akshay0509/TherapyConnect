@@ -5,10 +5,13 @@ import {
   adminResetPassword,
   getAnalyticsHealth,
   getAppointmentHealth,
+  getDltMessages,
+  getKafkaOverview,
   getLoginAudit,
   getServicesHealth,
   getUsers,
   isAdminLoggedIn,
+  replayDlt,
   replayOutbox,
   updateUserStatus,
 } from "../api/admin";
@@ -76,6 +79,14 @@ export default function AdminPage() {
   const [audit, setAudit] = useState([]);
   const [auditError, setAuditError] = useState("");
   const [auditFilter, setAuditFilter] = useState("all"); // "all" | "success" | "failure"
+
+  // Kafka / DLQ
+  const [kafka, setKafka] = useState(null);
+  const [kafkaError, setKafkaError] = useState("");
+  const [dltView, setDltView] = useState(null); // { topic, loading, messages, error }
+  const [dltReplayTarget, setDltReplayTarget] = useState(null); // topic awaiting confirm
+  const [dltReplaying, setDltReplaying] = useState(false);
+  const [dltResult, setDltResult] = useState(null); // { type, message }
 
   const handleAuthError = useCallback(
     (err) => {
@@ -145,12 +156,25 @@ export default function AdminPage() {
     }
   }, [handleAuthError]);
 
+  const fetchKafka = useCallback(async () => {
+    setKafkaError("");
+    try {
+      const data = await getKafkaOverview();
+      setKafka(data);
+    } catch (err) {
+      if (handleAuthError(err)) return;
+      setKafka(null);
+      setKafkaError(err.response?.data?.error || "Failed to load Kafka status.");
+    }
+  }, [handleAuthError]);
+
   const refreshAll = useCallback(() => {
     fetchHealth();
     fetchServices();
     fetchUsers();
     fetchAudit();
-  }, [fetchHealth, fetchServices, fetchUsers, fetchAudit]);
+    fetchKafka();
+  }, [fetchHealth, fetchServices, fetchUsers, fetchAudit, fetchKafka]);
 
   useEffect(() => {
     if (!isAdminLoggedIn()) {
@@ -201,6 +225,40 @@ export default function AdminPage() {
 
   function requestUserAction(user, field, value, label) {
     setPendingAction({ user, field, value, label });
+  }
+
+  // ── DLQ actions ──────────────────────────────────────────────────
+  async function openDltMessages(topic) {
+    setDltView({ topic, loading: true, messages: [], error: "" });
+    try {
+      const messages = await getDltMessages(topic, 20);
+      setDltView({ topic, loading: false, messages, error: "" });
+    } catch (err) {
+      if (handleAuthError(err)) return;
+      setDltView({
+        topic,
+        loading: false,
+        messages: [],
+        error: err.response?.data?.error || "Failed to load messages.",
+      });
+    }
+  }
+
+  async function confirmDltReplay() {
+    const topic = dltReplayTarget;
+    setDltReplayTarget(null);
+    setDltReplaying(true);
+    setDltResult(null);
+    try {
+      const result = await replayDlt(topic);
+      setDltResult({ type: "success", message: `Replayed ${result.replayed} message(s) from ${topic}.` });
+      setTimeout(fetchKafka, 2000);
+    } catch (err) {
+      if (handleAuthError(err)) return;
+      setDltResult({ type: "failure", message: err.response?.data?.error || "Replay failed. See logs." });
+    } finally {
+      setDltReplaying(false);
+    }
   }
 
   function openResetDialog(user) {
@@ -330,6 +388,164 @@ export default function AdminPage() {
             "No events processed yet"
           )}
         </div>
+      </div>
+    );
+  }
+
+  // ── Kafka / DLQ card ─────────────────────────────────────────────
+  function renderKafkaCard() {
+    if (!kafka) {
+      return (
+        <div className={`${styles.card} ${styles.cardNeutral}`}>
+          <div className={styles.cardLabel}>Kafka / Dead Letters</div>
+          <div className={`${styles.statusBadge} ${styles.neutral}`}>
+            <span className={`${styles.statusDot} ${styles.dotNeutral}`} />
+            {kafkaError ? "UNREACHABLE" : "No data"}
+          </div>
+          {kafkaError && <div className={styles.cardDetail}>{kafkaError}</div>}
+        </div>
+      );
+    }
+
+    const pending = kafka.totalPending ?? 0;
+    const totalLag = (kafka.groups || []).reduce((sum, g) => sum + (g.totalLag || 0), 0);
+    const hasDead = pending > 0;
+    const hasLag = totalLag > 0;
+    const cardClass = hasDead ? styles.cardError : hasLag ? styles.cardWarn : styles.cardOk;
+    const badgeClass = hasDead ? styles.error : hasLag ? styles.warn : styles.ok;
+    const dotClass = hasDead ? styles.dotError : hasLag ? styles.dotWarn : styles.dotOk;
+    const label = hasDead
+      ? `${pending} DEAD-LETTERED`
+      : hasLag
+        ? `LAG: ${totalLag} EVENT${totalLag !== 1 ? "S" : ""}`
+        : "ALL CLEAR";
+
+    return (
+      <div className={`${styles.card} ${cardClass}`}>
+        <div className={styles.cardLabel}>Kafka / Dead Letters</div>
+        <div className={`${styles.statusBadge} ${badgeClass}`}>
+          <span className={`${styles.statusDot} ${dotClass}`} />
+          {label}
+        </div>
+        <div className={styles.cardDetail}>
+          {(kafka.dlts || []).length} DLT topic(s) · {(kafka.groups || []).length} consumer group(s)
+          {hasDead && (
+            <>
+              <br />
+              <strong style={{ color: "#dc2626" }}>Unhandled failures — see Dead Letter Queues below</strong>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ── DLQ tables ───────────────────────────────────────────────────
+  function renderKafkaSection() {
+    const dlts = kafka?.dlts || [];
+    const groups = kafka?.groups || [];
+    const stableStates = ["Stable", "STABLE"];
+    return (
+      <div className={styles.tablePanel}>
+        {kafkaError && <div className={styles.fetchError}>{kafkaError}</div>}
+        {dltResult && (
+          <div className={`${styles.replayResult} ${styles[dltResult.type]}`}>{dltResult.message}</div>
+        )}
+        <table className={styles.table}>
+          <thead>
+            <tr>
+              <th>DLT Topic</th>
+              <th>Pending</th>
+              <th>Total</th>
+              <th>Last Failure</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {dlts.map((d) => (
+              <tr key={d.topic}>
+                <td className={styles.cellUsername}>{d.topic}</td>
+                <td>
+                  {d.pending > 0 ? (
+                    <span className={`${styles.pill} ${styles.pillDisabled}`}>{d.pending}</span>
+                  ) : (
+                    <span className={`${styles.pill} ${styles.pillActive}`}>0</span>
+                  )}
+                </td>
+                <td className={styles.cellMuted}>{d.total}</td>
+                <td className={styles.cellMuted}>
+                  {d.lastMessageAt ? (
+                    <>
+                      {formatDateTime(d.lastMessageAt)}{" "}
+                      <span className={styles.cellFaint}>({timeAgo(d.lastMessageAt)})</span>
+                    </>
+                  ) : (
+                    "—"
+                  )}
+                </td>
+                <td>
+                  <div className={styles.rowActions}>
+                    <button className={styles.miniBtn} onClick={() => openDltMessages(d.topic)}>
+                      View
+                    </button>
+                    <button
+                      className={`${styles.miniBtn} ${styles.miniBtnOk}`}
+                      disabled={dltReplaying || d.pending === 0}
+                      onClick={() => setDltReplayTarget(d.topic)}
+                    >
+                      {dltReplaying ? "…" : "Replay"}
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+            {!dlts.length && (
+              <tr>
+                <td colSpan={5} className={styles.emptyNote}>
+                  No dead-letter topics exist yet — nothing has ever failed processing.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+        <div className={styles.groupsSubTitle}>Consumer Groups</div>
+        <table className={styles.table}>
+          <thead>
+            <tr>
+              <th>Group</th>
+              <th>State</th>
+              <th>Lag</th>
+              <th>Topics</th>
+            </tr>
+          </thead>
+          <tbody>
+            {groups.map((g) => (
+              <tr key={g.groupId}>
+                <td className={styles.cellUsername}>{g.groupId}</td>
+                <td>
+                  <span className={`${styles.pill} ${stableStates.includes(g.state) ? styles.pillActive : styles.pillLocked}`}>
+                    {g.state}
+                  </span>
+                </td>
+                <td>
+                  {g.totalLag > 0 ? (
+                    <span className={`${styles.pill} ${styles.pillLocked}`}>{g.totalLag}</span>
+                  ) : (
+                    <span className={styles.cellMuted}>0</span>
+                  )}
+                </td>
+                <td className={styles.cellMuted}>
+                  {(g.topics || []).map((t) => `${t.topic}${t.lag > 0 ? ` (+${t.lag})` : ""}`).join(", ") || "—"}
+                </td>
+              </tr>
+            ))}
+            {!groups.length && (
+              <tr>
+                <td colSpan={4} className={styles.emptyNote}>No consumer groups found.</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </div>
     );
   }
@@ -562,7 +778,14 @@ export default function AdminPage() {
           <div className={styles.cardsRow}>
             {renderOutboxCard()}
             {renderAnalyticsCard()}
+            {renderKafkaCard()}
           </div>
+        </div>
+
+        {/* Kafka / DLQ */}
+        <div className={styles.section}>
+          <div className={styles.sectionTitle}>Dead Letter Queues</div>
+          {renderKafkaSection()}
         </div>
 
         {/* User management */}
@@ -687,6 +910,59 @@ export default function AdminPage() {
               </button>
               <button className={styles.confirmBtn} onClick={confirmResetPassword} disabled={resetBusy}>
                 {resetBusy ? "Saving…" : "Reset Password"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* DLT messages viewer */}
+      {dltView && (
+        <div className={styles.overlay}>
+          <div className={`${styles.dialog} ${styles.dialogWide}`}>
+            <h3>Dead Letters · {dltView.topic}</h3>
+            {dltView.loading && <p>Loading…</p>}
+            {dltView.error && <div className={styles.fetchError}>{dltView.error}</div>}
+            {!dltView.loading && !dltView.error && !dltView.messages.length && (
+              <p>No pending messages — everything on this DLT has been replayed.</p>
+            )}
+            <div className={styles.dltMsgList}>
+              {dltView.messages.map((m) => (
+                <div key={`${m.partition}-${m.offset}`} className={styles.dltMsg}>
+                  <div className={styles.dltMsgMeta}>
+                    {formatDateTime(m.timestamp)} · partition {m.partition} · offset {m.offset}
+                    {m.key ? ` · key ${m.key}` : ""}
+                  </div>
+                  {m.exceptionMessage && <div className={styles.dltMsgError}>{m.exceptionMessage}</div>}
+                  <pre className={styles.dltPayload}>{m.payload}</pre>
+                </div>
+              ))}
+            </div>
+            <div className={styles.dialogActions}>
+              <button className={styles.cancelBtn} onClick={() => setDltView(null)}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirm DLT replay dialog */}
+      {dltReplayTarget && (
+        <div className={styles.overlay}>
+          <div className={styles.dialog}>
+            <h3>Confirm DLT Replay</h3>
+            <p>
+              Re-publish all pending messages from <strong>{dltReplayTarget}</strong> back to
+              the original topic. Consumers are idempotent — events that already succeeded
+              are skipped on redelivery.
+            </p>
+            <div className={styles.dialogActions}>
+              <button className={styles.cancelBtn} onClick={() => setDltReplayTarget(null)}>
+                Cancel
+              </button>
+              <button className={styles.confirmBtn} onClick={confirmDltReplay}>
+                Yes, Replay
               </button>
             </div>
           </div>

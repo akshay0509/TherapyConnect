@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.api.client.googleapis.json.GoogleJsonResponseException;
 import com.org.events.TherapistAppointment.AppointmentEvent;
 import com.org.notificationService.Entity.AppointmentCalendarEvent;
 import com.org.notificationService.Entity.ClientProjection;
@@ -50,9 +51,13 @@ public class AppointmentEventConsumer {
 
 	private static final Logger logger = LoggerFactory.getLogger(AppointmentEventConsumer.class);
 
+	// Failures must propagate: the container's DefaultErrorHandler retries
+	// (5s x 2) and then dead-letters to <topic>.DLT, where the admin dashboard
+	// can see and replay them. A catch-and-log here loses the event forever
+	// (this is how expired-Google-token failures went unnoticed for days).
 	@KafkaListener(topics = topic, groupId = "${spring.kafka.consumer.group-id}")
 	@Transactional
-	public void listen(JsonNode payload) {
+	public void listen(JsonNode payload) throws Exception {
 
 		logger.info("inside process of therapist-appointment-events..");
 
@@ -94,7 +99,7 @@ public class AppointmentEventConsumer {
 		return fallbackTherapistEmail;
 	}
 
-	private void createInvite(AppointmentEvent appointmentEvent) {
+	private void createInvite(AppointmentEvent appointmentEvent) throws Exception {
 
 		Optional<AppointmentCalendarEvent> existingCalendarEvent = appointmentCalendarEventRepository.findById(appointmentEvent.getAppointmentId());
 
@@ -103,40 +108,31 @@ public class AppointmentEventConsumer {
 			return;
 		}
 
-		Optional<ClientProjection> clientProjection = clientProjectionRepository.findById(appointmentEvent.getClientId());
-
-		if (clientProjection.isEmpty()) {
-			logger.error("Client not found. Skipping event. clientId={}", appointmentEvent.getClientId());
-			return;
-		}
+		ClientProjection clientProjection = clientProjectionRepository.findById(appointmentEvent.getClientId())
+				.orElseThrow(() -> new IllegalStateException(
+						"Client projection not found for clientId=" + appointmentEvent.getClientId()));
 
 		ZoneId zone = resolveZone(appointmentEvent.getTherapistId());
 
-		try {
+		String googleCalendarEventId = googleCalendarService.createAppointmentEvent(
+				clientProjection.getEmail(),
+				resolveTherapistEmail(appointmentEvent.getTherapistId()),
+				"Therapy Session",
+				"Appointment ID: " + appointmentEvent.getAppointmentId(),
+				appointmentEvent.getStartTime(),
+				appointmentEvent.getEndTime(),
+				appointmentEvent.getModeType(),
+				appointmentEvent.getAddress(),
+				zone
+				);
 
-			String googleCalendarEventId = googleCalendarService.createAppointmentEvent(
-					clientProjection.get().getEmail(),
-					resolveTherapistEmail(appointmentEvent.getTherapistId()),
-					"Therapy Session",
-					"Appointment ID: " + appointmentEvent.getAppointmentId(),
-					appointmentEvent.getStartTime(),
-					appointmentEvent.getEndTime(),
-					appointmentEvent.getModeType(),
-					appointmentEvent.getAddress(),
-					zone
-					);
-
-			AppointmentCalendarEvent appointmentCalendarEvent = new AppointmentCalendarEvent();
-			appointmentCalendarEvent.setAppointmentId(appointmentEvent.getAppointmentId());
-			appointmentCalendarEvent.setGoogleCalendarEventId(googleCalendarEventId);
-			appointmentCalendarEventRepository.save(appointmentCalendarEvent);
-		}
-		catch (Exception e) {
-			logger.error("Failed to create calendar event for appointmentId={}", appointmentEvent.getAppointmentId(), e);
-		}
+		AppointmentCalendarEvent appointmentCalendarEvent = new AppointmentCalendarEvent();
+		appointmentCalendarEvent.setAppointmentId(appointmentEvent.getAppointmentId());
+		appointmentCalendarEvent.setGoogleCalendarEventId(googleCalendarEventId);
+		appointmentCalendarEventRepository.save(appointmentCalendarEvent);
 	}
 
-	private void rescheduleInvite(AppointmentEvent appointmentEvent) {
+	private void rescheduleInvite(AppointmentEvent appointmentEvent) throws Exception {
 
 		Optional<AppointmentCalendarEvent> existingCalendarEvent = appointmentCalendarEventRepository.findById(appointmentEvent.getAppointmentId());
 
@@ -145,35 +141,27 @@ public class AppointmentEventConsumer {
 			return;
 		}
 
-		Optional<ClientProjection> clientProjection = clientProjectionRepository.findById(appointmentEvent.getClientId());
-
-		if (clientProjection.isEmpty()) {
-			logger.error("Client not found. Skipping reschedule event. clientId={}", appointmentEvent.getClientId());
-			return;
-		}
+		ClientProjection clientProjection = clientProjectionRepository.findById(appointmentEvent.getClientId())
+				.orElseThrow(() -> new IllegalStateException(
+						"Client projection not found for clientId=" + appointmentEvent.getClientId()));
 
 		ZoneId zone = resolveZone(appointmentEvent.getTherapistId());
 
-		try {
-			googleCalendarService.updateAppointmentEvent(
-					existingCalendarEvent.get().getGoogleCalendarEventId(),
-					clientProjection.get().getEmail(),
-					resolveTherapistEmail(appointmentEvent.getTherapistId()),
-					"Therapy Session",
-					"Appointment ID: " + appointmentEvent.getAppointmentId(),
-					appointmentEvent.getStartTime(),
-					appointmentEvent.getEndTime(),
-					appointmentEvent.getModeType(),
-					appointmentEvent.getAddress(),
-					zone
-					);
-		}
-		catch (Exception e) {
-			logger.error("Failed to update calendar event for appointmentId={}", appointmentEvent.getAppointmentId(), e);
-		}
+		googleCalendarService.updateAppointmentEvent(
+				existingCalendarEvent.get().getGoogleCalendarEventId(),
+				clientProjection.getEmail(),
+				resolveTherapistEmail(appointmentEvent.getTherapistId()),
+				"Therapy Session",
+				"Appointment ID: " + appointmentEvent.getAppointmentId(),
+				appointmentEvent.getStartTime(),
+				appointmentEvent.getEndTime(),
+				appointmentEvent.getModeType(),
+				appointmentEvent.getAddress(),
+				zone
+				);
 	}
 
-	private void cancelInvite(AppointmentEvent appointmentEvent) {
+	private void cancelInvite(AppointmentEvent appointmentEvent) throws Exception {
 
 		Optional<AppointmentCalendarEvent> mapping = appointmentCalendarEventRepository.findById(appointmentEvent.getAppointmentId());
 		if (mapping.isEmpty()) {
@@ -183,10 +171,14 @@ public class AppointmentEventConsumer {
 
 		try {
 			googleCalendarService.cancelAppointmentEvent(mapping.get().getGoogleCalendarEventId());
-			appointmentCalendarEventRepository.delete(mapping.get());
 		}
-		catch (Exception e) {
-			logger.error("Failed to cancel calendar event for appointmentId={}", appointmentEvent.getAppointmentId(), e);
+		catch (GoogleJsonResponseException e) {
+			// already deleted on Google's side — treat as success, clean up mapping
+			if (e.getStatusCode() != 404 && e.getStatusCode() != 410) {
+				throw e;
+			}
+			logger.warn("Calendar event already gone for appointmentId={}; removing mapping", appointmentEvent.getAppointmentId());
 		}
+		appointmentCalendarEventRepository.delete(mapping.get());
 	}
 }
