@@ -97,10 +97,17 @@ public class GoogleCalendarService {
 			}
 		} else {
 			existingEvent.setLocation(null);
+			// switching to online: the event has no Meet link yet, request one
+			if (existingEvent.getConferenceData() == null) {
+				existingEvent.setConferenceData(buildConferenceData());
+			}
 		}
 
+		// conferenceDataVersion=1 is required or the API silently ignores all
+		// conferenceData changes (both adding and removing a Meet link)
 		calendar.events()
 		.update("primary", googleCalendarEventId, existingEvent)
+		.setConferenceDataVersion(1)
 		.setSendUpdates("all")
 		.execute();
 
