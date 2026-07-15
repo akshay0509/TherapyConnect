@@ -30,10 +30,8 @@
             <tr><td><code>client-events</code></td><td>Client</td><td>Therapist, Notification, Analytics, Appointment</td><td>ClientEvent</td></tr>
             <tr><td><code>therapist-availability-events</code></td><td>Therapist</td><td>Appointment, Notification</td><td>AvailabilityEvent, AvailabilitySlots*Event, CalendarBlockEvent, DeliveryModeEvent, <strong>TherapistEvent</strong></td></tr>
             <tr><td><code>therapist-appointment-events</code></td><td>Appointment</td><td>Therapist, Notification, Analytics</td><td>AppointmentEvent</td></tr>
-            <tr><td><code>email-reminder-events</code></td><td>Therapist*</td><td>(reminder pipeline)</td><td>EmailReminderEvent</td></tr>
           </tbody>
         </table></div>
-        <p style="font-size:13px;color:var(--text-muted)">*Topic declared and a producer exists (<code>EmailReminderProducer</code>); the consuming reminder flow is minimal in the current tree.</p>
 
         <h2 id="flow">End-to-end event flow</h2>
         <div class="mermaid">

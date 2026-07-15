@@ -19,11 +19,6 @@ public class TopicsConfig {
 	}
 	
 	@Bean
-	NewTopic emailReminderTopic() {
-		return TopicBuilder.name("email-reminder-events").partitions(3).replicas(1).build();
-	}
-	
-	@Bean
 	NewTopic therapistAvailabilityTopic() {
 		return TopicBuilder.name("therapist-availability-events").partitions(3).replicas(1).build();
 	}

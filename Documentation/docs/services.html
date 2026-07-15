@@ -97,7 +97,7 @@
         <div class="kv">
           <dt>Owns (DB)</dt><dd><code>THERAPIST</code>, <code>THERAPIST_SERVICES</code>, <code>THERAPY_DELIVERY_MODE</code>, <code>THERAPIST_AVAILABILITY_RULES</code>, <code>THERAPIST_AVAILABILITY_OVERRIDES</code>, <code>THERAPIST_AVAILABILITY</code>, <code>SESSION_NOTES</code>, <code>CLIENT_NOTES</code>, <code>OUTBOX_EVENT</code></dd>
           <dt>Projections</dt><dd><code>THERAPIST_CLIENTS</code>, <code>AppointmentProjection</code></dd>
-          <dt>Produces</dt><dd><code>therapist-availability-events</code> (availability, delivery modes, <code>TherapistEvent</code> for created/payment-settings), <code>email-reminder-events</code></dd>
+          <dt>Produces</dt><dd><code>therapist-availability-events</code> (availability, delivery modes, <code>TherapistEvent</code> for created/payment-settings)</dd>
           <dt>Consumes</dt><dd><code>therapist-appointment-events</code>, <code>client-events</code></dd>
           <dt>Calls (REST)</dt><dd><code>client-service</code> (create client)</dd>
         </div>
