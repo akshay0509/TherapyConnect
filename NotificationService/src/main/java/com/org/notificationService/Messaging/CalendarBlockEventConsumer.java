@@ -48,7 +48,7 @@ public class CalendarBlockEventConsumer {
         String eventType = payload.get("eventType").asText();
 
         switch (eventType) {
-            case "TherapistCreated" -> upsertProjection(objectMapper.convertValue(payload, TherapistEvent.class));
+            case "TherapistCreated", "TherapistPaymentSettingsUpdated" -> upsertProjection(objectMapper.convertValue(payload, TherapistEvent.class));
             case "CalendarBlockCreated" -> createBlock(objectMapper.convertValue(payload, CalendarBlockEvent.class));
             case "CalendarBlockDeleted" -> deleteBlock(objectMapper.convertValue(payload, CalendarBlockEvent.class));
             default -> logger.debug("Skipping unsupported availability eventType={}", eventType);
@@ -62,8 +62,13 @@ public class CalendarBlockEventConsumer {
                 .orElse(new TherapistProjection());
         projection.setTherapistId(event.getTherapistId());
         projection.setTimezone(event.getTimezone());
+        // replayed events from before the email field existed carry no email —
+        // never wipe a value that is already projected
+        if (event.getEmail() != null && !event.getEmail().isBlank()) {
+            projection.setEmail(event.getEmail());
+        }
         therapistProjectionRepository.save(projection);
-        logger.info("Upserted TherapistProjection for therapistId={} timezone={}", event.getTherapistId(), event.getTimezone());
+        logger.info("Upserted TherapistProjection for therapistId={} timezone={} email={}", event.getTherapistId(), event.getTimezone(), projection.getEmail());
     }
 
     private void createBlock(CalendarBlockEvent calendarBlockEvent) {

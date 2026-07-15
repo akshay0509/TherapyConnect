@@ -12,4 +12,5 @@ public class TherapistProjection {
     @Id
     private String therapistId;
     private String timezone;
+    private String email;
 }

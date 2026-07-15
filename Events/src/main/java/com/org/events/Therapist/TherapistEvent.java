@@ -13,6 +13,7 @@ public class TherapistEvent {
 	private LocalDateTime occurredAt;
 	private String therapistId;
 	private String timezone;
+	private String email;
 	private Boolean paymentEnabled;
 
 	public TherapistEvent() {

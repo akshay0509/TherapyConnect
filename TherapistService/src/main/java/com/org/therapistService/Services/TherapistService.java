@@ -118,6 +118,7 @@ public class TherapistService {
 		event.setEventType("TherapistCreated");
 		event.setTherapistId(saved.getTherapistId());
 		event.setTimezone(saved.getTimezone());
+		event.setEmail(saved.getEmail());
 		event.setPaymentEnabled(saved.isPaymentEnabled());
 		outboxService.saveOutboxEvent("THERAPIST_AVAILABILITY", saved.getTherapistId(), "TherapistCreated", event);
 
@@ -134,6 +135,7 @@ public class TherapistService {
 		event.setEventType("TherapistPaymentSettingsUpdated");
 		event.setTherapistId(saved.getTherapistId());
 		event.setTimezone(saved.getTimezone());
+		event.setEmail(saved.getEmail());
 		event.setPaymentEnabled(saved.isPaymentEnabled());
 		outboxService.saveOutboxEvent("THERAPIST_AVAILABILITY", saved.getTherapistId(), "TherapistPaymentSettingsUpdated", event);
 

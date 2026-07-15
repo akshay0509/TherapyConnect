@@ -41,8 +41,9 @@ public class AppointmentEventConsumer {
 	@Autowired
 	AppointmentCalendarEventRepository appointmentCalendarEventRepository;
 
-	@Value("${google.calendar.therapist-email}")
-	private String therapistEmail;
+	// fallback only — the real email comes from TherapistProjection per therapist
+	@Value("${google.calendar.therapist-email:}")
+	private String fallbackTherapistEmail;
 
 	private static final String topic = "therapist-appointment-events";
 	private static final ZoneId FALLBACK_ZONE = ZoneId.of("Asia/Kolkata");
@@ -82,6 +83,17 @@ public class AppointmentEventConsumer {
 		}
 	}
 
+	private String resolveTherapistEmail(String therapistId) {
+		Optional<String> projectedEmail = therapistProjectionRepository.findById(therapistId)
+				.map(TherapistProjection::getEmail)
+				.filter(email -> !email.isBlank());
+		if (projectedEmail.isPresent()) {
+			return projectedEmail.get();
+		}
+		logger.warn("No email in TherapistProjection for therapistId={}; using configured fallback", therapistId);
+		return fallbackTherapistEmail;
+	}
+
 	private void createInvite(AppointmentEvent appointmentEvent) {
 
 		Optional<AppointmentCalendarEvent> existingCalendarEvent = appointmentCalendarEventRepository.findById(appointmentEvent.getAppointmentId());
@@ -104,7 +116,7 @@ public class AppointmentEventConsumer {
 
 			String googleCalendarEventId = googleCalendarService.createAppointmentEvent(
 					clientProjection.get().getEmail(),
-					therapistEmail,
+					resolveTherapistEmail(appointmentEvent.getTherapistId()),
 					"Therapy Session",
 					"Appointment ID: " + appointmentEvent.getAppointmentId(),
 					appointmentEvent.getStartTime(),
@@ -146,7 +158,7 @@ public class AppointmentEventConsumer {
 			googleCalendarService.updateAppointmentEvent(
 					existingCalendarEvent.get().getGoogleCalendarEventId(),
 					clientProjection.get().getEmail(),
-					therapistEmail,
+					resolveTherapistEmail(appointmentEvent.getTherapistId()),
 					"Therapy Session",
 					"Appointment ID: " + appointmentEvent.getAppointmentId(),
 					appointmentEvent.getStartTime(),

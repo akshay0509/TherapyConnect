@@ -2,6 +2,7 @@ package com.org.notificationService.Services;
 
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -141,10 +142,17 @@ public class GoogleCalendarService {
 		logger.info("calendar event deleted. eventId={}", googleCalendarEventId);
 	}
 
+	// a blank email would make the Calendar API reject the whole insert, so
+	// missing attendees are skipped rather than sent empty
 	private List<EventAttendee> buildAttendees(String clientEmail, String therapistEmail) {
-		EventAttendee client = new EventAttendee().setEmail(clientEmail);
-		EventAttendee therapist = new EventAttendee().setEmail(therapistEmail);
-		return List.of(client, therapist);
+		List<EventAttendee> attendees = new ArrayList<>();
+		if (clientEmail != null && !clientEmail.isBlank()) {
+			attendees.add(new EventAttendee().setEmail(clientEmail));
+		}
+		if (therapistEmail != null && !therapistEmail.isBlank()) {
+			attendees.add(new EventAttendee().setEmail(therapistEmail));
+		}
+		return attendees;
 	}
 
 	private ConferenceData buildConferenceData() {
