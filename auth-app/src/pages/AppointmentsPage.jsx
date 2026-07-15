@@ -203,6 +203,7 @@ export default function AppointmentsPage() {
   const [reschedWeekStart, setReschedWeekStart] = useState(() => getWeekStart(new Date()));
   const [reschedSelectedDate, setReschedSelectedDate] = useState(null);
   const [reschedNewSlot, setReschedNewSlot] = useState(null);
+  const [reschedModeId, setReschedModeId] = useState("");
   const [reschedReason, setReschedReason] = useState("");
   const [reschedLoading, setReschedLoading] = useState(false);
   const [reschedError, setReschedError] = useState(null);
@@ -423,9 +424,12 @@ export default function AppointmentsPage() {
   };
 
   const openReschedule = (slot) => {
+    // terminal appointments can't be rescheduled (backend rejects them too)
+    if (["COMPLETED", "CANCELLED", "ABANDONED"].includes(slot.appointmentStatus)) return;
     setPanelSlot(slot);
     setReschedWeekStart(getWeekStart(new Date()));
     setReschedSelectedDate(null); setReschedNewSlot(null);
+    setReschedModeId("");
     setReschedReason(""); setReschedError(null);
     setPanel("reschedule");
   };
@@ -500,6 +504,21 @@ export default function AppointmentsPage() {
     }).sort((a,b) => new Date(a.startTime) - new Date(b.startTime));
   }, [reschedSelectedDate, slotsByDay, appointmentsByDay, panelSlot]);
 
+  const modesForSlot = (slot) => slot?.serviceId
+    ? allModes.filter(m => m.serviceId === slot.serviceId && m.isActive)
+    : allModes.filter(m => m.isActive);
+
+  const reschedModes = useMemo(() => reschedNewSlot ? modesForSlot(reschedNewSlot) : [], [reschedNewSlot, allModes]);
+
+  const selectReschedSlot = (s) => {
+    setReschedNewSlot(s);
+    // keep the appointment's current mode when the new slot's service still
+    // offers it; otherwise fall back to the slot's own default mode
+    const modes = modesForSlot(s);
+    const keep = modes.find(m => m.modeId === panelSlot?.modeId) || modes.find(m => m.modeId === s.modeId);
+    setReschedModeId(keep ? keep.modeId : (modes.length === 1 ? modes[0].modeId : ""));
+  };
+
   const handleOverrideDelete = async () => {
     if (!overrideRange?.overrideId) return;
     setOverrideDeleteLoading(true); setOverrideError(null);
@@ -549,9 +568,10 @@ export default function AppointmentsPage() {
 
   const handleReschedule = async () => {
     if (!reschedNewSlot) { setReschedError("Please select a new slot."); return; }
+    if (!reschedModeId) { setReschedError("Please select a delivery mode."); return; }
     setReschedLoading(true); setReschedError(null);
     try {
-      await rescheduleAppointment({ appointmentId: panelSlot.appointmentId, therapistId: panelSlot.therapistId, newSlotId: reschedNewSlot.slotId, reason: reschedReason || undefined });
+      await rescheduleAppointment({ appointmentId: panelSlot.appointmentId, therapistId: panelSlot.therapistId, newSlotId: reschedNewSlot.slotId, modeId: reschedModeId, reason: reschedReason || undefined });
       await reloadAll();
       setPanel(null);
     } catch (err) { setReschedError(err.message); }
@@ -853,7 +873,7 @@ export default function AppointmentsPage() {
                         {height > 36 && <span className={styles.bookedBlockClient}>{appt.clientName}</span>}
                         {height > 52 && <span className={styles.bookedBlockStatus} style={{ color: colors.text }}>{STATUS_ICON[appt.status]} {appt.status}{modeName ? ` · ${modeName}` : ""}</span>}
                       </div>
-                      {height > 40 && (
+                      {height > 40 && appt.status !== "COMPLETED" && (
                         <button className={styles.reschedBadge} onClick={e => { e.stopPropagation(); openReschedule(apptAsSlot); }} title="Reschedule">↺</button>
                       )}
                     </div>
@@ -1061,7 +1081,9 @@ export default function AppointmentsPage() {
                 {updateError && <div className={styles.errorBox}><span className={styles.errorIcon}>!</span>{updateError}</div>}
                 <div className={styles.formActions}>
                   <button className={styles.cancelBtn} onClick={() => setPanel(null)}>Cancel</button>
-                  <button className={styles.rescheduleActionBtn} onClick={() => openReschedule(panelSlot)}>↺ Reschedule</button>
+                  {!["COMPLETED", "CANCELLED", "ABANDONED"].includes(panelSlot.appointmentStatus) && (
+                    <button className={styles.rescheduleActionBtn} onClick={() => openReschedule(panelSlot)}>↺ Reschedule</button>
+                  )}
                   <button className={styles.submitBtn} onClick={handleUpdateStatus} disabled={updateLoading || !updateStatus || updateStatus === panelSlot.appointmentStatus}>
                     {updateLoading ? <span className={styles.btnSpinner}/> : "Save"}
                   </button>
@@ -1114,7 +1136,7 @@ export default function AppointmentsPage() {
                         {reschedDaySlots.map(s=>{
                           const modeName = modeMap[s.modeId]?.displayName ?? s.modeId ?? "";
                           return (
-                            <button key={s.slotId} type="button" className={`${styles.reschedSlotBtn} ${reschedNewSlot?.slotId===s.slotId?styles.reschedSlotBtnActive:""}`} onClick={()=>setReschedNewSlot(s)}>
+                            <button key={s.slotId} type="button" className={`${styles.reschedSlotBtn} ${reschedNewSlot?.slotId===s.slotId?styles.reschedSlotBtnActive:""}`} onClick={()=>selectReschedSlot(s)}>
                               {formatTime(s.startTime)} – {formatTime(s.endTime)}
                               {modeName && <span className={styles.reschedSlotType}>{modeName}</span>}
                             </button>
@@ -1124,13 +1146,26 @@ export default function AppointmentsPage() {
                     )}
                   </div>
                 )}
+                {reschedNewSlot && (
+                  <div className={styles.field}><label className={styles.label}>Delivery Mode</label>
+                    <ModeDropdown modes={reschedModes} value={reschedModeId} onChange={setReschedModeId} />
+                    {reschedModeId && reschedModeId !== panelSlot.modeId && modeMap[panelSlot.modeId] && (() => {
+                      const m = reschedModes.find(x => x.modeId === reschedModeId);
+                      return (
+                        <p className={styles.reschedNoSlots}>
+                          Switching from {modeMap[panelSlot.modeId].displayName}{m?.price != null ? ` · new fee ₹${parseFloat(m.price).toFixed(0)}` : ""}
+                        </p>
+                      );
+                    })()}
+                  </div>
+                )}
                 <div className={styles.field}><label className={styles.label}>Reason <span className={styles.optionalTag}>(optional)</span></label>
                   <textarea className={styles.reasonTextarea} rows={3} placeholder="Reason…" value={reschedReason} onChange={e=>setReschedReason(e.target.value)}/>
                 </div>
                 {reschedError && <div className={styles.errorBox}><span className={styles.errorIcon}>!</span>{reschedError}</div>}
                 <div className={styles.formActions}>
                   <button className={styles.cancelBtn} onClick={() => setPanel(null)}>Cancel</button>
-                  <button className={styles.submitBtn} onClick={handleReschedule} disabled={reschedLoading||!reschedNewSlot}>{reschedLoading?<span className={styles.btnSpinner}/>:"Confirm"}</button>
+                  <button className={styles.submitBtn} onClick={handleReschedule} disabled={reschedLoading||!reschedNewSlot||!reschedModeId}>{reschedLoading?<span className={styles.btnSpinner}/>:"Confirm"}</button>
                 </div>
               </div>
             </div>
