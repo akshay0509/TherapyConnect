@@ -103,8 +103,8 @@ updatedAt, cancelledBy, reason</code></pre>
 
         <details class="collapse"><summary><code>TherapistEvent</code> — topic <code>therapist-availability-events</code></summary>
           <div class="collapse-body">
-            <p>Types: <code>TherapistCreated</code>, <code>TherapistPaymentSettingsUpdated</code>. Fields: eventId, eventType, occurredAt, therapistId, <code>timezone</code>, <code>paymentEnabled</code>.</p>
-            <p><strong>Consumed by:</strong> Appointment's <code>TherapistPaymentSettingsConsumer</code> (group <code>appointment-therapist-payment-projection-group</code>) — upserts <code>THERAPIST_PAYMENT_PROJECTION</code> so booking knows whether to create Razorpay links.</p>
+            <p>Types: <code>TherapistCreated</code>, <code>TherapistPaymentSettingsUpdated</code>. Fields: eventId, eventType, occurredAt, therapistId, <code>timezone</code>, <code>email</code>, <code>paymentEnabled</code>.</p>
+            <p><strong>Consumed by:</strong> Appointment's <code>TherapistPaymentSettingsConsumer</code> (group <code>appointment-therapist-payment-projection-group</code>) — upserts <code>THERAPIST_PAYMENT_PROJECTION</code> so booking knows whether to create Razorpay links — and Notification, which upserts <code>THERAPIST_PROJECTION</code> (timezone + email) so calendar invites use the <em>therapist's own</em> email rather than a single env-configured address.</p>
           </div>
         </details>
 
@@ -134,9 +134,18 @@ public void publishPendingEvents() {
 }</code></pre>
         <p>The producer publishes the raw <code>jsonb</code> payload keyed by <code>aggregateId</code>, so all events for one therapist/appointment land on the same partition and stay ordered. The Kafka send is awaited (<code>.get()</code>) so a failure is caught and the row stays unpublished.</p>
 
-        <div class="callout warn">
-          <div class="callout-title">⚠️ Delivery semantics &amp; DLQ</div>
-          <p>Delivery is <strong>at-least-once</strong>: a crash after Kafka ack but before the <code>published=true</code> commit will republish. Consumers are written to be idempotent (existence checks before applying). A dedicated dead-letter topic/DLT is referenced in Analytics' Kafka config but a full DLQ + retry policy is not yet implemented platform-wide — see <a href="technical-debt.html">Technical Debt</a>.</p>
+        <h2 id="dlq">Retry &amp; dead-letter pipeline</h2>
+        <p>Every consuming service (Appointment, Therapist, Notification, Analytics) registers a <code>KafkaConsumerConfig</code> with a Spring Kafka <code>DefaultErrorHandler</code>:</p>
+        <ol>
+          <li>A listener exception triggers <strong>2 retries with a 5s fixed backoff</strong> (<code>FixedBackOff(5000, 2)</code>).</li>
+          <li>If it still fails, a <code>DeadLetterPublishingRecoverer</code> publishes the record to <code>&lt;topic&gt;.DLT</code> (partition <code>-1</code> — producer-chosen, since auto-created DLTs have fewer partitions than the 3-partition source topics). Kafka's standard <code>kafka_dlt-original-topic</code> / <code>kafka_dlt-exception-message</code> headers travel with it.</li>
+          <li>Consumers are therefore written to <strong>let failures propagate</strong> rather than catch-and-log. Notification is the poster child: it previously swallowed Google Calendar errors (expired-token failures silently lost events for days); it now throws, retries, and dead-letters so the failure is visible and replayable.</li>
+        </ol>
+        <p><strong>Monitoring &amp; replay:</strong> the gateway's <code>KafkaMonitorService</code> powers the admin dashboard (<a href="api.html#admin-api"><code>/admin/kafka</code></a>): DLT depth, consumer-group lag, message peek, and one-click <strong>replay</strong> that republishes DLT messages to their original topic. "Pending" is measured against the committed offsets of the dedicated <code>dlt-replay</code> consumer group — topics are append-only, so the committed offset is what separates handled from unhandled. Replay is safe because every consumer is idempotent.</p>
+
+        <div class="callout info">
+          <div class="callout-title">Delivery semantics</div>
+          <p>Delivery is <strong>at-least-once</strong> end to end: a crash after Kafka ack but before the outbox's <code>published=true</code> commit republishes, and a DLT replay can redeliver an already-applied event. Consumers tolerate both via existence checks before applying.</p>
         </div>
 
         <h2 id="idempotency">Idempotency patterns in consumers</h2>

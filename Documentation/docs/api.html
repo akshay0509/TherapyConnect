@@ -436,6 +436,18 @@
           <summary><span class="badge post">POST</span><span class="path">/admin/outbox/replay</span><span class="ep-desc">Replay outbox events (appointment-service)</span></summary>
           <div class="ep-body"><p><strong>Request:</strong> <code>{ "from": "YYYY-MM-DDTHH:MM:SS" }</code> (defaults to midnight today; <code>400</code> on bad format). Re-publishes outbox events from that time — an operational recovery tool if a consumer missed messages.</p></div>
         </details>
+        <details class="endpoint">
+          <summary><span class="badge get">GET</span><span class="path">/admin/kafka</span><span class="ep-desc">Kafka / DLQ overview (gateway)</span></summary>
+          <div class="ep-body"><p><strong>Response:</strong> <code>{ dlts: [{ topic, originalTopic, pending, total, lastMessageAt }], groups: [{ groupId, state, totalLag, topics }], totalPending }</code>. "Pending" = DLT messages not yet replayed, measured against the <code>dlt-replay</code> group's committed offsets. Consumer-group lag is computed against main topics only. <code>500 { error }</code> if Kafka is unreachable.</p></div>
+        </details>
+        <details class="endpoint">
+          <summary><span class="badge get">GET</span><span class="path">/admin/kafka/dlt/{topic}/messages</span><span class="ep-desc">Peek pending DLT messages</span></summary>
+          <div class="ep-body"><p><strong>Query:</strong> <code>?limit</code> (default 20, max 50) · <strong>Response:</strong> oldest-first list of <code>{ partition, offset, timestamp, key, payload (truncated at 4000 chars), exceptionMessage, originalTopic }</code> — the exception message comes from the <code>kafka_dlt-*</code> headers. <code>400</code> if the topic doesn't end in <code>.DLT</code>.</p></div>
+        </details>
+        <details class="endpoint">
+          <summary><span class="badge post">POST</span><span class="path">/admin/kafka/dlt/{topic}/replay</span><span class="ep-desc">Replay a DLT back to its source topic</span></summary>
+          <div class="ep-body"><p>Republishes all pending messages to their original topic (from the <code>kafka_dlt-original-topic</code> header, falling back to the topic name minus <code>.DLT</code>), with synchronous sends, then commits the <code>dlt-replay</code> group's offsets so they stop counting as pending. <strong>Response:</strong> <code>{ topic, replayed }</code>. Safe to repeat — consumers are idempotent.</p></div>
+        </details>
 
         <!-- ============================ CLIENT ============================ -->
         <h2 id="client-api">Client <span class="badge neutral">client-service · /client</span></h2>

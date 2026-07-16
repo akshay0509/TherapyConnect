@@ -31,7 +31,7 @@
             <tr><td><code>APP_ENCRYPTION_SECRET</code></td><td>Therapist</td><td>Base64 AES key for session-notes encryption.</td></tr>
             <tr><td><code>RAZORPAY_KEY_ID</code> / <code>KEY_SECRET</code> / <code>WEBHOOK_SECRET</code></td><td>Appointment</td><td>Payment links + webhook HMAC. Blank ⇒ payments globally disabled.</td></tr>
             <tr><td><code>GOOGLE_CLIENT_ID</code> / <code>GOOGLE_CLIENT_SECRET</code> / <code>GOOGLE_REFRESH_TOKEN</code></td><td>Notification, User</td><td>OAuth creds for Calendar &amp; Gmail.</td></tr>
-            <tr><td><code>THERAPIST_EMAIL</code></td><td>Notification</td><td>Calendar owner / attendee.</td></tr>
+            <tr><td><code>THERAPIST_EMAIL</code></td><td>Notification</td><td><em>Fallback</em> attendee email only — invites normally use the therapist's own email from <code>THERAPIST_PROJECTION</code>.</td></tr>
             <tr><td><code>GMAIL_FROM</code></td><td>User</td><td>Sender address for reset/username emails.</td></tr>
             <tr><td><code>FRONTEND_URL</code></td><td>User, Gateway</td><td>Base URL in emails + CORS origin (default <code>http://localhost:5173</code>).</td></tr>
           </tbody>

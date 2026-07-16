@@ -29,6 +29,8 @@
             <li><strong>Internal endpoints are denied at the gateway</strong> (<code>/*/internal/**</code>).</li>
             <li><strong>Login rate limiting is now per-client-IP</strong> — the old global Resilience4j bucket (one source could exhaust it and lock out all users) was replaced by a per-IP limiter keyed on the un-spoofable nginx <code>X-Real-IP</code>.</li>
             <li><strong>TLS at the edge</strong> — the gateway is bound to loopback behind a host nginx that terminates HTTPS, so the API (payments, webhooks, <code>SameSite=None</code> cookie) runs over TLS.</li>
+            <li><strong>DLQ + retry pipeline implemented</strong> — every consumer retries with backoff then dead-letters to <code>&lt;topic&gt;.DLT</code>; the admin dashboard monitors DLT depth &amp; consumer lag and can peek/replay messages. Consumers now propagate failures instead of swallowing them.</li>
+            <li><strong>Per-therapist calendar identity</strong> — invites use the therapist's own email from <code>THERAPIST_PROJECTION</code> (via <code>TherapistEvent</code>), not a single env-configured address; the dead email-reminder pipeline was deleted.</li>
           </ul>
         </div>
 
@@ -40,7 +42,7 @@
             <tr><td>2</td><td>Security</td><td>Single static admin credential (no MFA / per-admin accounts)</td><td><span class="badge put">Medium</span></td></tr>
             <tr><td>3</td><td>Security</td><td>Shared DB credential pair (isolation is per-DB, not per-user)</td><td><span class="badge put">Medium</span></td></tr>
             <tr><td>4</td><td>Security</td><td>Secrets in <code>.env</code>; <code>/user/validate-user</code> reachable service-side</td><td><span class="badge put">Medium</span></td></tr>
-            <tr><td>5</td><td>Reliability</td><td>No DLQ / consumer retry policy</td><td><span class="badge put">Medium</span></td></tr>
+            <tr><td>5</td><td>Reliability</td><td>No alerting on DLT depth / outbox backlog (pipeline exists, monitoring is pull-only)</td><td><span class="badge patch">Low</span></td></tr>
             <tr><td>6</td><td>Payments</td><td>Refunds are manual; over-payment on terminal appointments only logged</td><td><span class="badge put">Medium</span></td></tr>
             <tr><td>7</td><td>Ops</td><td>No CI pipeline; Kafka single node at replication factor 1</td><td><span class="badge put">Medium</span></td></tr>
             <tr><td>8</td><td>Quality</td><td>Debug <code>System.out</code>, swallowed errors, thin tests</td><td><span class="badge patch">Low</span></td></tr>
@@ -69,8 +71,8 @@
 
         <h2 id="reliability-debt">Reliability &amp; messaging</h2>
         <div class="card">
-          <h4>6 · No dead-letter strategy <span class="badge put">Medium</span></h4>
-          <p>The outbox guarantees at-least-once <em>publication</em>, and consumers are idempotent, but there is no platform-wide DLQ + retry/backoff. A consistently failing message blocks progress (the outbox scheduler <code>break</code>s the batch on first failure) or is dropped after error-handling deserialization. Analytics' config hints at DLT but it isn't fully realized. <strong>Fix:</strong> add a Spring Kafka <code>DefaultErrorHandler</code> with retries + DLT topics, and alerting on outbox backlog / DLT depth.</p>
+          <h4>5 · DLQ exists — alerting doesn't <span class="badge patch">Low</span></h4>
+          <p>The dead-letter pipeline is now real: every consumer retries (5s × 2) then dead-letters to <code>&lt;topic&gt;.DLT</code>, and the admin dashboard can inspect depth/lag, peek messages, and replay them (<a href="messaging.html#dlq">details</a>). What's missing is <strong>push alerting</strong> — an admin has to open the dashboard to notice a growing DLT or outbox backlog. <strong>Fix:</strong> alert (email/webhook) when DLT pending count or consumer lag crosses a threshold, and on outbox rows stuck unpublished.</p>
         </div>
         <div class="card">
           <h4>Outbox single-instance assumption <span class="badge patch">Low</span></h4>
@@ -105,7 +107,7 @@
         <ul>
           <li><strong>Read models grow unbounded</strong> — projections and audit/outbox tables need archival/retention policies.</li>
           <li><strong>Analytics recomputation</strong> is event-sourced into rollups; there's no rebuild/replay tool if a projection is corrupted (mitigated by <code>earliest</code> offset but not formalized).</li>
-          <li><strong>Single-tenant assumptions</strong> — calendar/email use one therapist identity from env (<code>THERAPIST_EMAIL</code>, shared Google creds); true multi-therapist Google integration would need per-therapist OAuth.</li>
+          <li><strong>Single-tenant Google account</strong> — invite <em>attendee</em> emails are now per-therapist (projection), but all calendar events are still created on one Google account (shared OAuth creds, <code>THERAPIST_EMAIL</code> remains as fallback attendee); true multi-therapist integration would need per-therapist OAuth.</li>
         </ul>
 
         <h2 id="manual">Areas needing manual verification</h2>

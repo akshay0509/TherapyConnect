@@ -126,6 +126,17 @@ erDiagram
         <h2 id="client-data">ClientService — <code>CLIENT</code></h2>
         <p>Fields: <code>clientId</code> PK (CLT), therapistId, firstName, lastName, dob, age, phone numbers, email, pronouns, gender, createdAt, <code>status</code> (ACTIVE/TERMINATED), <code>dsf</code> (sliding-fee flag). Plus its own <code>OUTBOX_EVENT</code>.</p>
 
+        <h2 id="notification-data">NotificationService tables</h2>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Table</th><th>Key fields</th><th>Purpose</th></tr></thead>
+          <tbody>
+            <tr><td><code>AppointmentCalendarEvent</code></td><td>appointmentId PK, googleCalendarEventId</td><td>Maps an appointment to its Google Calendar invite (idempotency + update/cancel).</td></tr>
+            <tr><td><code>AvailabilityBlockCalendarEvent</code></td><td>blockId PK, googleCalendarEventId</td><td>Maps an availability block to its "blocked time" calendar event.</td></tr>
+            <tr><td><code>ClientProjection</code> <span class="tag">projection</span></td><td>clientId PK, email</td><td>Client email for invites; from <code>client-events</code>.</td></tr>
+            <tr><td><code>THERAPIST_PROJECTION</code> <span class="tag">projection</span></td><td>therapistId PK, timezone, email</td><td>Per-therapist invite identity &amp; timezone; from <code>TherapistEvent</code>.</td></tr>
+          </tbody>
+        </table></div>
+
         <h2 id="analytics-data">AnalyticsService tables</h2>
         <div class="table-wrap"><table>
           <thead><tr><th>Table</th><th>Composite key</th><th>Metrics</th></tr></thead>

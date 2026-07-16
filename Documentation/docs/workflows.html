@@ -122,12 +122,13 @@ stateDiagram-v2
         <div class="table-wrap"><table>
           <thead><tr><th>Event</th><th>Action in Google Calendar</th></tr></thead>
           <tbody>
-            <tr><td><code>AppointmentConfirmed</code></td><td>Create event with therapist+client attendees; Meet conference if ONLINE, location if OFFLINE; store mapping (idempotent — skips if mapping exists or client email unknown).</td></tr>
-            <tr><td><code>AppointmentRescheduled</code></td><td>Update the existing event's times/mode (skips if no prior invite).</td></tr>
+            <tr><td><code>AppointmentConfirmed</code></td><td>Create event with therapist+client attendees; Meet conference if ONLINE, location if OFFLINE; store mapping (idempotent — skips if a mapping already exists). Blank attendee emails are skipped rather than sent (a blank email fails the whole insert).</td></tr>
+            <tr><td><code>AppointmentRescheduled</code></td><td>Update the existing event's times/mode (skips if no prior invite). Switching OFFLINE→ONLINE now <em>adds</em> a Meet link; updates set <code>conferenceDataVersion=1</code>, without which the Calendar API silently ignores conference changes.</td></tr>
             <tr><td><code>AppointmentCancelled</code></td><td>Delete the event (<code>sendUpdates=all</code>) and remove the mapping.</td></tr>
             <tr><td><code>CalendarBlockCreated/Deleted</code></td><td>Create/delete a "blocked time" calendar event when <code>syncToGoogleCalendar</code> is true.</td></tr>
           </tbody>
         </table></div>
+        <p>Attendee identity is per-therapist: invites use the email from Notification's <code>THERAPIST_PROJECTION</code> (kept current by <code>TherapistEvent</code>), falling back to the <code>THERAPIST_EMAIL</code> env value only for rows that predate the email field. Calendar failures are no longer swallowed — they retry (5s × 2) and dead-letter to <code>&lt;topic&gt;.DLT</code> for admin <a href="messaging.html#dlq">inspection and replay</a>.</p>
 
         <h2 id="payment">6 · Payment collection (Razorpay)</h2>
         <p>When the therapist has payments enabled and Razorpay keys are configured, booking creates a payment link and a successful payment auto-confirms the appointment. Payment can never block or fail a booking — every Razorpay call is wrapped and failures are recorded on the payment row.</p>
@@ -166,7 +167,8 @@ sequenceDiagram
         <div class="callout info"><p style="margin:0"><strong>Kill switch &amp; enablement:</strong> if Razorpay keys are blank <em>or</em> the therapist's <code>paymentEnabled</code> projection (from <code>TherapistEvent</code>) is off, every payment method is a silent no-op and bookings behave exactly as before. See the <a href="../RazorpaySetupGuide.html">Razorpay Setup Guide</a>.</p></div>
 
         <h2 id="admin-flow">7 · Admin operations</h2>
-        <p>The admin console authenticates separately (<code>POST /auth/admin-login</code> → 8-hour <code>ADMIN</code> token) and drives <code>ADMIN</code>-gated endpoints across services: a live service-health grid (Gateway <code>/admin/services</code> via Eureka + actuator), user management (list, enable/lock, force-reset password, login audit), rollup-freshness health (Analytics), and an <strong>outbox replay</strong> tool (Appointment <code>/admin/outbox/replay</code>) to re-publish events from a given time if a consumer missed them.</p>
+        <p>The admin console authenticates separately (<code>POST /auth/admin-login</code> → 8-hour <code>ADMIN</code> token) and drives <code>ADMIN</code>-gated endpoints across services: a live service-health grid (Gateway <code>/admin/services</code> via Eureka + actuator), a <strong>Kafka/DLQ monitor</strong> (Gateway <code>/admin/kafka</code> — DLT depth, consumer-group lag, message peek, and one-click replay back to the source topic), user management (list, enable/lock, force-reset password, login audit), rollup-freshness health (Analytics), and an <strong>outbox replay</strong> tool (Appointment <code>/admin/outbox/replay</code>) to re-publish events from a given time if a consumer missed them.</p>
+        <p>The recovery model is now two-sided: the outbox replay covers events that never reached Kafka's consumers, while the DLT replay covers events that reached a consumer but failed processing (e.g. an expired Google token). Both are safe to repeat because consumers are idempotent.</p>
 
         <h2 id="analytics-flow">8 · Analytics rollups</h2>
         <p>Analytics consumes appointment events and maintains daily aggregates + retention projections. Only certain event types affect counters:</p>

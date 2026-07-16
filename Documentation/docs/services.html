@@ -47,7 +47,7 @@
           <li><strong>Authentication</strong> — <code>AuthController</code> (<code>/auth/**</code>) handles login, refresh, logout, forgot/reset password; <code>AdminAuthController</code> handles <code>/auth/admin-login</code> (constant-time env-credential check, 8-hour ADMIN token).</li>
           <li><strong>Token issuance</strong> — <code>JwtUtil</code> signs RS256 access tokens (15-min TTL); <code>RefreshTokensService</code> manages rotating 7-day refresh tokens (roles preserved) in a <code>SameSite=None</code> httpOnly cookie.</li>
           <li><strong>Authorization</strong> — <code>JwtAuthenticationConverter</code> maps the <code>authorities</code> claim; <code>/admin/**</code> requires <code>ADMIN</code>; <code>/*/internal/**</code> is denied at the edge.</li>
-          <li><strong>Admin dashboard</strong> — <code>AdminServicesController</code> (<code>/admin/services</code>) reports per-service health from Eureka + actuator.</li>
+          <li><strong>Admin dashboard</strong> — <code>AdminServicesController</code> (<code>/admin/services</code>) reports per-service health from Eureka + actuator; <code>AdminKafkaController</code> + <code>KafkaMonitorService</code> (<code>/admin/kafka</code>) expose DLT depth, consumer lag, and DLT peek/replay.</li>
           <li><strong>Resilience</strong> — a custom per-IP <code>LoginRateLimiter</code> throttles login (10/60s) and admin login (5/60s) by client IP; Resilience4j circuit breakers wrap the User and Therapist proxy calls.</li>
           <li><strong>Login eventing</strong> — publishes <code>auth-login-success</code>/<code>auth-login-failure</code> directly to Kafka (no outbox). Declares all Kafka topics via <code>TopicsConfig</code>.</li>
         </ul>
@@ -136,11 +136,15 @@
 
         <!-- NOTIFICATION -->
         <h2 id="notification">NotificationService <span class="badge neutral">:5004</span></h2>
-        <p>Purely reactive — it has no REST API. It consumes appointment and availability-block events and reflects them into Google Calendar (invites with Google Meet links for online sessions, location for offline; blocked-time events for unavailability).</p>
+        <p>Purely reactive — it has no REST API. It consumes appointment and availability-block events and reflects them into Google Calendar (invites with Google Meet links for online sessions, location for offline; blocked-time events for unavailability). Invite attendees use the <em>therapist's own</em> email from its <code>TherapistProjection</code> (built from <code>TherapistEvent</code>), with the <code>THERAPIST_EMAIL</code> env value only as a fallback for rows created before the field existed.</p>
+        <div class="callout warn" style="margin:10px 0">
+          <div class="callout-title">Failures propagate by design</div>
+          <p>Calendar failures are <strong>not</strong> caught-and-logged anymore — they throw, get retried by the container's error handler (5s × 2), and then dead-letter to <code>&lt;topic&gt;.DLT</code> where the admin dashboard can inspect and replay them. The old swallow-the-exception pattern silently lost events when the Google token expired.</p>
+        </div>
         <div class="kv">
           <dt>Owns (DB)</dt><dd><code>AppointmentCalendarEvent</code>, <code>AvailabilityBlockCalendarEvent</code> (mappings to Google event IDs)</dd>
-          <dt>Projections</dt><dd><code>ClientProjection</code> (email lookup)</dd>
-          <dt>Consumes</dt><dd><code>therapist-appointment-events</code>, <code>therapist-availability-events</code>, <code>client-events</code></dd>
+          <dt>Projections</dt><dd><code>ClientProjection</code> (client email), <code>THERAPIST_PROJECTION</code> (therapist timezone + email)</dd>
+          <dt>Consumes</dt><dd><code>therapist-appointment-events</code>, <code>therapist-availability-events</code> (incl. <code>TherapistEvent</code>), <code>client-events</code></dd>
           <dt>External</dt><dd>Google Calendar API</dd>
           <dt>Key classes</dt><dd><code>GoogleCalendarService</code>, <code>AppointmentEventConsumer</code>, <code>CalendarBlockEventConsumer</code>, <code>ClientConsumer</code></dd>
         </div>
@@ -158,7 +162,7 @@
 
         <div class="callout info">
           <div class="callout-title">🛡️ Admin console (cross-service)</div>
-          <p>A single admin surface spans several services, all gated behind <code>ADMIN</code> authority (login at <a href="security.html#admin-auth"><code>/auth/admin-login</code></a>): the Gateway exposes <code>/admin/services</code> (Eureka + actuator health dashboard); UserService exposes user management (<code>/admin/users</code>, status, force reset, <code>/admin/audit</code>); Appointment &amp; Analytics expose <code>/admin/health</code>, and Appointment adds <code>/admin/outbox/replay</code>. The React app renders these in <code>AdminPage</code>. See the <a href="api.html#admin-api">API reference</a>.</p>
+          <p>A single admin surface spans several services, all gated behind <code>ADMIN</code> authority (login at <a href="security.html#admin-auth"><code>/auth/admin-login</code></a>): the Gateway exposes <code>/admin/services</code> (Eureka + actuator health dashboard) and <code>/admin/kafka</code> (DLT depth, consumer lag, peek/replay); UserService exposes user management (<code>/admin/users</code>, status, force reset, <code>/admin/audit</code>); Appointment &amp; Analytics expose <code>/admin/health</code>, and Appointment adds <code>/admin/outbox/replay</code>. The React app renders these in <code>AdminPage</code>. See the <a href="api.html#admin-api">API reference</a>.</p>
         </div>
 
         <!-- EVENTS -->
