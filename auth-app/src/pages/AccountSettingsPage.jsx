@@ -4,6 +4,11 @@ import { useAuth } from "../context/AuthContext";
 import { updateAccount } from "../api/user";
 import styles from "./AccountSettingsPage.module.css";
 
+// mirror of the backend rule in UserService.validateUsername
+const USERNAME_RE = /^[A-Za-z0-9._-]{3,30}$/;
+const USERNAME_RULES =
+  "Username must be 3-30 characters using only letters, numbers, dots, dashes or underscores (no spaces).";
+
 export default function AccountSettingsPage() {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
@@ -24,11 +29,13 @@ export default function AccountSettingsPage() {
     e.preventDefault();
     if (!form.currentPassword) { setError("Current password is required to make changes."); return; }
     if (!form.username && !form.email) { setError("Please provide a new username or email to update."); return; }
+    const username = form.username.trim();
+    if (username && !USERNAME_RE.test(username)) { setError(USERNAME_RULES); return; }
     setLoading(true); setError(null); setSuccess(false);
     try {
       await updateAccount({
         currentUsername: user?.username,
-        username: form.username || undefined,
+        username: username || undefined,
         email: form.email || undefined,
         currentPassword: form.currentPassword,
       });

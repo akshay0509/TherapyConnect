@@ -4,6 +4,11 @@ import { useAuth } from "../context/AuthContext";
 import { createUserRequest, forgotPassword, forgotUsername } from "../api/user";
 import styles from "./LoginPage.module.css";
 
+// mirror of the backend rule in UserService.validateUsername
+const USERNAME_RE = /^[A-Za-z0-9._-]{3,30}$/;
+const USERNAME_RULES =
+  "Username must be 3-30 characters using only letters, numbers, dots, dashes or underscores (no spaces).";
+
 export default function LoginPage() {
   const { login, loading, error } = useAuth();
   const navigate = useNavigate();
@@ -76,11 +81,13 @@ export default function LoginPage() {
   const handleCreate = async (e) => {
     e.preventDefault();
     if (!form.role) { setCreateError("Please select a role."); return; }
+    const username = form.username.trim();
+    if (!USERNAME_RE.test(username)) { setCreateError(USERNAME_RULES); return; }
     setCreateLoading(true);
     setCreateError(null);
     setCreateSuccess(false);
     try {
-      await createUserRequest(form.username, form.email, form.password, form.role);
+      await createUserRequest(username, form.email, form.password, form.role);
       setCreateSuccess(true);
       setForm({ username: "", email: "", password: "", role: "" });
     } catch (err) {

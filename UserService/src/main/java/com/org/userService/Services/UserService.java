@@ -39,6 +39,9 @@ public class UserService {
 
 	private static final int MIN_PASSWORD_LENGTH = 8;
 	private static final Pattern EMAIL_PATTERN = Pattern.compile("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$");
+	private static final Pattern USERNAME_PATTERN = Pattern.compile("^[A-Za-z0-9._-]{3,30}$");
+	private static final String USERNAME_RULES =
+			"Username must be 3-30 characters using only letters, numbers, dots, dashes or underscores (no spaces).";
 
 	private UserAssembler userAssembler = new UserAssembler();
 
@@ -67,10 +70,20 @@ public class UserService {
 		if (userDto.getUsername() == null || userDto.getUsername().isBlank()) {
 			throw new IllegalArgumentException("Username is required.");
 		}
+		// accidental surrounding whitespace is trimmed rather than rejected;
+		// anything else (inner spaces, odd characters) fails the pattern
+		userDto.setUsername(userDto.getUsername().trim());
+		validateUsername(userDto.getUsername());
 		if (userDto.getEmail() == null || !EMAIL_PATTERN.matcher(userDto.getEmail()).matches()) {
 			throw new IllegalArgumentException("A valid email address is required.");
 		}
 		validatePasswordPolicy(userDto.getPassword());
+	}
+
+	private void validateUsername(String username) {
+		if (!USERNAME_PATTERN.matcher(username).matches()) {
+			throw new IllegalArgumentException(USERNAME_RULES);
+		}
 	}
 
 	private void validatePasswordPolicy(String password) {
@@ -156,10 +169,23 @@ public class UserService {
 		}
 
 		if (request.getEmail() != null && !request.getEmail().isBlank()) {
-			user.setEmail(request.getEmail());
+			String email = request.getEmail().trim();
+			if (!EMAIL_PATTERN.matcher(email).matches()) {
+				throw new IllegalArgumentException("A valid email address is required.");
+			}
+			// friendly 400 instead of a 500 from the DB unique constraint
+			if (!email.equals(user.getEmail()) && userRepository.existsByEmail(email)) {
+				throw new IllegalArgumentException("An account with this email already exists.");
+			}
+			user.setEmail(email);
 		}
 		if (request.getUsername() != null && !request.getUsername().isBlank()) {
-			user.setUsername(request.getUsername());
+			String username = request.getUsername().trim();
+			validateUsername(username);
+			if (!username.equals(user.getUsername()) && userRepository.existsByUsername(username)) {
+				throw new IllegalArgumentException("That username is already taken.");
+			}
+			user.setUsername(username);
 		}
 
 		userRepository.save(user);
