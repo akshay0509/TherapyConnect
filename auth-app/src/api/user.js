@@ -62,3 +62,13 @@ export async function getAccount() {
     throw new Error(message);
   }
 }
+
+export async function changePassword(currentPassword, newPassword) {
+  try {
+    const response = await api.put("/user/change-password", { currentPassword, newPassword });
+    return response.data;
+  } catch (err) {
+    const message = err.response?.data?.message || err.response?.data?.error || "Failed to change password.";
+    throw new Error(message);
+  }
+}

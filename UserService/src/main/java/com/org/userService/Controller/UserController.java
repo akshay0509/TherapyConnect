@@ -12,8 +12,10 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.org.userService.Dto.AccountDetailsDto;
 import com.org.userService.Dto.AuthRequest;
 import com.org.userService.Dto.AuthResponse;
+import com.org.userService.Dto.ChangePasswordRequest;
 import com.org.userService.Dto.ForgotPasswordRequest;
 import com.org.userService.Dto.ResetPasswordRequest;
 import com.org.userService.Dto.UpdateAccountRequest;
@@ -70,10 +72,18 @@ public class UserController {
 	}
 
 	// current account details for the logged-in user (username from JWT) —
-	// used to pre-fill the therapist setup email and show current values
+	// shown on Account Settings and used to pre-fill the therapist setup email
 	@GetMapping("/account")
-	public ResponseEntity<UserDto> getAccount() {
+	public ResponseEntity<AccountDetailsDto> getAccount() {
 		return ResponseEntity.ok(userService.getAccount());
+	}
+
+	// logged-in password change: verifies the current password, applies the
+	// same policy as reset; confirm-match is checked client-side
+	@PutMapping("/change-password")
+	public ResponseEntity<Map<String, String>> changePassword(@RequestBody ChangePasswordRequest request) {
+		userService.changePassword(request.getCurrentPassword(), request.getNewPassword());
+		return ResponseEntity.ok(Map.of("message", "Password changed successfully."));
 	}
 
 }

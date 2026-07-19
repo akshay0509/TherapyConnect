@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { getAccount, updateAccount } from "../api/user";
+import { getAccount, updateAccount, changePassword } from "../api/user";
 import { updateTherapistEmail } from "../api/therapistProfile";
 import styles from "./AccountSettingsPage.module.css";
 
@@ -9,15 +9,55 @@ import styles from "./AccountSettingsPage.module.css";
 const USERNAME_RE = /^[A-Za-z0-9._-]{3,30}$/;
 const USERNAME_RULES =
   "Username must be 3-30 characters using only letters, numbers, dots, dashes or underscores (no spaces).";
+const MIN_PASSWORD_LENGTH = 8;
+
+const SECTIONS = [
+  { id: "profile", icon: "👤", label: "Profile" },
+  { id: "security", icon: "🔒", label: "Security" },
+  { id: "preferences", icon: "🎨", label: "Preferences" },
+];
+
+function formatDateTime(iso) {
+  if (!iso) return "—";
+  try { return new Date(iso).toLocaleString(); } catch { return iso; }
+}
+
+function formatDate(iso) {
+  if (!iso) return "—";
+  try {
+    return new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" });
+  } catch { return iso; }
+}
+
+// coarse, dependency-free UA description — enough for "was that me?"
+function describeDevice(ua) {
+  if (!ua) return "Unknown device";
+  const browser =
+    ua.includes("Edg/") ? "Edge" :
+    ua.includes("OPR/") ? "Opera" :
+    ua.includes("Chrome/") ? "Chrome" :
+    ua.includes("Firefox/") ? "Firefox" :
+    ua.includes("Safari/") ? "Safari" : "Browser";
+  const os =
+    ua.includes("Windows") ? "Windows" :
+    ua.includes("Android") ? "Android" :
+    ua.includes("iPhone") || ua.includes("iPad") ? "iOS" :
+    ua.includes("Mac OS") ? "macOS" :
+    ua.includes("Linux") ? "Linux" : "";
+  return os ? `${browser} on ${os}` : browser;
+}
 
 export default function AccountSettingsPage() {
   const navigate = useNavigate();
   const { user, role } = useAuth();
 
-  // current values from the server — the page is read-only until Edit
-  const [account, setAccount] = useState(null); // { username, email, userRole }
+  const [activeSection, setActiveSection] = useState("profile");
+
+  // current values from the server — everything is read-only until Edit
+  const [account, setAccount] = useState(null);
   const [accountError, setAccountError] = useState(null);
 
+  // ── profile edit state ──
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ username: "", email: "", currentPassword: "" });
   const [showPassword, setShowPassword] = useState(false);
@@ -25,12 +65,20 @@ export default function AccountSettingsPage() {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
 
+  // ── change password state ──
+  const [pwForm, setPwForm] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" });
+  const [showPw, setShowPw] = useState(false);
+  const [pwLoading, setPwLoading] = useState(false);
+  const [pwError, setPwError] = useState(null);
+  const [pwSuccess, setPwSuccess] = useState(false);
+
   useEffect(() => {
     getAccount()
       .then(setAccount)
       .catch((e) => setAccountError(e.message));
   }, []);
 
+  // ── profile handlers ──
   const startEdit = () => {
     setForm({
       username: account?.username || user?.username || "",
@@ -75,7 +123,7 @@ export default function AccountSettingsPage() {
         try {
           await updateTherapistEmail(email);
         } catch (syncErr) {
-          setAccount(updated);
+          setAccount(prev => ({ ...prev, ...updated }));
           setError(
             "Account email was updated, but syncing the calendar-invite email failed (" +
             syncErr.message + "). Edit and save the same email again to retry the sync."
@@ -84,7 +132,7 @@ export default function AccountSettingsPage() {
           return;
         }
       }
-      setAccount(updated);
+      setAccount(prev => ({ ...prev, ...updated }));
       setEditing(false);
       setSuccess(usernameChanged
         ? "Account updated. Use your new username the next time you sign in."
@@ -95,6 +143,228 @@ export default function AccountSettingsPage() {
       setLoading(false);
     }
   };
+
+  // ── password handlers ──
+  const handlePwChange = (e) => setPwForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
+
+  const handlePwSubmit = async (e) => {
+    e.preventDefault();
+    setPwSuccess(false);
+    if (!pwForm.currentPassword) { setPwError("Enter your current password."); return; }
+    if (pwForm.newPassword.length < MIN_PASSWORD_LENGTH) {
+      setPwError(`New password must be at least ${MIN_PASSWORD_LENGTH} characters.`); return;
+    }
+    if (pwForm.newPassword !== pwForm.confirmPassword) {
+      setPwError("New password and confirmation do not match."); return;
+    }
+    setPwLoading(true); setPwError(null);
+    try {
+      await changePassword(pwForm.currentPassword, pwForm.newPassword);
+      setPwForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
+      setPwSuccess(true);
+    } catch (err) {
+      setPwError(err.message);
+    } finally {
+      setPwLoading(false);
+    }
+  };
+
+  const switchSection = (id) => {
+    setActiveSection(id);
+    setSuccess(null);
+    setPwSuccess(false);
+  };
+
+  // ── sections ──
+  const renderProfile = () => (
+    <>
+      <h2 className={styles.sectionTitle}>Profile</h2>
+      <p className={styles.sectionSub}>
+        {editing
+          ? "Modify your details below. Your current password is required to confirm the changes."
+          : "Your account details. Use Edit to change your username or email."}
+      </p>
+
+      {!editing ? (
+        <div className={styles.viewList}>
+          <div className={styles.viewRow}>
+            <span className={styles.label}>Username</span>
+            <span className={styles.viewValue}>{account?.username ?? user?.username ?? "—"}</span>
+          </div>
+          <div className={styles.viewRow}>
+            <span className={styles.label}>Email</span>
+            <span className={styles.viewValue}>
+              {account ? (account.email || "—") : accountError ? "unavailable" : "Loading…"}
+            </span>
+            {role === "THERAPIST" && (
+              <span className={styles.hint}>Also used for your calendar invites</span>
+            )}
+          </div>
+          <div className={styles.viewRow}>
+            <span className={styles.label}>Role</span>
+            <span className={styles.viewValue}>{account?.userRole ?? role ?? "—"}</span>
+          </div>
+          <div className={styles.viewRow}>
+            <span className={styles.label}>Member since</span>
+            <span className={styles.viewValue}>{formatDate(account?.createdAt)}</span>
+          </div>
+
+          {accountError && (
+            <div className={styles.errorBox}><span className={styles.errorIcon}>!</span>{accountError}</div>
+          )}
+          {success && (
+            <div className={styles.successBox}><span className={styles.successIcon}>✓</span> {success}</div>
+          )}
+
+          <div className={styles.actions}>
+            <button type="button" className={styles.submitBtn} onClick={startEdit} disabled={!account}>
+              ✎ Edit details
+            </button>
+          </div>
+        </div>
+      ) : (
+        <form onSubmit={handleSubmit} className={styles.form}>
+          <div className={styles.field}>
+            <label className={styles.label}>Username</label>
+            <input name="username" type="text" autoComplete="off"
+              value={form.username} onChange={handleChange} className={styles.input} />
+            <span className={styles.hint}>3–30 characters — letters, numbers, dots, dashes or underscores</span>
+          </div>
+
+          <div className={styles.field}>
+            <label className={styles.label}>Email</label>
+            <input name="email" type="email" autoComplete="off"
+              value={form.email} onChange={handleChange} className={styles.input} />
+            {role === "THERAPIST" && (
+              <span className={styles.hint}>Also used for your calendar invites — both update together</span>
+            )}
+          </div>
+
+          <div className={styles.divider}/>
+
+          <div className={styles.field}>
+            <label className={styles.label}>Current password <span className={styles.required}>*</span></label>
+            <div className={styles.inputWrapper}>
+              <input name="currentPassword" type={showPassword ? "text" : "password"}
+                autoComplete="current-password" required
+                value={form.currentPassword} onChange={handleChange}
+                className={styles.input} placeholder="••••••••" />
+              <button type="button" className={styles.toggle} onClick={() => setShowPassword(s => !s)}>
+                {showPassword ? "Hide" : "Show"}
+              </button>
+            </div>
+          </div>
+
+          {error && (
+            <div className={styles.errorBox}><span className={styles.errorIcon}>!</span>{error}</div>
+          )}
+
+          <div className={styles.actions}>
+            <button type="button" className={styles.cancelBtn} onClick={cancelEdit} disabled={loading}>Cancel</button>
+            <button type="submit" className={styles.submitBtn} disabled={loading}>
+              {loading ? <span className={styles.btnSpinner}/> : "Save changes"}
+            </button>
+          </div>
+        </form>
+      )}
+    </>
+  );
+
+  const renderSecurity = () => (
+    <>
+      <h2 className={styles.sectionTitle}>Security</h2>
+      <p className={styles.sectionSub}>Sign-in activity and password.</p>
+
+      <div className={styles.subCard}>
+        <h3 className={styles.subCardTitle}>Last sign-in</h3>
+        <div className={styles.metaGrid}>
+          <div className={styles.metaItem}>
+            <span className={styles.label}>When</span>
+            <span className={styles.viewValue}>{formatDateTime(account?.lastLoginTime)}</span>
+          </div>
+          <div className={styles.metaItem}>
+            <span className={styles.label}>IP address</span>
+            <span className={styles.viewValue}>{account?.lastLoginIp || "—"}</span>
+          </div>
+          <div className={styles.metaItem}>
+            <span className={styles.label}>Device</span>
+            <span className={styles.viewValue} title={account?.lastLoginUserAgent || ""}>
+              {describeDevice(account?.lastLoginUserAgent)}
+            </span>
+          </div>
+        </div>
+        <span className={styles.hint}>If this doesn't look like you, change your password below.</span>
+      </div>
+
+      <div className={styles.subCard}>
+        <h3 className={styles.subCardTitle}>Change password</h3>
+        <form onSubmit={handlePwSubmit} className={styles.form}>
+          <div className={styles.field}>
+            <label className={styles.label}>Current password <span className={styles.required}>*</span></label>
+            <div className={styles.inputWrapper}>
+              <input name="currentPassword" type={showPw ? "text" : "password"}
+                autoComplete="current-password" required
+                value={pwForm.currentPassword} onChange={handlePwChange}
+                className={styles.input} placeholder="••••••••" />
+              <button type="button" className={styles.toggle} onClick={() => setShowPw(s => !s)}>
+                {showPw ? "Hide" : "Show"}
+              </button>
+            </div>
+          </div>
+          <div className={styles.field}>
+            <label className={styles.label}>New password <span className={styles.required}>*</span></label>
+            <input name="newPassword" type={showPw ? "text" : "password"}
+              autoComplete="new-password" required
+              value={pwForm.newPassword} onChange={handlePwChange}
+              className={styles.input} placeholder="At least 8 characters" />
+          </div>
+          <div className={styles.field}>
+            <label className={styles.label}>Confirm new password <span className={styles.required}>*</span></label>
+            <input name="confirmPassword" type={showPw ? "text" : "password"}
+              autoComplete="new-password" required
+              value={pwForm.confirmPassword} onChange={handlePwChange}
+              className={styles.input} placeholder="Repeat the new password" />
+            {pwForm.confirmPassword && pwForm.newPassword !== pwForm.confirmPassword && (
+              <span className={styles.mismatch}>Passwords do not match</span>
+            )}
+          </div>
+
+          {pwError && (
+            <div className={styles.errorBox}><span className={styles.errorIcon}>!</span>{pwError}</div>
+          )}
+          {pwSuccess && (
+            <div className={styles.successBox}><span className={styles.successIcon}>✓</span> Password changed successfully.</div>
+          )}
+
+          <div className={styles.actions}>
+            <button type="submit" className={styles.submitBtn} disabled={pwLoading}>
+              {pwLoading ? <span className={styles.btnSpinner}/> : "Change password"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </>
+  );
+
+  const renderPreferences = () => (
+    <>
+      <h2 className={styles.sectionTitle}>Preferences</h2>
+      <p className={styles.sectionSub}>Display options.</p>
+
+      <div className={styles.subCard}>
+        <h3 className={styles.subCardTitle}>Theme</h3>
+        <div className={styles.themeRow}>
+          <button type="button" className={`${styles.themeOption} ${styles.themeOptionActive}`}>
+            🌙 Dark
+          </button>
+          <button type="button" className={styles.themeOption} disabled title="Light theme is coming soon">
+            ☀️ Light <span className={styles.soonTag}>soon</span>
+          </button>
+        </div>
+        <span className={styles.hint}>Light theme arrives with the upcoming design refresh.</span>
+      </div>
+    </>
+  );
 
   return (
     <div className={styles.page}>
@@ -107,116 +377,28 @@ export default function AccountSettingsPage() {
       </header>
 
       <main className={styles.main}>
-        <div className={styles.content}>
-          <div className={styles.hero}>
-            <h1 className={styles.heading}>Account Settings</h1>
-            <p className={styles.sub}>
-              {editing
-                ? "Modify your details below. Your current password is required to confirm the changes."
-                : "Your account details. Use Edit to change your username or email."}
-            </p>
-          </div>
+        <div className={styles.hero}>
+          <h1 className={styles.heading}>Account Settings</h1>
+        </div>
+
+        <div className={styles.settingsGrid}>
+          <nav className={styles.sideNav}>
+            {SECTIONS.map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                className={`${styles.navItem} ${activeSection === s.id ? styles.navItemActive : ""}`}
+                onClick={() => switchSection(s.id)}
+              >
+                <span className={styles.navIcon}>{s.icon}</span> {s.label}
+              </button>
+            ))}
+          </nav>
 
           <div className={styles.card}>
-            {!editing ? (
-              <div className={styles.viewList}>
-                <div className={styles.viewRow}>
-                  <span className={styles.label}>Username</span>
-                  <span className={styles.viewValue}>{account?.username ?? user?.username ?? "—"}</span>
-                </div>
-                <div className={styles.viewRow}>
-                  <span className={styles.label}>Email</span>
-                  <span className={styles.viewValue}>
-                    {account ? (account.email || "—") : accountError ? "unavailable" : "Loading…"}
-                  </span>
-                </div>
-                <div className={styles.viewRow}>
-                  <span className={styles.label}>Role</span>
-                  <span className={styles.viewValue}>{account?.userRole ?? role ?? "—"}</span>
-                </div>
-
-                {accountError && (
-                  <div className={styles.errorBox}>
-                    <span className={styles.errorIcon}>!</span>{accountError}
-                  </div>
-                )}
-                {success && (
-                  <div className={styles.successBox}>
-                    <span className={styles.successIcon}>✓</span> {success}
-                  </div>
-                )}
-
-                <div className={styles.actions}>
-                  <button type="button" className={styles.submitBtn} onClick={startEdit} disabled={!account}>
-                    ✎ Edit details
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <form onSubmit={handleSubmit} className={styles.form}>
-                <div className={styles.field}>
-                  <label className={styles.label}>Username</label>
-                  <input
-                    name="username"
-                    type="text"
-                    autoComplete="off"
-                    value={form.username}
-                    onChange={handleChange}
-                    className={styles.input}
-                  />
-                  <span className={styles.hint}>3–30 characters — letters, numbers, dots, dashes or underscores</span>
-                </div>
-
-                <div className={styles.field}>
-                  <label className={styles.label}>Email</label>
-                  <input
-                    name="email"
-                    type="email"
-                    autoComplete="off"
-                    value={form.email}
-                    onChange={handleChange}
-                    className={styles.input}
-                  />
-                  {role === "THERAPIST" && (
-                    <span className={styles.hint}>Also used for your calendar invites — both update together</span>
-                  )}
-                </div>
-
-                <div className={styles.divider}/>
-
-                <div className={styles.field}>
-                  <label className={styles.label}>Current password <span className={styles.required}>*</span></label>
-                  <div className={styles.inputWrapper}>
-                    <input
-                      name="currentPassword"
-                      type={showPassword ? "text" : "password"}
-                      autoComplete="current-password"
-                      required
-                      value={form.currentPassword}
-                      onChange={handleChange}
-                      className={styles.input}
-                      placeholder="••••••••"
-                    />
-                    <button type="button" className={styles.toggle} onClick={() => setShowPassword(s => !s)}>
-                      {showPassword ? "Hide" : "Show"}
-                    </button>
-                  </div>
-                </div>
-
-                {error && (
-                  <div className={styles.errorBox}>
-                    <span className={styles.errorIcon}>!</span>{error}
-                  </div>
-                )}
-
-                <div className={styles.actions}>
-                  <button type="button" className={styles.cancelBtn} onClick={cancelEdit} disabled={loading}>Cancel</button>
-                  <button type="submit" className={styles.submitBtn} disabled={loading}>
-                    {loading ? <span className={styles.btnSpinner}/> : "Save changes"}
-                  </button>
-                </div>
-              </form>
-            )}
+            {activeSection === "profile" && renderProfile()}
+            {activeSection === "security" && renderSecurity()}
+            {activeSection === "preferences" && renderPreferences()}
           </div>
         </div>
       </main>

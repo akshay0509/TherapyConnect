@@ -13,6 +13,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import com.org.userService.Assembler.UserAssembler;
+import com.org.userService.Dto.AccountDetailsDto;
 import com.org.userService.Dto.AuthRequest;
 import com.org.userService.Dto.AuthResponse;
 import com.org.userService.Dto.UpdateAccountRequest;
@@ -197,15 +198,37 @@ public class UserService {
 		return dto;
 	}
 
-	public UserDto getAccount() {
+	public AccountDetailsDto getAccount() {
+		User user = requireCurrentUser();
+		AccountDetailsDto dto = new AccountDetailsDto();
+		dto.setUsername(user.getUsername());
+		dto.setEmail(user.getEmail());
+		dto.setUserRole(user.getUserRole());
+		dto.setCreatedAt(user.getCreatedAt());
+		dto.setLastLoginTime(user.getLastLoginTime());
+		dto.setLastLoginIp(user.getLastLoginIp());
+		dto.setLastLoginUserAgent(user.getLastLoginUserAgent());
+		return dto;
+	}
+
+	public void changePassword(String currentPassword, String newPassword) {
+		User user = requireCurrentUser();
+		if (currentPassword == null || !passwordEncoder.matches(currentPassword, user.getPasswordHash())) {
+			throw new IllegalArgumentException("Current password is invalid.");
+		}
+		validatePasswordPolicy(newPassword);
+		if (passwordEncoder.matches(newPassword, user.getPasswordHash())) {
+			throw new IllegalArgumentException("New password must be different from the current password.");
+		}
+		user.setPasswordHash(passwordEncoder.encode(newPassword));
+		userRepository.save(user);
+	}
+
+	private User requireCurrentUser() {
 		User user = userRepository.findByUsername(SecurityUtils.getUsername());
 		if (user == null) {
 			throw new IllegalArgumentException("User not found.");
 		}
-		UserDto dto = new UserDto();
-		dto.setUsername(user.getUsername());
-		dto.setEmail(user.getEmail());
-		dto.setUserRole(user.getUserRole());
-		return dto;
+		return user;
 	}
 }
