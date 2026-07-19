@@ -131,11 +131,29 @@
         </details>
 
         <details class="endpoint">
+          <summary><span class="badge get">GET</span><span class="path">/user/account</span><span class="ep-desc">Current account details</span></summary>
+          <div class="ep-body">
+            <p><strong>Auth:</strong> JWT (username from token) · <strong>Response</strong></p>
+            <pre><span class="pre-label">AccountDetailsDto</span><code>{ "username", "email", "userRole", "createdAt",
+  "lastLoginTime", "lastLoginIp", "lastLoginUserAgent" }</code></pre>
+            <p>Backs the Account Settings page and pre-fills the therapist-setup email.</p>
+          </div>
+        </details>
+
+        <details class="endpoint">
+          <summary><span class="badge put">PUT</span><span class="path">/user/change-password</span><span class="ep-desc">Logged-in password change</span></summary>
+          <div class="ep-body">
+            <p><strong>Auth:</strong> JWT · <strong>Request:</strong> <code>{ "currentPassword": "…", "newPassword": "…" }</code></p>
+            <p><strong>Response:</strong> <code>200</code> <code>{ message }</code>. Verifies the current password, applies the same policy as reset, and rejects a new password identical to the current one (<code>400</code> on any failure).</p>
+          </div>
+        </details>
+
+        <details class="endpoint">
           <summary><span class="badge put">PUT</span><span class="path">/user/update-account</span><span class="ep-desc">Update email/username</span></summary>
           <div class="ep-body">
             <p><strong>Auth:</strong> JWT (username resolved from token, not body) · <strong>Request</strong></p>
             <pre><span class="pre-label">UpdateAccountRequest</span><code>{ "username": "newname", "email": "new@x.com", "currentPassword": "••••" }</code></pre>
-            <p><strong>Response:</strong> <code>200</code> updated <code>UserDto</code>. Requires the correct <code>currentPassword</code>; blank fields are ignored.</p>
+            <p><strong>Response:</strong> <code>200</code> updated <code>UserDto</code>. Requires the correct <code>currentPassword</code>; blank fields are ignored. Values are trimmed and validated — username must match <code>[A-Za-z0-9._-]{3,30}</code>, email must be well-formed, and both are checked for uniqueness (friendly <code>400</code> instead of a DB-constraint 500).</p>
           </div>
         </details>
 
@@ -159,6 +177,13 @@
           </div>
         </details>
         <details class="endpoint">
+          <summary><span class="badge put">PUT</span><span class="path">/therapist/update-email</span><span class="ep-desc">Sync therapist email with account email</span></summary>
+          <div class="ep-body">
+            <p><strong>Auth:</strong> JWT · <strong>Request:</strong> <code>{ "email": "…" }</code> (validated, trimmed) · <strong>Response:</strong> updated <code>TherapistDto</code>.</p>
+            <p><strong>Side effects:</strong> Account Settings calls this alongside <code>/user/update-account</code> so the invite/contact email mirrors the login email. Emits <code>TherapistUpdated</code> → Notification updates <code>THERAPIST_PROJECTION</code>, so future calendar invites go to the new address.</p>
+          </div>
+        </details>
+        <details class="endpoint">
           <summary><span class="badge put">PUT</span><span class="path">/therapist/payment-settings</span><span class="ep-desc">Toggle payment collection</span></summary>
           <div class="ep-body">
             <p><strong>Auth:</strong> JWT · <strong>Request:</strong> <code>{ "paymentEnabled": true }</code> (400 if null) · <strong>Response:</strong> updated <code>TherapistDto</code>.</p>
@@ -169,7 +194,7 @@
         <h3 id="t-services">Services &amp; delivery modes</h3>
         <details class="endpoint">
           <summary><span class="badge get">GET</span><span class="path">/therapist/therapist-services</span><span class="ep-desc">List services (paged optional)</span></summary>
-          <div class="ep-body"><p><strong>Auth:</strong> JWT · <strong>Query:</strong> optional <code>?page&amp;size</code> → returns a <code>PageResponseDto</code> instead of a list · <strong>Response item:</strong> <code>TherapistServicesDto</code> (serviceId, serviceType, duration, price, isActive).</p></div>
+          <div class="ep-body"><p><strong>Auth:</strong> JWT · <strong>Query:</strong> optional <code>?page&amp;size</code> → returns a <code>PageResponseDto</code> instead of a list · <strong>Response item:</strong> <code>TherapistServicesDto</code> (serviceId, serviceType, duration, isActive — no price; pricing lives on delivery modes).</p></div>
         </details>
         <details class="endpoint">
           <summary><span class="badge get">GET</span><span class="path">/therapist/{therapistId}/therapist-services</span><span class="ep-desc">List a given therapist’s services</span></summary>
@@ -180,8 +205,8 @@
           <div class="ep-body">
             <p><strong>Auth:</strong> JWT · <strong>Request</strong></p>
             <pre><span class="pre-label">TherapistServicesDto</span><code>{ "serviceType": "INDIVIDUAL_THERAPY", "duration": 60,
-  "price": 120.00, "isActive": true }   // therapistId from JWT</code></pre>
-            <p><strong>Response:</strong> <code>200</code>. <code>serviceType</code> ∈ {<code>INDIVIDUAL_THERAPY</code>, <code>COUPLES_THERAPY</code>}. <code>duration</code> drives slot length during generation.</p>
+  "isActive": true }   // therapistId from JWT</code></pre>
+            <p><strong>Response:</strong> <code>200</code>. <code>serviceType</code> ∈ {<code>INDIVIDUAL_THERAPY</code>, <code>COUPLES_THERAPY</code>}. <code>duration</code> must be &gt; 0 (it drives slot length during generation). <strong>Note:</strong> there is no service-level <code>price</code> anymore — pricing lives entirely on delivery modes and is resolved at booking time.</p>
           </div>
         </details>
         <details class="endpoint">
@@ -347,7 +372,7 @@
             <pre><span class="pre-label">BookAppointmentRequest</span><code>{ "slotId": "SLT…", "clientId": "CLT…", "modeId": "…",
   "clientName": "Jane", "customPrice": 1500.00 }   // customPrice optional — overrides the mode's default fee</code></pre>
             <p><strong>Response:</strong> <code>200</code> <code>BookAppointmentResponse</code> — <code>{ appointmentId, paymentStatus, paymentLinkUrl, clientNotified }</code>. The payment fields are populated only when the therapist has payments enabled (otherwise null). <strong>Errors:</strong> <code>SlotNotAvailableException</code> (unknown/blocked slot or invalid mode), <code>SlotAlreadyBookedException</code> (lost the race).</p>
-            <p><strong>Flow:</strong> validates slot + unavailable overrides + active delivery mode (→ price, or <code>customPrice</code> override), atomically <code>markSlotAsBooked</code> (0 rows ⇒ already booked), persists the appointment, emits <code>AppointmentCreated</code>. After commit it best-effort creates a Razorpay payment link (never fails the booking — worst case <code>paymentStatus=LINK_FAILED</code>, retry via <code>/payments/{id}/link</code>).</p>
+            <p><strong>Flow:</strong> validates slot + unavailable overrides + active delivery mode (→ price, or <code>customPrice</code> override), requires a <strong>positive fee</strong> (a zero/null fee would corrupt earnings and produce an invalid Razorpay amount), rejects if the window <strong>overlaps an existing active appointment</strong> (slots for <em>other services</em> legitimately exist at the same times, so marking one slot booked isn't enough to prevent a double-booking), atomically <code>markSlotAsBooked</code> (0 rows ⇒ already booked), persists the appointment, emits <code>AppointmentCreated</code>. After commit it best-effort creates a Razorpay payment link (never fails the booking — worst case <code>paymentStatus=LINK_FAILED</code>, retry via <code>/payments/{id}/link</code>). Validation failures return <code>400 VALIDATION_ERROR</code> via the exception handler.</p>
           </div>
         </details>
         <details class="endpoint">
@@ -430,11 +455,11 @@
         </details>
         <details class="endpoint">
           <summary><span class="badge get">GET</span><span class="path">/admin/health</span><span class="ep-desc">Service self-report (appointment &amp; analytics)</span></summary>
-          <div class="ep-body"><p>AppointmentService returns an <code>AdminHealthDto</code>; AnalyticsService reports rollup freshness — <code>{ status: OK | BEHIND | NO_DATA, lastProcessedDate, daysBehind, serverTime }</code>.</p></div>
+          <div class="ep-body"><p>AppointmentService returns an <code>AdminHealthDto</code> including outbox stats — pending count and oldest-pending age (both <em>excluding</em> parked poison events, which get their own <code>parkedCount</code>); AnalyticsService reports rollup freshness — <code>{ status: OK | BEHIND | NO_DATA, lastProcessedDate, daysBehind, serverTime }</code>.</p></div>
         </details>
         <details class="endpoint">
           <summary><span class="badge post">POST</span><span class="path">/admin/outbox/replay</span><span class="ep-desc">Replay outbox events (appointment-service)</span></summary>
-          <div class="ep-body"><p><strong>Request:</strong> <code>{ "from": "YYYY-MM-DDTHH:MM:SS" }</code> (defaults to midnight today; <code>400</code> on bad format). Re-publishes outbox events from that time — an operational recovery tool if a consumer missed messages.</p></div>
+          <div class="ep-body"><p><strong>Request:</strong> <code>{ "from": "YYYY-MM-DDTHH:MM:SS" }</code> (defaults to midnight today; <code>400</code> on bad format). Re-publishes outbox events from that time — an operational recovery tool if a consumer missed messages. This is also the <strong>un-park path</strong>: parked poison events in the range get <code>parked=false, retryCount=0</code> and re-enter rotation (see <a href="messaging.html#outbox-parking">poison-event parking</a>).</p></div>
         </details>
         <details class="endpoint">
           <summary><span class="badge get">GET</span><span class="path">/admin/kafka</span><span class="ep-desc">Kafka / DLQ overview (gateway)</span></summary>

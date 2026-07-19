@@ -90,11 +90,11 @@ erDiagram
           <thead><tr><th>Table</th><th>Key fields</th><th>Purpose</th></tr></thead>
           <tbody>
             <tr><td><code>THERAPIST</code></td><td><code>therapistId</code> PK, <code>userId</code> (unique), <code>timezone</code>, <code>paymentEnabled</code></td><td>Profile. <code>paymentEnabled</code> gates Razorpay collection; <code>timezone</code> is the therapist's zone. Changes emit <code>TherapistEvent</code>.</td></tr>
-            <tr><td><code>THERAPIST_SERVICES</code></td><td>serviceId, duration, price, type</td><td>Offered services; drives slot duration &amp; pricing.</td></tr>
+            <tr><td><code>THERAPIST_SERVICES</code></td><td>serviceId, duration, type</td><td>Offered services; drives slot duration. <em>Pricing lives on delivery modes only</em> — the legacy <code>price</code> column is dead (kept until a migration removes it).</td></tr>
             <tr><td><code>THERAPY_DELIVERY_MODE</code></td><td>modeId, serviceId, modeType, address, price, isActive</td><td>Online/offline delivery options per service.</td></tr>
             <tr><td><code>THERAPIST_AVAILABILITY_RULES</code></td><td>dayOfWeek, startTime, endTime, isActive</td><td>Weekly recurring availability.</td></tr>
             <tr><td><code>THERAPIST_AVAILABILITY_OVERRIDES</code></td><td>startTime, endTime, available, reason</td><td>Date-specific add/remove of availability.</td></tr>
-            <tr><td><code>THERAPIST_AVAILABILITY</code></td><td><code>slotId</code> PK (SLT), startTime, endTime, serviceId, sessionFee</td><td>Concrete generated slots.</td></tr>
+            <tr><td><code>THERAPIST_AVAILABILITY</code></td><td><code>slotId</code> PK (SLT), startTime, endTime, serviceId</td><td>Concrete generated slots. Slots no longer carry a <code>sessionFee</code> — the fee is resolved from the delivery mode at booking time.</td></tr>
             <tr><td><code>SESSION_NOTES</code></td><td><code>noteId</code> PK, appointmentId (unique), <code>noteContent</code> 🔒</td><td>Clinical notes, AES-GCM encrypted at field level.</td></tr>
             <tr><td><code>CLIENT_NOTES</code></td><td>per therapist+client</td><td>Free-form per-client note.</td></tr>
             <tr><td><code>THERAPIST_CLIENTS</code> <span class="tag">projection</span></td><td>therapistId, clientId, clientName, status, dsf</td><td>Roster, kept current by <code>client-events</code>.</td></tr>
@@ -161,6 +161,8 @@ erDiagram
             <tr><td><code>payload</code></td><td>jsonb</td><td>Serialized event POJO.</td></tr>
             <tr><td><code>createdAt</code></td><td>timestamp</td><td>Publish order (oldest first).</td></tr>
             <tr><td><code>published</code></td><td>boolean</td><td>Flipped true after Kafka ack.</td></tr>
+            <tr><td><code>retryCount</code></td><td>int (default 0)</td><td>Failed publish attempts; reset by admin replay.</td></tr>
+            <tr><td><code>parked</code></td><td>boolean (default false)</td><td>Poison-event guard — set after a fatal error or 150 retries so the event stops blocking the queue; only admin replay un-parks (<a href="messaging.html#outbox-parking">details</a>).</td></tr>
           </tbody>
         </table></div>
 

@@ -63,7 +63,7 @@ sequenceDiagram
     K-->>AS: AvailabilitySlotsGenerated
     AS->>AS: refuse if BOOKED slots in range<br/>else replace AVAILABLE projection rows
         </div>
-        <div class="callout info"><p style="margin:0"><strong>Slot math:</strong> for each active service, the rule's time block is chopped into slots of the service's <code>duration</code>, advancing in fixed <strong>30-minute</strong> steps; a slot that would run past the block end is dropped. Each slot carries its <code>serviceId</code> and <code>sessionFee</code>. Overrides are single-day windows.</p></div>
+        <div class="callout info"><p style="margin:0"><strong>Slot math:</strong> for each active service, the rule's time block is chopped into slots of the service's <code>duration</code> (validated &gt; 0), advancing in fixed <strong>30-minute</strong> steps; a slot that would run past the block end is dropped. Each slot carries its <code>serviceId</code> only — fees are not stored on slots; pricing is resolved from the delivery mode at booking time. Overrides are single-day windows.</p></div>
 
         <h2 id="booking">3 · Booking an appointment</h2>
         <p>The most important transaction in the system. AppointmentService validates against its <em>local</em> availability and delivery-mode projections, then books atomically.</p>
@@ -80,7 +80,8 @@ sequenceDiagram
     T->>AS: POST /create-appointment {slotId, modeId, client}
     AS->>DB: find slot (else SlotNotAvailable)
     AS->>DB: check no unavailable override covers it
-    AS->>DB: find active delivery mode → price
+    AS->>DB: find active delivery mode → price (must be > 0)
+    AS->>DB: reject if window overlaps an active appointment
     AS->>DB: markSlotAsBooked(slotId) [affected rows]
     alt rows == 0
         AS-->>T: SlotAlreadyBooked
@@ -91,7 +92,8 @@ sequenceDiagram
         K-->>AN: (ignored until Completed)
     end
         </div>
-        <p><strong>Race safety:</strong> <code>markSlotAsBooked</code> is a conditional UPDATE returning the affected-row count; a return of 0 means another booking won the slot, yielding <code>SlotAlreadyBookedException</code> instead of a double-book. Pricing comes from the delivery mode (<code>findByModeIdAndTherapistIdAndServiceIdAndIsActiveTrue</code>), not the slot.</p>
+        <p><strong>Race safety:</strong> <code>markSlotAsBooked</code> is a conditional UPDATE returning the affected-row count; a return of 0 means another booking won the slot, yielding <code>SlotAlreadyBookedException</code> instead of a double-book. Pricing comes from the delivery mode (<code>findByModeIdAndTherapistIdAndServiceIdAndIsActiveTrue</code>), not the slot, and must be positive.</p>
+        <p><strong>Cross-service overlap guard:</strong> because a therapist's slots for <em>different services</em> legitimately occupy the same times, marking one slot booked doesn't block the parallel slots. Booking (and rescheduling) therefore also checks <code>existsActiveAppointmentOverlap</code> — any SCHEDULED/CONFIRMED/RESCHEDULED appointment overlapping the requested window rejects the booking with <code>SlotNotAvailableException</code>.</p>
 
         <h2 id="states">4 · Appointment state machine</h2>
         <p>Status transitions enforced by <code>AppointmentService</code>. Manual targets are limited to CONFIRMED/COMPLETED/CANCELLED/ABANDONED; terminal states cannot change.</p>
@@ -128,7 +130,7 @@ stateDiagram-v2
             <tr><td><code>CalendarBlockCreated/Deleted</code></td><td>Create/delete a "blocked time" calendar event when <code>syncToGoogleCalendar</code> is true.</td></tr>
           </tbody>
         </table></div>
-        <p>Attendee identity is per-therapist: invites use the email from Notification's <code>THERAPIST_PROJECTION</code> (kept current by <code>TherapistEvent</code>), falling back to the <code>THERAPIST_EMAIL</code> env value only for rows that predate the email field. Calendar failures are no longer swallowed — they retry (5s × 2) and dead-letter to <code>&lt;topic&gt;.DLT</code> for admin <a href="messaging.html#dlq">inspection and replay</a>.</p>
+        <p>Attendee identity is per-therapist: invites use the email from Notification's <code>THERAPIST_PROJECTION</code> (kept current by <code>TherapistCreated/TherapistUpdated/TherapistPaymentSettingsUpdated</code> events — changing your email in Account Settings propagates here), falling back to the <code>THERAPIST_EMAIL</code> env value only for rows that predate the email field. The client-side <code>ClientProjection</code> likewise upserts on <code>ClientUpdated</code>, so client contact edits reach future invites. Calendar failures are no longer swallowed — they retry (5s × 2) and dead-letter to <code>&lt;topic&gt;.DLT</code> for admin <a href="messaging.html#dlq">inspection and replay</a>.</p>
 
         <h2 id="payment">6 · Payment collection (Razorpay)</h2>
         <p>When the therapist has payments enabled and Razorpay keys are configured, booking creates a payment link and a successful payment auto-confirms the appointment. Payment can never block or fail a booking — every Razorpay call is wrapped and failures are recorded on the payment row.</p>

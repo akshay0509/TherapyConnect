@@ -31,6 +31,8 @@
             <li><strong>TLS at the edge</strong> — the gateway is bound to loopback behind a host nginx that terminates HTTPS, so the API (payments, webhooks, <code>SameSite=None</code> cookie) runs over TLS.</li>
             <li><strong>DLQ + retry pipeline implemented</strong> — every consumer retries with backoff then dead-letters to <code>&lt;topic&gt;.DLT</code>; the admin dashboard monitors DLT depth &amp; consumer lag and can peek/replay messages. Consumers now propagate failures instead of swallowing them.</li>
             <li><strong>Per-therapist calendar identity</strong> — invites use the therapist's own email from <code>THERAPIST_PROJECTION</code> (via <code>TherapistEvent</code>), not a single env-configured address; the dead email-reminder pipeline was deleted.</li>
+            <li><strong>Outbox poison-event parking</strong> — a permanently unpublishable event no longer blocks the outbox queue forever; it's parked after fatal errors or 150 retries and only re-enters via explicit admin replay (<a href="messaging.html#outbox-parking">details</a>).</li>
+            <li><strong>Cross-service double-booking guard</strong> — booking/reschedule now reject windows that overlap an existing active appointment (parallel slots for other services made slot-marking alone insufficient), and fees are validated positive.</li>
           </ul>
         </div>
 
@@ -62,7 +64,7 @@
         <h2 id="data-debt">Data &amp; schema</h2>
         <div class="card">
           <h4>4 · No migration tooling <span class="badge delete">High</span></h4>
-          <p>Every service runs <code>spring.jpa.hibernate.ddl-auto=update</code>. This is convenient in dev but unsafe in production — it can't drop/rename safely, offers no review trail, and risks divergence. <strong>Fix:</strong> adopt Flyway or Liquibase, switch to <code>validate</code>, and baseline the current schema.</p>
+          <p>Every service runs <code>spring.jpa.hibernate.ddl-auto=update</code>. This is convenient in dev but unsafe in production — it can't drop/rename safely, offers no review trail, and risks divergence. Concrete symptom: the now-dead <code>THERAPIST_SERVICES.price</code> and slot <code>sessionFee</code> columns can't be dropped without a migration tool and linger in the schema. <strong>Fix:</strong> adopt Flyway or Liquibase, switch to <code>validate</code>, baseline the current schema, and drop the dead columns.</p>
         </div>
         <div class="card">
           <h4>3 · One DB credential set <span class="badge put">Medium</span></h4>

@@ -67,7 +67,7 @@
           <li>Create users (BCrypt password hashing via <code>PasswordConfig</code>).</li>
           <li>Validate credentials — returns a structured <code>AuthResponse</code> with success/failure reason (invalid credentials, disabled, locked).</li>
           <li>Password reset — issue a 30-minute reset token and email a link via Gmail API (<code>EmailService</code>).</li>
-          <li>Update account (email/username) — identity taken from the JWT, not the body.</li>
+          <li>Account settings — view account details (<code>GET /account</code>), update email/username (trimmed, format-validated, uniqueness-checked → friendly 400s; username <code>[A-Za-z0-9._-]{3,30}</code>), and logged-in password change. Identity always from the JWT, not the body.</li>
           <li><strong>Forgot username</strong> — emails the username for a given address (generic response, no enumeration).</li>
           <li>Consume login events to maintain audit trail &amp; lockout: <strong>5 failed attempts locks the account</strong>; success resets the counter.</li>
           <li><strong>Admin user management</strong> — <code>AdminUserController</code>: list users, enable/lock, force-reset password, recent login audit.</li>
@@ -87,7 +87,7 @@
         <ul>
           <li>Therapist profile CRUD; resolve <code>therapistId</code> from <code>userId</code> (the gateway calls this during login).</li>
           <li><strong>Services</strong> (e.g. duration, price) and <strong>delivery modes</strong> (online/offline, address, price).</li>
-          <li><strong>Payment settings &amp; timezone</strong> — <code>PUT /payment-settings</code> toggles Razorpay collection; the profile carries a <code>timezone</code>. Both changes emit a <code>TherapistEvent</code> that AppointmentService projects.</li>
+          <li><strong>Payment settings, timezone &amp; email sync</strong> — <code>PUT /payment-settings</code> toggles Razorpay collection; <code>PUT /update-email</code> mirrors the account (login) email onto the profile so calendar invites follow; the profile carries a <code>timezone</code>. All changes emit <code>TherapistEvent</code>s that Appointment/Notification project.</li>
           <li><strong>Availability rules</strong> (weekly recurring) and <strong>overrides</strong> (date-specific add/remove); expands them into concrete slots via <code>AvailabilitySlotService</code>.</li>
           <li>Dashboard stats, earnings summary/sessions, and <strong>CSV export</strong> of earnings.</li>
           <li>Client roster (projection) and creating clients (delegates to ClientService over REST).</li>

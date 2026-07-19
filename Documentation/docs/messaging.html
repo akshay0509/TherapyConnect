@@ -97,13 +97,13 @@ updatedAt, cancelledBy, reason</code></pre>
         <details class="collapse"><summary><code>ClientEvent</code> — topic <code>client-events</code></summary>
           <div class="collapse-body">
             <p>Types: <code>ClientCreated</code>, <code>ClientUpdated</code>, <code>ClientStatusUpdated</code>. Fields: eventId, eventType, occurredAt, clientId, therapistId, email, <code>phoneNumber</code>, firstName, lastName, <code>status</code> (ACTIVE/TERMINATED), <code>dsf</code>.</p>
-            <p><strong>Consumed by:</strong> Therapist (updates <code>THERAPIST_CLIENTS</code> name/status), Notification (<code>ClientProjection</code> email), Analytics (DSF projection), and Appointment (<code>ClientContactProjection</code> email/phone for Razorpay notify).</p>
+            <p><strong>Consumed by:</strong> Therapist (updates <code>THERAPIST_CLIENTS</code> name/status), Notification (<code>ClientProjection</code> email — now upserts on <code>ClientUpdated</code> too; previously only <code>ClientCreated</code> was consumed and contact edits never reached the invite email), Analytics (DSF projection), and Appointment (<code>ClientContactProjection</code> email/phone for Razorpay notify).</p>
           </div>
         </details>
 
         <details class="collapse"><summary><code>TherapistEvent</code> — topic <code>therapist-availability-events</code></summary>
           <div class="collapse-body">
-            <p>Types: <code>TherapistCreated</code>, <code>TherapistPaymentSettingsUpdated</code>. Fields: eventId, eventType, occurredAt, therapistId, <code>timezone</code>, <code>email</code>, <code>paymentEnabled</code>.</p>
+            <p>Types: <code>TherapistCreated</code>, <code>TherapistUpdated</code>, <code>TherapistPaymentSettingsUpdated</code>. Fields: eventId, eventType, occurredAt, therapistId, <code>timezone</code>, <code>email</code>, <code>paymentEnabled</code>. <code>TherapistUpdated</code> fires when the therapist email is changed from Account Settings so downstream projections follow.</p>
             <p><strong>Consumed by:</strong> Appointment's <code>TherapistPaymentSettingsConsumer</code> (group <code>appointment-therapist-payment-projection-group</code>) — upserts <code>THERAPIST_PAYMENT_PROJECTION</code> so booking knows whether to create Razorpay links — and Notification, which upserts <code>THERAPIST_PROJECTION</code> (timezone + email) so calendar invites use the <em>therapist's own</em> email rather than a single env-configured address.</p>
           </div>
         </details>
@@ -133,6 +133,14 @@ public void publishPendingEvents() {
     }
 }</code></pre>
         <p>The producer publishes the raw <code>jsonb</code> payload keyed by <code>aggregateId</code>, so all events for one therapist/appointment land on the same partition and stay ordered. The Kafka send is awaited (<code>.get()</code>) so a failure is caught and the row stays unpublished.</p>
+
+        <h3 id="outbox-parking">Poison-event parking</h3>
+        <p>A permanently unpublishable event (oversized record, serialization failure) used to block everything behind it forever, since the scheduler stops the batch on failure to preserve ordering. The outbox now distinguishes the two failure classes:</p>
+        <ul>
+          <li><strong>Transient</strong> (broker down/slow) — increment <code>retryCount</code>, stop the batch, retry next tick. Ordering preserved.</li>
+          <li><strong>Fatal</strong> (<code>RecordTooLargeException</code>, <code>SerializationException</code>) or <strong>150 retries</strong> (~5 minutes of 2s ticks — long enough that a broker restart never parks a healthy event) — mark the row <code>parked=true</code> and <em>continue past it</em>.</li>
+        </ul>
+        <p>Parked events are excluded from the scheduler's query and from the admin health "pending" count (they'd keep the card red forever); they get their own <code>parkedCount</code>. The only way back into rotation is an explicit <a href="api.html#admin-api">admin outbox replay</a>, which un-parks rows in the requested range with a fresh retry budget — deliberate, because replaying a stale parked event <em>after</em> newer events for the same entity can regress projections.</p>
 
         <h2 id="dlq">Retry &amp; dead-letter pipeline</h2>
         <p>Every consuming service (Appointment, Therapist, Notification, Analytics) registers a <code>KafkaConsumerConfig</code> with a Spring Kafka <code>DefaultErrorHandler</code>:</p>
