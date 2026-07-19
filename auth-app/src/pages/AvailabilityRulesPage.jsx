@@ -130,10 +130,12 @@ export default function AvailabilityRulesPage() {
 
   const openEditRule = (rule) => {
     setEditRule(rule);
+    // backend LocalTime serializes as HH:MM:SS — trim to HH:MM so the time
+    // input doesn't render a seconds column
     setEditForm({
       dayOfWeek: rule.dayOfWeek,
-      startTime: rule.startTime,
-      endTime:   rule.endTime,
+      startTime: (rule.startTime || "").slice(0, 5),
+      endTime:   (rule.endTime || "").slice(0, 5),
       isActive:  rule.isActive,
     });
     setEditError(null);
@@ -437,12 +439,12 @@ export default function AvailabilityRulesPage() {
                 </div>
                 <div className={styles.editField}>
                   <label className={styles.editLabel}>Start Time</label>
-                  <input className={styles.input} type="time" value={editForm.startTime}
+                  <input className={styles.timeInput} type="time" value={editForm.startTime}
                     onChange={e => setEditForm(p => ({ ...p, startTime: e.target.value }))} />
                 </div>
                 <div className={styles.editField}>
                   <label className={styles.editLabel}>End Time</label>
-                  <input className={styles.input} type="time" value={editForm.endTime}
+                  <input className={styles.timeInput} type="time" value={editForm.endTime}
                     onChange={e => setEditForm(p => ({ ...p, endTime: e.target.value }))} />
                 </div>
               </div>
