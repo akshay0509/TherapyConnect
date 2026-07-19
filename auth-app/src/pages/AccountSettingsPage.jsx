@@ -245,9 +245,13 @@ export default function AccountSettingsPage() {
           <div className={styles.field}>
             <label className={styles.label}>Current password <span className={styles.required}>*</span></label>
             <div className={styles.inputWrapper}>
-              <input name="currentPassword" type={showPassword ? "text" : "password"}
-                autoComplete="current-password" required
-                value={form.currentPassword} onChange={handleChange}
+              {/* one-time-code stops Chrome from classifying username+password
+                  here as a login form and autofilling the saved credential —
+                  this field should always be typed deliberately */}
+              <input name="confirmIdentity" type={showPassword ? "text" : "password"}
+                autoComplete="one-time-code" required
+                value={form.currentPassword}
+                onChange={(e) => setForm(prev => ({ ...prev, currentPassword: e.target.value }))}
                 className={styles.input} placeholder="••••••••" />
               <button type="button" className={styles.toggle} onClick={() => setShowPassword(s => !s)}>
                 {showPassword ? "Hide" : "Show"}
