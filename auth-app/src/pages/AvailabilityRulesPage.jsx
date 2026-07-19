@@ -140,6 +140,10 @@ export default function AvailabilityRulesPage() {
   };
 
   const handleEditRule = async () => {
+    // same window validation the create flow has (backend validates too)
+    if (!editForm.startTime || !editForm.endTime || editForm.startTime >= editForm.endTime) {
+      setEditError("End time must be after start time."); return;
+    }
     setEditLoading(true); setEditError(null);
     try {
       const updated = await updateAvailabilityRule(editRule.ruleId, editForm);
@@ -150,6 +154,16 @@ export default function AvailabilityRulesPage() {
     } finally {
       setEditLoading(false);
     }
+  };
+
+  // Days selectable in the edit dialog: same one-rule-per-day restriction the
+  // create flow enforces — exclude days owned by other rules, keep own day
+  const availableForEdit = () => {
+    if (!editRule) return ALL_DAYS;
+    const takenDays = existingRules
+      .filter(r => r.ruleId !== editRule.ruleId)
+      .map(r => r.dayOfWeek);
+    return ALL_DAYS.filter(d => !takenDays.includes(d) || d === editForm.dayOfWeek);
   };
 
   // Days available for a specific new row (excluding other new rows' selections except itself)
@@ -418,7 +432,7 @@ export default function AvailabilityRulesPage() {
                   <label className={styles.editLabel}>Day</label>
                   <select className={styles.select} value={editForm.dayOfWeek}
                     onChange={e => setEditForm(p => ({ ...p, dayOfWeek: Number(e.target.value) }))}>
-                    {ALL_DAYS.map(d => <option key={d} value={d}>{DAY_MAP[d]}</option>)}
+                    {availableForEdit().map(d => <option key={d} value={d}>{DAY_MAP[d]}</option>)}
                   </select>
                 </div>
                 <div className={styles.editField}>

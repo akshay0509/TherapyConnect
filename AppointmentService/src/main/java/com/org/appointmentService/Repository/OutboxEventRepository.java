@@ -17,16 +17,20 @@ import org.springframework.transaction.annotation.Transactional;
 @Repository
 public interface OutboxEventRepository extends JpaRepository<OutboxEvent, String> {
 
-    List<OutboxEvent> findTop100ByPublishedFalseOrderByCreatedAtAsc();
+    List<OutboxEvent> findTop100ByPublishedFalseAndParkedFalseOrderByCreatedAtAsc();
 
-    long countByPublishedFalse();
+    long countByPublishedFalseAndParkedFalse();
 
-    Optional<OutboxEvent> findTopByPublishedFalseOrderByCreatedAtAsc();
+    long countByParkedTrue();
+
+    Optional<OutboxEvent> findTopByPublishedFalseAndParkedFalseOrderByCreatedAtAsc();
 
     long deleteByPublishedTrueAndCreatedAtBefore(LocalDateTime cutoff);
 
+    // manual replay is also the un-park path: an admin explicitly requesting a
+    // range gets parked events back into rotation with a fresh retry budget
     @Transactional
     @Modifying
-    @Query("UPDATE OutboxEvent o SET o.published = false WHERE o.createdAt >= :from")
+    @Query("UPDATE OutboxEvent o SET o.published = false, o.parked = false, o.retryCount = 0 WHERE o.createdAt >= :from")
     int resetPublishedFrom(@Param("from") LocalDateTime from);
 }

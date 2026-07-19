@@ -26,11 +26,15 @@ public class AdminService {
         AdminHealthDto dto = new AdminHealthDto();
         dto.setServerTime(LocalDateTime.now().format(ISO_FMT));
 
-        long pendingCount = outboxEventRepository.countByPublishedFalse();
-        Optional<OutboxEvent> oldest = outboxEventRepository.findTopByPublishedFalseOrderByCreatedAtAsc();
+        // parked (poison) events are excluded from pending/staleness — they no
+        // longer retry, so counting them would keep the card red forever;
+        // they get their own counter instead
+        long pendingCount = outboxEventRepository.countByPublishedFalseAndParkedFalse();
+        Optional<OutboxEvent> oldest = outboxEventRepository.findTopByPublishedFalseAndParkedFalseOrderByCreatedAtAsc();
 
         AdminHealthDto.OutboxStatus outbox = new AdminHealthDto.OutboxStatus();
         outbox.setPendingCount(pendingCount);
+        outbox.setParkedCount(outboxEventRepository.countByParkedTrue());
 
         if (pendingCount == 0 || oldest.isEmpty()) {
             outbox.setStatus("OK");
@@ -56,7 +60,7 @@ public class AdminService {
         return Map.of(
             "resetCount", resetCount,
             "replayFrom", from.format(ISO_FMT),
-            "message", "Reset " + resetCount + " events. Outbox scheduler will republish within seconds."
+            "message", "Reset " + resetCount + " events (parked events in range un-parked). Outbox scheduler will republish within seconds."
         );
     }
 }

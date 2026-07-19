@@ -161,6 +161,7 @@ public class TherapistService {
 
 	@Transactional
 	public void createTherapistServices(TherapistServicesDto therapistServicesDto) {
+		validateServiceDuration(therapistServicesDto);
 		TherapistServices therapistServices = therapistAssembler.assembleDtoToEntity(therapistServicesDto);
 		therapistServicesRepository.save(therapistServices);
 
@@ -169,12 +170,14 @@ public class TherapistService {
 
 	@Transactional
 	public TherapistServicesDto updateTherapistService(String therapistId, String serviceId, TherapistServicesDto therapistServicesDto) {
+		validateServiceDuration(therapistServicesDto);
 		TherapistServices service = therapistServicesRepository.findByServiceIdAndTherapistId(serviceId, therapistId)
 				.orElseThrow(() -> new IllegalArgumentException("Therapist service not found."));
 
+		// pricing lives on delivery modes only — the service-level price is a
+		// dead field kept in the schema until the Flyway cleanup
 		service.setServiceType(therapistServicesDto.getServiceType());
 		service.setDuration(therapistServicesDto.getDuration());
-		service.setPrice(therapistServicesDto.getPrice());
 		service.setActive(Boolean.TRUE.equals(therapistServicesDto.getIsActive()));
 
 		TherapistServicesDto result = therapistAssembler.assembleEntityToDto(therapistServicesRepository.save(service));
@@ -182,6 +185,21 @@ public class TherapistService {
 		regenerateFutureSlots(therapistId);
 
 		return result;
+	}
+
+	// zero/negative duration would generate zero-length garbage slots
+	private void validateServiceDuration(TherapistServicesDto dto) {
+		if (dto.getDuration() <= 0) {
+			throw new IllegalArgumentException("Service duration must be a positive number of minutes.");
+		}
+	}
+
+	// modes are the single source of pricing — a null/zero price here would
+	// surface later as a rejected booking
+	private void validateModePrice(TherapyDeliveryModeDto dto) {
+		if (dto.getPrice() == null || dto.getPrice().signum() <= 0) {
+			throw new IllegalArgumentException("Delivery mode price is required and must be positive.");
+		}
 	}
 
 	@Transactional
@@ -266,6 +284,7 @@ public class TherapistService {
 
 	@Transactional
 	public TherapyDeliveryModeDto createDeliveryMode(String therapistId, TherapyDeliveryModeDto dto) throws JsonProcessingException {
+		validateModePrice(dto);
 		TherapyDeliveryMode mode = therapistAssembler.assembleDtoToEntity(dto);
 		mode.setTherapistId(therapistId);
 		TherapyDeliveryMode saved = therapyDeliveryModeRepository.save(mode);
@@ -300,6 +319,7 @@ public class TherapistService {
 
 	@Transactional
 	public TherapyDeliveryModeDto updateDeliveryMode(String therapistId, String modeId, TherapyDeliveryModeDto dto) throws JsonProcessingException {
+		validateModePrice(dto);
 		TherapyDeliveryMode mode = therapyDeliveryModeRepository.findByModeIdAndTherapistId(modeId, therapistId)
 				.orElseThrow(() -> new IllegalArgumentException("Delivery mode not found."));
 		mode.setModeType(dto.getModeType());
@@ -338,6 +358,9 @@ public class TherapistService {
 			TherapistAvailabilityRules therapistAvailabilityRules = therapistAssembler.assembleDtoToEntity(therapistAvailabilityRulesDto);
 			therapistAvailabilityRulesList.add(therapistAvailabilityRules);
 		}
+
+		rejectOverlappingRules(therapistAvailabilityRulesList.get(0).getTherapistId(), therapistAvailabilityRulesList, null);
+
 		List<TherapistAvailabilityRules> saved = therapistAvailabilityRulesRepository.saveAll(therapistAvailabilityRulesList);
 		List<TherapistAvailabilityRulesDto> result = new ArrayList<>();
 		for (TherapistAvailabilityRules entity : saved) {
@@ -366,11 +389,57 @@ public class TherapistService {
 		rule.setStartTime(dto.getStartTime());
 		rule.setEndTime(dto.getEndTime());
 		rule.setActive(Boolean.TRUE.equals(dto.getIsActive()));
+
+		rejectOverlappingRules(therapistId, List.of(rule), ruleId);
+
 		TherapistAvailabilityRulesDto result = therapistAssembler.assembleEntityToDto(therapistAvailabilityRulesRepository.save(rule));
 
 		regenerateFutureSlots(therapistId);
 
 		return result;
+	}
+
+	/**
+	 * Overlapping active rules for the same weekday would generate overlapping
+	 * slots — there is no DB constraint catching this, so the extra supply
+	 * would silently become bookable. Validates each candidate window and
+	 * checks it against the other active rules (and earlier candidates in the
+	 * same batch); excludeRuleId skips the rule being updated.
+	 */
+	private void rejectOverlappingRules(String therapistId, List<TherapistAvailabilityRules> candidates, String excludeRuleId) {
+		List<TherapistAvailabilityRules> accepted = new ArrayList<>(
+				therapistAvailabilityRulesRepository.findByTherapistIdAndIsActiveTrue(therapistId).stream()
+						.filter(existing -> excludeRuleId == null || !existing.getRuleId().equals(excludeRuleId))
+						.toList());
+
+		for (TherapistAvailabilityRules candidate : candidates) {
+			if (candidate.getStartTime() == null || candidate.getEndTime() == null) {
+				throw new IllegalArgumentException("Rule start and end time are required.");
+			}
+			if (!candidate.getEndTime().isAfter(candidate.getStartTime())) {
+				throw new IllegalArgumentException("Rule end time must be after start time.");
+			}
+			if (candidate.getDayOfWeek() < 1 || candidate.getDayOfWeek() > 7) {
+				throw new IllegalArgumentException("Rule day of week must be between 1 (Monday) and 7 (Sunday).");
+			}
+			if (!candidate.isActive()) {
+				continue;
+			}
+			for (TherapistAvailabilityRules other : accepted) {
+				if (other.getDayOfWeek() == candidate.getDayOfWeek()
+						&& candidate.getStartTime().isBefore(other.getEndTime())
+						&& candidate.getEndTime().isAfter(other.getStartTime())) {
+					throw new IllegalArgumentException(
+							"Availability rule " + ruleWindowLabel(candidate)
+							+ " overlaps existing rule " + ruleWindowLabel(other) + ".");
+				}
+			}
+			accepted.add(candidate);
+		}
+	}
+
+	private String ruleWindowLabel(TherapistAvailabilityRules rule) {
+		return "day " + rule.getDayOfWeek() + " " + rule.getStartTime() + "–" + rule.getEndTime();
 	}
 
 	/**

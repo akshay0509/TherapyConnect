@@ -310,19 +310,29 @@ export default function AdminPage() {
 
     const { outbox } = apptHealth;
     const isStale = outbox?.status === "STALE";
-    const cardClass = isStale ? styles.cardError : styles.cardOk;
-    const badgeClass = isStale ? styles.error : styles.ok;
-    const dotClass = isStale ? styles.dotError : styles.dotOk;
+    const hasParked = (outbox?.parkedCount ?? 0) > 0;
+    const isBad = isStale || hasParked;
+    const cardClass = isBad ? styles.cardError : styles.cardOk;
+    const badgeClass = isBad ? styles.error : styles.ok;
+    const dotClass = isBad ? styles.dotError : styles.dotOk;
 
     return (
       <div className={`${styles.card} ${cardClass}`}>
         <div className={styles.cardLabel}>Outbox / Kafka Producer</div>
         <div className={`${styles.statusBadge} ${badgeClass}`}>
           <span className={`${styles.statusDot} ${dotClass}`} />
-          {isStale ? "STALE — Events stuck" : "HEALTHY"}
+          {isStale ? "STALE — Events stuck" : hasParked ? "PARKED EVENTS" : "HEALTHY"}
         </div>
         <div className={styles.cardDetail}>
           <strong>{outbox?.pendingCount ?? 0}</strong> event(s) pending
+          {hasParked && (
+            <>
+              <br />
+              <strong style={{ color: "#dc2626" }}>
+                {outbox.parkedCount} parked (poison) — inspect logs, then replay the range to retry
+              </strong>
+            </>
+          )}
           {outbox?.oldestPendingAt && (
             <>
               <br />

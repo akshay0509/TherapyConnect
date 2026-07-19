@@ -11,6 +11,7 @@ public class AdminHealthDto {
     @Data
     public static class OutboxStatus {
         private long pendingCount;
+        private long parkedCount;
         private String oldestPendingAt;
         private String estimatedIssueStartedAt;
         private String status; // "OK" | "STALE"

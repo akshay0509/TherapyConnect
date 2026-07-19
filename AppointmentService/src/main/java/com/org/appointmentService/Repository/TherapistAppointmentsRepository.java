@@ -21,15 +21,35 @@ public interface TherapistAppointmentsRepository extends JpaRepository<Therapist
 			LocalDateTime startTime,
 			LocalDateTime endTime
 			);
-	
+
 	Optional<TherapistAppointments> findByAppointmentIdAndTherapistId(String appointmentId, String therapistId);
-	
+
 	List<TherapistAppointments> findByTherapistIdAndStartTimeLessThanAndEndTimeGreaterThanOrderByStartTimeAsc(
 			String therapistId,
 			LocalDateTime endTime,
 			LocalDateTime startTime
 			);
-	
+
+	@Query("""
+			SELECT COUNT(a) > 0
+			FROM TherapistAppointments a
+			WHERE a.therapistId = :therapistId
+			AND (:excludeAppointmentId IS NULL OR a.appointmentId <> :excludeAppointmentId)
+			AND a.status IN (
+			com.org.events.TherapistAppointment.AppointmentStatus.SCHEDULED,
+			com.org.events.TherapistAppointment.AppointmentStatus.CONFIRMED,
+			com.org.events.TherapistAppointment.AppointmentStatus.RESCHEDULED
+			)
+			AND a.startTime < :endTime
+			AND a.endTime > :startTime
+			""")
+	boolean existsActiveAppointmentOverlap(
+			String therapistId,
+			String excludeAppointmentId,
+			LocalDateTime startTime,
+			LocalDateTime endTime
+			);
+
 	@Query("""
 			SELECT a
 			FROM TherapistAppointments a

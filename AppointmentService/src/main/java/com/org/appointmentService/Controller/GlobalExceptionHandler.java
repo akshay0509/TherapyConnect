@@ -23,7 +23,7 @@ public class GlobalExceptionHandler {
                 .status(HttpStatus.CONFLICT)
                 .body(apiError);
     }
-	
+
 	@ExceptionHandler(SlotNotAvailableException.class)
     public ResponseEntity<ApiError> handleSlotNotAvailable(
             SlotNotAvailableException ex) {
@@ -53,7 +53,15 @@ public class GlobalExceptionHandler {
                 .status(HttpStatus.BAD_REQUEST)
                 .body(apiError);
     }
-    
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ApiError> handleIllegalArgument(IllegalArgumentException ex) {
+        ApiError apiError = new ApiError("VALIDATION_ERROR", ex.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(apiError);
+    }
+
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<ApiError> handleIllegalState(IllegalStateException ex) {
         ApiError apiError = new ApiError("INVALID_APPOINTMENT_STATE", ex.getMessage());

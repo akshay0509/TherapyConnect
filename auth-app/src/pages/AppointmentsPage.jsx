@@ -438,8 +438,8 @@ export default function AppointmentsPage() {
     e.preventDefault();
     if (!booking.clientId) { setBookingError("Please select a client."); return; }
     if (!booking.modeId) { setBookingError("Please select a delivery mode."); return; }
-    if (booking.useCustomPrice && (!booking.customPrice || parseFloat(booking.customPrice) < 0)) {
-      setBookingError("Please enter a valid custom session fee."); return;
+    if (booking.useCustomPrice && (!booking.customPrice || parseFloat(booking.customPrice) <= 0)) {
+      setBookingError("Custom session fee must be greater than zero."); return;
     }
     setBookingLoading(true); setBookingError(null);
     try {

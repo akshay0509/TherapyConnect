@@ -72,6 +72,15 @@ public class AppointmentService {
 			AppointmentStatus.ABANDONED
 			);
 
+	// a null/zero fee would create a financially broken appointment: earnings
+	// queries would count it and the Razorpay link amount would be invalid
+	private void requirePositiveFee(BigDecimal sessionFee) {
+		if (sessionFee == null || sessionFee.signum() <= 0) {
+			throw new IllegalArgumentException(
+					"Session fee must be a positive amount — set a valid price on the delivery mode.");
+		}
+	}
+
 	@Transactional
 	public String bookAppointment(BookAppointmentRequest bookAppointmentRequest) throws JsonProcessingException {
 
@@ -96,6 +105,20 @@ public class AppointmentService {
 		BigDecimal sessionFee = bookAppointmentRequest.getCustomPrice() != null
 				? bookAppointmentRequest.getCustomPrice()
 				: deliveryMode.getPrice();
+
+		requirePositiveFee(sessionFee);
+
+		// slots for other services exist at the same time by design; booking
+		// marks only one slot, so the overlap with active appointments must be
+		// checked explicitly or the therapist can be double-booked
+		if (therapistAppointmentsRepository.existsActiveAppointmentOverlap(
+				bookAppointmentRequest.getTherapistId(),
+				null,
+				therapistAvailability.getStartTime(),
+				therapistAvailability.getEndTime())) {
+			throw new SlotNotAvailableException(
+					"Requested time overlaps an existing appointment.");
+		}
 
 		int updated = therapistAvailabilityRepository.markSlotAsBooked(slotId);
 
@@ -216,6 +239,19 @@ public class AppointmentService {
 						"Mode " + modeId + " is not available for slot " + newSlotId));
 
 		BigDecimal sessionFee = deliveryMode.getPrice();
+
+		requirePositiveFee(sessionFee);
+
+		// same double-booking guard as bookAppointment; the appointment being
+		// rescheduled must not block its own move
+		if (therapistAppointmentsRepository.existsActiveAppointmentOverlap(
+				therapistId,
+				appointmentId,
+				newSlot.getStartTime(),
+				newSlot.getEndTime())) {
+			throw new SlotNotAvailableException(
+					"Requested time overlaps an existing appointment.");
+		}
 
 		int booked = therapistAvailabilityRepository.markSlotAsBooked(newSlotId);
 		if (booked == 0) {

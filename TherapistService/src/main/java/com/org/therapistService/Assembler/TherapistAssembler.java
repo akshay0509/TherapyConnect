@@ -54,11 +54,12 @@ public class TherapistAssembler {
 		return therapistDto;
 	}
 
+	// service-level price is dead — pricing lives on delivery modes; the
+	// entity column stays until the Flyway cleanup but is no longer mapped
 	public TherapistServices assembleDtoToEntity(TherapistServicesDto therapistServicesDto) {
 		TherapistServices therapistServices = new TherapistServices();
 		therapistServices.setTherapistId(therapistServicesDto.getTherapistId());
 		therapistServices.setServiceType(therapistServicesDto.getServiceType());
-		therapistServices.setPrice(therapistServicesDto.getPrice());
 		therapistServices.setDuration(therapistServicesDto.getDuration());
 		therapistServices.setActive(therapistServicesDto.getIsActive());
 
@@ -70,7 +71,6 @@ public class TherapistAssembler {
 		therapistServicesDto.setServiceId(therapistServices.getServiceId());
 		therapistServicesDto.setTherapistId(therapistServices.getTherapistId());
 		therapistServicesDto.setServiceType(therapistServices.getServiceType());
-		therapistServicesDto.setPrice(therapistServices.getPrice());
 		therapistServicesDto.setDuration(therapistServices.getDuration());
 		therapistServicesDto.setIsActive(therapistServices.isActive());
 

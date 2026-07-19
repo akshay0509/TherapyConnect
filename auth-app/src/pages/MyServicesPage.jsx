@@ -25,10 +25,10 @@ const MODE_TYPE_ICON = {
   OFFLINE: "📍",
 };
 
+// no service-level price: pricing lives on delivery modes
 const EMPTY_FORM = {
   serviceType: "",
   duration: "",
-  price: "",
   isActive: true,
 };
 
@@ -112,7 +112,6 @@ export default function MyServicesPage() {
       const payload = {
         serviceType: form.serviceType,
         duration: parseInt(form.duration, 10),
-        price: parseFloat(form.price),
         isActive: form.isActive,
       };
       // createService returns void — re-fetch to get the new service with its generated ID
@@ -132,7 +131,7 @@ export default function MyServicesPage() {
 
   const openEdit = (s) => {
     setEditService(s);
-    setEditForm({ serviceType: s.serviceType, duration: String(s.duration), price: String(s.price), isActive: s.isActive });
+    setEditForm({ serviceType: s.serviceType, duration: String(s.duration), isActive: s.isActive });
     setEditError(null);
   };
   const closeEdit = () => { setEditService(null); setEditError(null); };
@@ -144,7 +143,6 @@ export default function MyServicesPage() {
       const payload = {
         serviceType: editForm.serviceType,
         duration: parseInt(editForm.duration, 10),
-        price: parseFloat(editForm.price),
         isActive: editForm.isActive,
       };
       const updated = await updateService(editService.serviceId, payload);
@@ -204,7 +202,7 @@ export default function MyServicesPage() {
         modeType: modeForm.modeType,
         displayName: modeForm.displayName,
         address: modeForm.address || undefined,
-        price: modeForm.price ? parseFloat(modeForm.price) : undefined,
+        price: parseFloat(modeForm.price),
         isActive: modeForm.isActive,
       };
       const created = await createDeliveryMode(payload);
@@ -239,7 +237,7 @@ export default function MyServicesPage() {
         modeType: editModeForm.modeType,
         displayName: editModeForm.displayName,
         address: editModeForm.address || undefined,
-        price: editModeForm.price ? parseFloat(editModeForm.price) : undefined,
+        price: parseFloat(editModeForm.price),
         isActive: editModeForm.isActive,
       };
       const updated = await updateDeliveryMode(editMode.modeId, payload);
@@ -347,11 +345,6 @@ export default function MyServicesPage() {
                     <span className={styles.statLabel}>Duration</span>
                     <span className={styles.statValue}>{s.duration} <span className={styles.statUnit}>min</span></span>
                   </div>
-                  <div className={styles.statDivider} />
-                  <div className={styles.stat}>
-                    <span className={styles.statLabel}>Price</span>
-                    <span className={styles.statValue}>₹{parseFloat(s.price).toFixed(2)}</span>
-                  </div>
                 </div>
 
                 <div className={styles.serviceId}>ID: {s.serviceId}</div>
@@ -453,15 +446,6 @@ export default function MyServicesPage() {
                 className={styles.input} placeholder="e.g. 60"
               />
             </div>
-            <div className={styles.field}>
-              <label className={styles.label} htmlFor="price">Price (₹)</label>
-              <input
-                id="price" name="price" type="number"
-                min="0" step="0.01" required
-                value={form.price} onChange={handleChange}
-                className={styles.input} placeholder="e.g. 1500.00"
-              />
-            </div>
           </div>
 
           <div className={styles.field}>
@@ -524,11 +508,6 @@ export default function MyServicesPage() {
                 <label className={styles.label}>Duration (minutes)</label>
                 <input className={styles.input} type="number" min="1" max="480" required
                   value={editForm.duration} onChange={e => setEditForm(p => ({ ...p, duration: e.target.value }))} placeholder="e.g. 60" />
-              </div>
-              <div className={styles.field}>
-                <label className={styles.label}>Price (₹)</label>
-                <input className={styles.input} type="number" min="0" step="0.01" required
-                  value={editForm.price} onChange={e => setEditForm(p => ({ ...p, price: e.target.value }))} placeholder="e.g. 1500.00" />
               </div>
             </div>
             <div className={styles.field}>
@@ -610,8 +589,8 @@ export default function MyServicesPage() {
               </div>
             )}
             <div className={styles.field}>
-              <label className={styles.label}>Price Override (₹) <span className={styles.optionalTag}>(optional)</span></label>
-              <input className={styles.input} type="number" min="0" step="0.01" placeholder="Leave blank to use service price"
+              <label className={styles.label}>Price (₹)</label>
+              <input className={styles.input} type="number" min="0.01" step="0.01" required placeholder="e.g. 1500.00"
                 value={modeForm.price} onChange={e => setModeForm(p => ({ ...p, price: e.target.value }))} />
             </div>
             <div className={styles.field}>
@@ -673,8 +652,8 @@ export default function MyServicesPage() {
               </div>
             )}
             <div className={styles.field}>
-              <label className={styles.label}>Price Override (₹) <span className={styles.optionalTag}>(optional)</span></label>
-              <input className={styles.input} type="number" min="0" step="0.01"
+              <label className={styles.label}>Price (₹)</label>
+              <input className={styles.input} type="number" min="0.01" step="0.01" required
                 value={editModeForm.price} onChange={e => setEditModeForm(p => ({ ...p, price: e.target.value }))} />
             </div>
             <div className={styles.field}>

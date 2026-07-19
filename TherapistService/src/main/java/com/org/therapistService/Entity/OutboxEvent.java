@@ -33,7 +33,16 @@ public class OutboxEvent {
 
     private LocalDateTime createdAt;
     private boolean published;
-    
+
+    // poison-event guard: a permanently failing event is parked after
+    // exhausting retries so it stops blocking the events behind it.
+    // columnDefinition defaults let ddl-auto add the columns to existing rows.
+    @Column(nullable = false, columnDefinition = "integer default 0")
+    private int retryCount = 0;
+
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    private boolean parked = false;
+
     @PrePersist
     public void generateId() {
         if (this.outboxEventId == null) {

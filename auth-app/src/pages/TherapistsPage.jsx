@@ -247,14 +247,12 @@ export default function TherapistsPage() {
                         </span>
                       </div>
                     </div>
+                    {/* price removed: service-level price is dead — fees come
+                        from delivery modes, chosen at booking time */}
                     <div className={styles.serviceDetails}>
                       <div className={styles.serviceStat}>
                         <span className={styles.serviceStatLabel}>Duration</span>
                         <span className={styles.serviceStatValue}>{s.duration} min</span>
-                      </div>
-                      <div className={styles.serviceStat}>
-                        <span className={styles.serviceStatLabel}>Price</span>
-                        <span className={styles.serviceStatValue}>₹{s.price.toFixed(2)}</span>
                       </div>
                     </div>
                   </div>

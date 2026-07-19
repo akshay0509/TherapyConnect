@@ -329,7 +329,9 @@ public class AvailabilitySlotService {
 				slot.setStartTime(slotStartTime);
 				slot.setEndTime(slotEndTime);
 				slot.setServiceId(serviceId);
-				slot.setSessionFee(service.getPrice());
+				// no fee on slots: pricing lives on delivery modes and is
+				// resolved at booking time; slot sessionFee was written but
+				// never read anywhere downstream
 
 				newSlots.add(slot);
 				currentSlotTime = currentSlotTime.plusMinutes(30);

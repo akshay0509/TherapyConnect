@@ -9,9 +9,11 @@ import org.springframework.stereotype.Repository;
 import com.org.therapistService.Entity.OutboxEvent;
 
 @Repository
-public interface OutboxEventRepository extends JpaRepository<OutboxEvent, String>{
+public interface OutboxEventRepository extends JpaRepository<OutboxEvent, String> {
 
-	List<OutboxEvent> findTop100ByPublishedFalseOrderByCreatedAtAsc();
+	List<OutboxEvent> findTop100ByPublishedFalseAndParkedFalseOrderByCreatedAtAsc();
+
+	long countByParkedTrue();
 
 	long deleteByPublishedTrueAndCreatedAtBefore(LocalDateTime cutoff);
 }
