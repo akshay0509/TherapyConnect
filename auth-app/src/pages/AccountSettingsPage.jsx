@@ -61,6 +61,11 @@ export default function AccountSettingsPage() {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ username: "", email: "", currentPassword: "" });
   const [showPassword, setShowPassword] = useState(false);
+  // anti-autofill: the password input renders readOnly and unlocks on focus —
+  // Chrome never injects saved credentials into read-only fields, which is
+  // the only reliable way to stop it treating username+password as a login
+  // form (autocomplete hints alone are ignored)
+  const [pwUnlocked, setPwUnlocked] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
@@ -85,6 +90,7 @@ export default function AccountSettingsPage() {
       email: account?.email || "",
       currentPassword: "",
     });
+    setPwUnlocked(false);
     setError(null);
     setSuccess(null);
     setEditing(true);
@@ -245,11 +251,10 @@ export default function AccountSettingsPage() {
           <div className={styles.field}>
             <label className={styles.label}>Current password <span className={styles.required}>*</span></label>
             <div className={styles.inputWrapper}>
-              {/* one-time-code stops Chrome from classifying username+password
-                  here as a login form and autofilling the saved credential —
-                  this field should always be typed deliberately */}
               <input name="confirmIdentity" type={showPassword ? "text" : "password"}
                 autoComplete="one-time-code" required
+                readOnly={!pwUnlocked}
+                onFocus={() => setPwUnlocked(true)}
                 value={form.currentPassword}
                 onChange={(e) => setForm(prev => ({ ...prev, currentPassword: e.target.value }))}
                 className={styles.input} placeholder="••••••••" />
