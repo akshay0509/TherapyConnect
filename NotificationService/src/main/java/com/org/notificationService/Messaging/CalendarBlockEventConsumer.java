@@ -51,7 +51,7 @@ public class CalendarBlockEventConsumer {
         String eventType = payload.get("eventType").asText();
 
         switch (eventType) {
-            case "TherapistCreated", "TherapistPaymentSettingsUpdated" -> upsertProjection(objectMapper.convertValue(payload, TherapistEvent.class));
+            case "TherapistCreated", "TherapistUpdated", "TherapistPaymentSettingsUpdated" -> upsertProjection(objectMapper.convertValue(payload, TherapistEvent.class));
             case "CalendarBlockCreated" -> createBlock(objectMapper.convertValue(payload, CalendarBlockEvent.class));
             case "CalendarBlockDeleted" -> deleteBlock(objectMapper.convertValue(payload, CalendarBlockEvent.class));
             default -> logger.debug("Skipping unsupported availability eventType={}", eventType);

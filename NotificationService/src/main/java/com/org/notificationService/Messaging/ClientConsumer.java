@@ -29,22 +29,30 @@ public class ClientConsumer {
 		String eventType = payload.get("eventType").asText();
 
 		switch (eventType) {
-		case "ClientCreated" -> {
+		// ClientUpdated must upsert too: this projection supplies the email
+		// calendar invites are sent to, so a contact-detail edit has to reach
+		// it — previously only ClientCreated was consumed and edits were lost
+		case "ClientCreated", "ClientUpdated" -> {
 			ClientEvent clientEvent = objectMapper.convertValue(payload, ClientEvent.class);
-			createClient(clientEvent);
+			upsertClient(clientEvent);
 		}
 		}
 	}
-	
-	private void createClient(ClientEvent event) {
-		
-		ClientProjection clientProjection = new ClientProjection();
-		clientProjection.setClientId(event.getClientId());
+
+	private void upsertClient(ClientEvent event) {
+
+		ClientProjection clientProjection = clientProjectionRepository.findById(event.getClientId())
+				.orElseGet(() -> {
+					ClientProjection created = new ClientProjection();
+					created.setClientId(event.getClientId());
+					created.setCreatedAt(event.getOccurredAt());
+					return created;
+				});
 		clientProjection.setFirstName(event.getFirstName());
 		clientProjection.setLastName(event.getLastName());
 		clientProjection.setEmail(event.getEmail());
-		clientProjection.setCreatedAt(event.getOccurredAt());
-		
+		clientProjection.setUpdatedAt(event.getOccurredAt());
+
 		clientProjectionRepository.save(clientProjection);
 	}
 }

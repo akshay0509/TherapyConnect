@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { createTherapistProfile } from "../api/therapistProfile";
+import { getAccount } from "../api/user";
 import styles from "./TherapistProfilePage.module.css";
 import cal from "./TherapistSetupPage.module.css";
 
@@ -43,6 +44,16 @@ export default function TherapistSetupPage() {
   const [calYear, setCalYear] = useState(CURRENT_YEAR - 30);
   const [calMonth, setCalMonth] = useState(0);
   const calRef = useRef(null);
+
+  // pre-fill from the account email so the profile (invite) email starts
+  // identical to the login email instead of being typed twice
+  useEffect(() => {
+    getAccount()
+      .then((account) => {
+        setForm((prev) => (prev.email ? prev : { ...prev, email: account.email || "" }));
+      })
+      .catch(() => {}); // prefill is best-effort — the field stays editable
+  }, []);
 
   useEffect(() => {
     if (!calOpen) return;

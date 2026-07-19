@@ -30,3 +30,14 @@ export async function updatePaymentSettings(paymentEnabled) {
     throw new Error(message);
   }
 }
+
+// keeps the therapist's invite/contact email in sync with the account email
+export async function updateTherapistEmail(email) {
+  try {
+    const response = await api.put("/therapist/update-email", { email });
+    return response.data;
+  } catch (err) {
+    const message = err.response?.data?.message || err.response?.data?.error || "Failed to update therapist email.";
+    throw new Error(message);
+  }
+}

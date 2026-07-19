@@ -196,4 +196,16 @@ public class UserService {
 		dto.setUserRole(user.getUserRole());
 		return dto;
 	}
+
+	public UserDto getAccount() {
+		User user = userRepository.findByUsername(SecurityUtils.getUsername());
+		if (user == null) {
+			throw new IllegalArgumentException("User not found.");
+		}
+		UserDto dto = new UserDto();
+		dto.setUsername(user.getUsername());
+		dto.setEmail(user.getEmail());
+		dto.setUserRole(user.getUserRole());
+		return dto;
+	}
 }

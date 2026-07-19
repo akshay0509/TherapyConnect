@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -106,6 +107,8 @@ public class TherapistService {
 
 	private static final Logger logger = LoggerFactory.getLogger(TherapistService.class);
 
+	private static final Pattern EMAIL_PATTERN = Pattern.compile("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$");
+
 	private TherapistAssembler therapistAssembler = new TherapistAssembler();
 
 	@Transactional
@@ -138,6 +141,35 @@ public class TherapistService {
 		event.setEmail(saved.getEmail());
 		event.setPaymentEnabled(saved.isPaymentEnabled());
 		outboxService.saveOutboxEvent("THERAPIST_AVAILABILITY", saved.getTherapistId(), "TherapistPaymentSettingsUpdated", event);
+
+		return therapistAssembler.assembleEntityToDto(saved);
+	}
+
+	/**
+	 * The therapist email mirrors the account (login) email — Account
+	 * Settings calls this alongside the UserService update so calendar
+	 * invites follow an email change. Publishes TherapistUpdated so the
+	 * NotificationService projection stays in sync.
+	 */
+	@Transactional
+	public TherapistDto updateTherapistEmail(String therapistId, String email) throws JsonProcessingException {
+		if (email == null || !EMAIL_PATTERN.matcher(email.trim()).matches()) {
+			throw new IllegalArgumentException("A valid email address is required.");
+		}
+		Therapist therapist = therapistRepository.findByTherapistId(therapistId);
+		if (therapist == null) {
+			throw new IllegalArgumentException("Therapist profile not found.");
+		}
+		therapist.setEmail(email.trim());
+		Therapist saved = therapistRepository.save(therapist);
+
+		TherapistEvent event = new TherapistEvent();
+		event.setEventType("TherapistUpdated");
+		event.setTherapistId(saved.getTherapistId());
+		event.setTimezone(saved.getTimezone());
+		event.setEmail(saved.getEmail());
+		event.setPaymentEnabled(saved.isPaymentEnabled());
+		outboxService.saveOutboxEvent("THERAPIST_AVAILABILITY", saved.getTherapistId(), "TherapistUpdated", event);
 
 		return therapistAssembler.assembleEntityToDto(saved);
 	}

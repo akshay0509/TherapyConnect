@@ -35,6 +35,7 @@ import com.org.therapistService.Dto.TherapistClientsDto;
 import com.org.therapistService.Dto.TherapistDto;
 import com.org.therapistService.Dto.TherapistServicesDto;
 import com.org.therapistService.Dto.TherapyDeliveryModeDto;
+import com.org.therapistService.Dto.UpdateEmailRequest;
 import com.org.therapistService.Proxy.ClientServiceProxy;
 import com.org.therapistService.Services.AvailabilitySlotService;
 import com.org.therapistService.Services.TherapistService;
@@ -72,6 +73,14 @@ public class TherapistController {
 		String therapistId = SecurityUtils.getTherapistId();
 		TherapistDto updated = therapistService.updatePaymentSettings(therapistId, paymentSettingsDto.getPaymentEnabled());
 		return ResponseEntity.ok(updated);
+	}
+
+	// called by Account Settings alongside the UserService email update so the
+	// invite/contact email mirrors the account email
+	@PutMapping("/update-email")
+	public ResponseEntity<TherapistDto> updateEmail(@RequestBody UpdateEmailRequest request) throws JsonProcessingException {
+		String therapistId = SecurityUtils.getTherapistId();
+		return ResponseEntity.ok(therapistService.updateTherapistEmail(therapistId, request.getEmail()));
 	}
 
 	@GetMapping("/dashboard/stats")

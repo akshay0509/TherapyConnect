@@ -6,6 +6,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -66,6 +67,13 @@ public class UserController {
 	@PutMapping("/update-account")
 	public ResponseEntity<UserDto> updateAccount(@RequestBody UpdateAccountRequest request) {
 		return ResponseEntity.ok(userService.updateAccount(request));
+	}
+
+	// current account details for the logged-in user (username from JWT) —
+	// used to pre-fill the therapist setup email and show current values
+	@GetMapping("/account")
+	public ResponseEntity<UserDto> getAccount() {
+		return ResponseEntity.ok(userService.getAccount());
 	}
 
 }

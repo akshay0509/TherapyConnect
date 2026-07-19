@@ -52,3 +52,13 @@ export async function updateAccount(data) {
     throw new Error(message);
   }
 }
+
+export async function getAccount() {
+  try {
+    const response = await api.get("/user/account");
+    return response.data;
+  } catch (err) {
+    const message = err.response?.data?.message || err.response?.data?.error || "Failed to load account details.";
+    throw new Error(message);
+  }
+}

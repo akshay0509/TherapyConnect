@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { updateAccount } from "../api/user";
+import { updateTherapistEmail } from "../api/therapistProfile";
 import styles from "./AccountSettingsPage.module.css";
 
 // mirror of the backend rule in UserService.validateUsername
@@ -11,7 +12,7 @@ const USERNAME_RULES =
 
 export default function AccountSettingsPage() {
   const navigate = useNavigate();
-  const { user, logout } = useAuth();
+  const { user, role, logout } = useAuth();
 
   const [form, setForm] = useState({
     username: user?.username || "",
@@ -39,6 +40,20 @@ export default function AccountSettingsPage() {
         email: form.email || undefined,
         currentPassword: form.currentPassword,
       });
+      // the therapist's invite/contact email mirrors the account email —
+      // sync it so calendar invites follow the change
+      if (form.email && role === "THERAPIST") {
+        try {
+          await updateTherapistEmail(form.email);
+        } catch (syncErr) {
+          setError(
+            "Account email was updated, but syncing the calendar-invite email failed (" +
+            syncErr.message + "). Please save again to retry the sync."
+          );
+          setForm(prev => ({ ...prev, currentPassword: "" }));
+          return;
+        }
+      }
       setSuccess(true);
       setForm(prev => ({ ...prev, currentPassword: "", email: "" }));
     } catch (err) {
