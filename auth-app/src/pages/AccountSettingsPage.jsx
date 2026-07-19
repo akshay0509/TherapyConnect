@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { updateAccount } from "../api/user";
+import { getAccount, updateAccount } from "../api/user";
 import { updateTherapistEmail } from "../api/therapistProfile";
 import styles from "./AccountSettingsPage.module.css";
 
@@ -12,50 +12,83 @@ const USERNAME_RULES =
 
 export default function AccountSettingsPage() {
   const navigate = useNavigate();
-  const { user, role, logout } = useAuth();
+  const { user, role } = useAuth();
 
-  const [form, setForm] = useState({
-    username: user?.username || "",
-    email: "",
-    currentPassword: "",
-  });
+  // current values from the server — the page is read-only until Edit
+  const [account, setAccount] = useState(null); // { username, email, userRole }
+  const [accountError, setAccountError] = useState(null);
+
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState({ username: "", email: "", currentPassword: "" });
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [success, setSuccess] = useState(false);
+  const [success, setSuccess] = useState(null);
+
+  useEffect(() => {
+    getAccount()
+      .then(setAccount)
+      .catch((e) => setAccountError(e.message));
+  }, []);
+
+  const startEdit = () => {
+    setForm({
+      username: account?.username || user?.username || "",
+      email: account?.email || "",
+      currentPassword: "",
+    });
+    setError(null);
+    setSuccess(null);
+    setEditing(true);
+  };
+
+  const cancelEdit = () => {
+    setEditing(false);
+    setError(null);
+  };
 
   const handleChange = (e) => setForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.currentPassword) { setError("Current password is required to make changes."); return; }
-    if (!form.username && !form.email) { setError("Please provide a new username or email to update."); return; }
+    if (!form.currentPassword) { setError("Current password is required to confirm changes."); return; }
     const username = form.username.trim();
-    if (username && !USERNAME_RE.test(username)) { setError(USERNAME_RULES); return; }
-    setLoading(true); setError(null); setSuccess(false);
+    const email = form.email.trim();
+    const usernameChanged = username && username !== account?.username;
+    const emailChanged = email && email !== account?.email;
+    if (!usernameChanged && !emailChanged) {
+      setError("Nothing changed — modify the username or email, or cancel.");
+      return;
+    }
+    if (usernameChanged && !USERNAME_RE.test(username)) { setError(USERNAME_RULES); return; }
+    setLoading(true); setError(null); setSuccess(null);
     try {
-      await updateAccount({
-        currentUsername: user?.username,
-        username: username || undefined,
-        email: form.email || undefined,
+      const updated = await updateAccount({
+        currentUsername: account?.username || user?.username,
+        username: usernameChanged ? username : undefined,
+        email: emailChanged ? email : undefined,
         currentPassword: form.currentPassword,
       });
       // the therapist's invite/contact email mirrors the account email —
       // sync it so calendar invites follow the change
-      if (form.email && role === "THERAPIST") {
+      if (emailChanged && role === "THERAPIST") {
         try {
-          await updateTherapistEmail(form.email);
+          await updateTherapistEmail(email);
         } catch (syncErr) {
+          setAccount(updated);
           setError(
             "Account email was updated, but syncing the calendar-invite email failed (" +
-            syncErr.message + "). Please save again to retry the sync."
+            syncErr.message + "). Edit and save the same email again to retry the sync."
           );
           setForm(prev => ({ ...prev, currentPassword: "" }));
           return;
         }
       }
-      setSuccess(true);
-      setForm(prev => ({ ...prev, currentPassword: "", email: "" }));
+      setAccount(updated);
+      setEditing(false);
+      setSuccess(usernameChanged
+        ? "Account updated. Use your new username the next time you sign in."
+        : "Account updated successfully!");
     } catch (err) {
       setError(err.message);
     } finally {
@@ -69,7 +102,7 @@ export default function AccountSettingsPage() {
         <div className={styles.headerInner}>
           <button className={styles.back} onClick={() => navigate(-1)}>← Back</button>
           <span className={styles.logo}>🧠 Therapy Connect</span>
-          <span className={styles.rolePill}>{user?.role || "User"}</span>
+          <span className={styles.rolePill}>{role || user?.role || "User"}</span>
         </div>
       </header>
 
@@ -77,77 +110,113 @@ export default function AccountSettingsPage() {
         <div className={styles.content}>
           <div className={styles.hero}>
             <h1 className={styles.heading}>Account Settings</h1>
-            <p className={styles.sub}>Update your username or email. Your current password is required to confirm any changes.</p>
+            <p className={styles.sub}>
+              {editing
+                ? "Modify your details below. Your current password is required to confirm the changes."
+                : "Your account details. Use Edit to change your username or email."}
+            </p>
           </div>
 
           <div className={styles.card}>
-            <form onSubmit={handleSubmit} className={styles.form}>
-              <div className={styles.field}>
-                <label className={styles.label}>Username</label>
-                <input
-                  name="username"
-                  type="text"
-                  autoComplete="username"
-                  value={form.username}
-                  onChange={handleChange}
-                  className={styles.input}
-                  placeholder="New username"
-                />
-                <span className={styles.hint}>Leave unchanged to keep your current username</span>
-              </div>
+            {!editing ? (
+              <div className={styles.viewList}>
+                <div className={styles.viewRow}>
+                  <span className={styles.label}>Username</span>
+                  <span className={styles.viewValue}>{account?.username ?? user?.username ?? "—"}</span>
+                </div>
+                <div className={styles.viewRow}>
+                  <span className={styles.label}>Email</span>
+                  <span className={styles.viewValue}>
+                    {account ? (account.email || "—") : accountError ? "unavailable" : "Loading…"}
+                  </span>
+                </div>
+                <div className={styles.viewRow}>
+                  <span className={styles.label}>Role</span>
+                  <span className={styles.viewValue}>{account?.userRole ?? role ?? "—"}</span>
+                </div>
 
-              <div className={styles.field}>
-                <label className={styles.label}>New email <span className={styles.optional}>(optional)</span></label>
-                <input
-                  name="email"
-                  type="email"
-                  autoComplete="email"
-                  value={form.email}
-                  onChange={handleChange}
-                  className={styles.input}
-                  placeholder="new@email.com"
-                />
-              </div>
+                {accountError && (
+                  <div className={styles.errorBox}>
+                    <span className={styles.errorIcon}>!</span>{accountError}
+                  </div>
+                )}
+                {success && (
+                  <div className={styles.successBox}>
+                    <span className={styles.successIcon}>✓</span> {success}
+                  </div>
+                )}
 
-              <div className={styles.divider}/>
-
-              <div className={styles.field}>
-                <label className={styles.label}>Current password <span className={styles.required}>*</span></label>
-                <div className={styles.inputWrapper}>
-                  <input
-                    name="currentPassword"
-                    type={showPassword ? "text" : "password"}
-                    autoComplete="current-password"
-                    required
-                    value={form.currentPassword}
-                    onChange={handleChange}
-                    className={styles.input}
-                    placeholder="••••••••"
-                  />
-                  <button type="button" className={styles.toggle} onClick={() => setShowPassword(s => !s)}>
-                    {showPassword ? "Hide" : "Show"}
+                <div className={styles.actions}>
+                  <button type="button" className={styles.submitBtn} onClick={startEdit} disabled={!account}>
+                    ✎ Edit details
                   </button>
                 </div>
               </div>
-
-              {error && (
-                <div className={styles.errorBox}>
-                  <span className={styles.errorIcon}>!</span>{error}
+            ) : (
+              <form onSubmit={handleSubmit} className={styles.form}>
+                <div className={styles.field}>
+                  <label className={styles.label}>Username</label>
+                  <input
+                    name="username"
+                    type="text"
+                    autoComplete="off"
+                    value={form.username}
+                    onChange={handleChange}
+                    className={styles.input}
+                  />
+                  <span className={styles.hint}>3–30 characters — letters, numbers, dots, dashes or underscores</span>
                 </div>
-              )}
-              {success && (
-                <div className={styles.successBox}>
-                  <span className={styles.successIcon}>✓</span> Account updated successfully!
-                </div>
-              )}
 
-              <div className={styles.actions}>
-                <button type="button" className={styles.cancelBtn} onClick={() => navigate(-1)}>Cancel</button>
-                <button type="submit" className={styles.submitBtn} disabled={loading}>
-                  {loading ? <span className={styles.btnSpinner}/> : "Save changes"}
-                </button>
-              </div>
-            </form>
+                <div className={styles.field}>
+                  <label className={styles.label}>Email</label>
+                  <input
+                    name="email"
+                    type="email"
+                    autoComplete="off"
+                    value={form.email}
+                    onChange={handleChange}
+                    className={styles.input}
+                  />
+                  {role === "THERAPIST" && (
+                    <span className={styles.hint}>Also used for your calendar invites — both update together</span>
+                  )}
+                </div>
+
+                <div className={styles.divider}/>
+
+                <div className={styles.field}>
+                  <label className={styles.label}>Current password <span className={styles.required}>*</span></label>
+                  <div className={styles.inputWrapper}>
+                    <input
+                      name="currentPassword"
+                      type={showPassword ? "text" : "password"}
+                      autoComplete="current-password"
+                      required
+                      value={form.currentPassword}
+                      onChange={handleChange}
+                      className={styles.input}
+                      placeholder="••••••••"
+                    />
+                    <button type="button" className={styles.toggle} onClick={() => setShowPassword(s => !s)}>
+                      {showPassword ? "Hide" : "Show"}
+                    </button>
+                  </div>
+                </div>
+
+                {error && (
+                  <div className={styles.errorBox}>
+                    <span className={styles.errorIcon}>!</span>{error}
+                  </div>
+                )}
+
+                <div className={styles.actions}>
+                  <button type="button" className={styles.cancelBtn} onClick={cancelEdit} disabled={loading}>Cancel</button>
+                  <button type="submit" className={styles.submitBtn} disabled={loading}>
+                    {loading ? <span className={styles.btnSpinner}/> : "Save changes"}
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       </main>

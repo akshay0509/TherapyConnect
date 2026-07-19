@@ -45,14 +45,20 @@ export default function TherapistSetupPage() {
   const [calMonth, setCalMonth] = useState(0);
   const calRef = useRef(null);
 
-  // pre-fill from the account email so the profile (invite) email starts
-  // identical to the login email instead of being typed twice
+  // The profile (invite) email always mirrors the account email: pre-fill it
+  // and lock the field. Changing it later goes through Account Settings,
+  // which updates both records together. If the lookup fails the field stays
+  // editable as a fallback so setup is never blocked.
+  const [emailLocked, setEmailLocked] = useState(false);
   useEffect(() => {
     getAccount()
       .then((account) => {
-        setForm((prev) => (prev.email ? prev : { ...prev, email: account.email || "" }));
+        if (account.email) {
+          setForm((prev) => ({ ...prev, email: account.email }));
+          setEmailLocked(true);
+        }
       })
-      .catch(() => {}); // prefill is best-effort — the field stays editable
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -148,7 +154,15 @@ export default function TherapistSetupPage() {
                 <label className={styles.label} htmlFor="email">Email</label>
                 <input id="email" name="email" type="email"
                   value={form.email} onChange={handleChange}
-                  className={styles.input} placeholder="you@example.com" />
+                  readOnly={emailLocked}
+                  className={styles.input} placeholder="you@example.com"
+                  style={emailLocked ? { opacity: 0.65, cursor: "not-allowed" } : undefined}
+                  title={emailLocked ? "Uses your account email — change it later in Account Settings" : undefined} />
+                {emailLocked && (
+                  <span style={{ fontSize: "0.72rem", color: "#64748b" }}>
+                    Uses your account email — changeable later in Account Settings
+                  </span>
+                )}
               </div>
               <div className={styles.field}>
                 <label className={styles.label} htmlFor="phoneNumber">Phone Number</label>
