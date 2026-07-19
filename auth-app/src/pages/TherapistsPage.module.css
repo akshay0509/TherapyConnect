@@ -2,16 +2,16 @@
 
 .page {
   min-height: 100vh;
-  background: #0a0a0f;
+  background: var(--bg-page);
   font-family: 'DM Sans', sans-serif;
-  color: #f1f5f9;
+  color: var(--text-1);
 }
 
 /* ─── Header ─── */
 .header {
-  border-bottom: 1px solid rgba(255,255,255,0.06);
+  border-bottom: 1px solid var(--wash-2);
   padding: 0 24px;
-  background: rgba(255,255,255,0.02);
+  background: var(--wash-1);
   backdrop-filter: blur(12px);
   position: sticky;
   top: 0;
@@ -27,16 +27,16 @@
 }
 .back {
   background: none;
-  border: 1px solid rgba(255,255,255,0.1);
+  border: 1px solid var(--wash-3);
   border-radius: 8px;
-  color: #94a3b8;
+  color: var(--text-2);
   font-family: 'DM Sans', sans-serif;
   font-size: 0.85rem;
   padding: 7px 14px;
   cursor: pointer;
   transition: color 0.2s, border-color 0.2s;
 }
-.back:hover { color: #f1f5f9; border-color: rgba(255,255,255,0.25); }
+.back:hover { color: var(--text-1); border-color: var(--wash-4); }
 .logo {
   font-family: 'Syne', sans-serif;
   font-weight: 800;
@@ -59,7 +59,7 @@
   letter-spacing: -0.04em;
   margin: 0 0 8px;
 }
-.sub { color: #64748b; font-size: 0.9rem; margin: 0; font-weight: 300; }
+.sub { color: var(--text-3); font-size: 0.9rem; margin: 0; font-weight: 300; }
 
 /* ─── Search ─── */
 .searchWrap {
@@ -73,24 +73,24 @@
   left: 14px;
   top: 50%;
   transform: translateY(-50%);
-  color: #475569;
+  color: var(--text-4);
   font-size: 1.2rem;
   pointer-events: none;
 }
 .search {
   width: 100%;
   padding: 11px 16px 11px 40px;
-  background: rgba(255,255,255,0.05);
-  border: 1px solid rgba(255,255,255,0.09);
+  background: var(--wash-2);
+  border: 1px solid var(--wash-3);
   border-radius: 10px;
-  color: #f1f5f9;
+  color: var(--text-1);
   font-family: 'DM Sans', sans-serif;
   font-size: 0.9rem;
   outline: none;
   transition: border-color 0.2s, box-shadow 0.2s;
   box-sizing: border-box;
 }
-.search::placeholder { color: #475569; }
+.search::placeholder { color: var(--text-4); }
 .search:focus {
   border-color: #6366f1;
   box-shadow: 0 0 0 3px rgba(99,102,241,0.15);
@@ -106,13 +106,13 @@
 }
 .spinner {
   width: 36px; height: 36px;
-  border: 3px solid rgba(255,255,255,0.08);
+  border: 3px solid var(--wash-3);
   border-top-color: #6366f1;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
-.loadingText { color: #475569; font-size: 0.9rem; }
-.empty { color: #475569; font-size: 0.95rem; }
+.loadingText { color: var(--text-4); font-size: 0.9rem; }
+.empty { color: var(--text-4); font-size: 0.95rem; }
 .errorBox {
   display: flex;
   align-items: center;
@@ -121,7 +121,7 @@
   background: rgba(239,68,68,0.08);
   border: 1px solid rgba(239,68,68,0.2);
   border-radius: 10px;
-  color: #fca5a5;
+  color: var(--danger-soft);
   font-size: 0.875rem;
   margin-bottom: 16px;
 }
@@ -141,8 +141,8 @@
 
 /* ─── Card ─── */
 .card {
-  background: rgba(255,255,255,0.03);
-  border: 1px solid rgba(255,255,255,0.07);
+  background: var(--wash-1);
+  border: 1px solid var(--wash-2);
   border-radius: 16px;
   padding: 24px;
   cursor: pointer;
@@ -183,11 +183,11 @@
 .nameBlock { flex: 1; min-width: 0; }
 .name {
   font-family: 'Syne', sans-serif;
-  font-size: 1rem; font-weight: 700; color: #e2e8f0;
+  font-size: 1rem; font-weight: 700; color: var(--text-1);
   margin: 0 0 4px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.gender { font-size: 0.78rem; color: #64748b; }
+.gender { font-size: 0.78rem; color: var(--text-3); }
 .expBadge {
   display: flex; flex-direction: column; align-items: center;
   background: rgba(16,185,129,0.1);
@@ -197,18 +197,18 @@
 }
 .expNum {
   font-family: 'Syne', sans-serif;
-  font-size: 1.1rem; font-weight: 800; color: #34d399; line-height: 1;
+  font-size: 1.1rem; font-weight: 800; color: var(--ok-mid); line-height: 1;
 }
-.expLabel { font-size: 0.65rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; }
+.expLabel { font-size: 0.65rem; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.05em; }
 
-.divider { height: 1px; background: rgba(255,255,255,0.06); margin-bottom: 16px; }
+.divider { height: 1px; background: var(--wash-2); margin-bottom: 16px; }
 
 .details { display: flex; flex-direction: column; gap: 9px; margin-bottom: 16px; }
 .detail { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
-.detailLabel { font-size: 0.75rem; color: #475569; text-transform: uppercase; letter-spacing: 0.07em; flex-shrink: 0; }
-.detailValue { font-size: 0.85rem; color: #94a3b8; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.detailLabel { font-size: 0.75rem; color: var(--text-4); text-transform: uppercase; letter-spacing: 0.07em; flex-shrink: 0; }
+.detailValue { font-size: 0.85rem; color: var(--text-2); text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-.cardFooter { border-top: 1px solid rgba(255,255,255,0.05); padding-top: 14px; }
+.cardFooter { border-top: 1px solid var(--wash-2); padding-top: 14px; }
 .viewServices {
   font-size: 0.8rem;
   color: #6366f1;
@@ -216,7 +216,7 @@
   letter-spacing: 0.02em;
   transition: color 0.2s;
 }
-.card:hover .viewServices { color: #a5b4fc; }
+.card:hover .viewServices { color: var(--indigo-mid); }
 
 /* ─── Backdrop ─── */
 .backdrop {
@@ -241,8 +241,8 @@
   width: 420px;
   max-width: 100vw;
   height: 100vh;
-  background: #111118;
-  border-left: 1px solid rgba(255,255,255,0.08);
+  background: var(--bg-page);
+  border-left: 1px solid var(--wash-3);
   z-index: 40;
   transform: translateX(100%);
   transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
@@ -273,15 +273,15 @@
   font-family: 'Syne', sans-serif;
   font-size: 1.15rem; font-weight: 800;
   letter-spacing: -0.02em;
-  color: #f1f5f9;
+  color: var(--text-1);
   margin: 0 0 4px;
 }
-.drawerMeta { font-size: 0.8rem; color: #64748b; margin: 0; }
+.drawerMeta { font-size: 0.8rem; color: var(--text-3); margin: 0; }
 .closeBtn {
-  background: rgba(255,255,255,0.06);
-  border: 1px solid rgba(255,255,255,0.1);
+  background: var(--wash-2);
+  border: 1px solid var(--wash-3);
   border-radius: 8px;
-  color: #64748b;
+  color: var(--text-3);
   width: 32px; height: 32px;
   display: flex; align-items: center; justify-content: center;
   cursor: pointer;
@@ -289,16 +289,16 @@
   transition: color 0.2s, background 0.2s;
   flex-shrink: 0;
 }
-.closeBtn:hover { color: #f1f5f9; background: rgba(255,255,255,0.1); }
+.closeBtn:hover { color: var(--text-1); background: var(--wash-3); }
 
-.drawerDivider { height: 1px; background: rgba(255,255,255,0.06); }
+.drawerDivider { height: 1px; background: var(--wash-2); }
 
 .drawerSection { padding: 24px; flex: 1; }
 .drawerSectionTitle {
   font-family: 'Syne', sans-serif;
   font-size: 0.8rem; font-weight: 700;
   text-transform: uppercase; letter-spacing: 0.1em;
-  color: #475569;
+  color: var(--text-4);
   margin: 0 0 20px;
 }
 
@@ -309,7 +309,7 @@
 }
 .drawerSpinner {
   width: 28px; height: 28px;
-  border: 2px solid rgba(255,255,255,0.08);
+  border: 2px solid var(--wash-3);
   border-top-color: #6366f1;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
@@ -319,8 +319,8 @@
 .serviceList { display: flex; flex-direction: column; gap: 14px; }
 
 .serviceCard {
-  background: rgba(255,255,255,0.03);
-  border: 1px solid rgba(255,255,255,0.07);
+  background: var(--wash-1);
+  border: 1px solid var(--wash-2);
   border-radius: 12px;
   padding: 16px 18px;
   transition: border-color 0.2s;
@@ -343,7 +343,7 @@
 .serviceType {
   font-family: 'Syne', sans-serif;
   font-size: 0.9rem; font-weight: 700;
-  color: #e2e8f0;
+  color: var(--text-1);
 }
 .serviceBadge {
   font-size: 0.7rem; font-weight: 600;
@@ -354,12 +354,12 @@
 }
 .badgeActive {
   background: rgba(16,185,129,0.12);
-  color: #34d399;
+  color: var(--ok-mid);
   border: 1px solid rgba(16,185,129,0.25);
 }
 .badgeInactive {
   background: rgba(100,116,139,0.12);
-  color: #64748b;
+  color: var(--text-3);
   border: 1px solid rgba(100,116,139,0.2);
 }
 
@@ -369,13 +369,13 @@
 }
 .serviceStat {
   flex: 1;
-  background: rgba(255,255,255,0.03);
+  background: var(--wash-1);
   border-radius: 8px;
   padding: 10px 14px;
   display: flex; flex-direction: column; gap: 4px;
 }
-.serviceStatLabel { font-size: 0.7rem; color: #475569; text-transform: uppercase; letter-spacing: 0.07em; }
-.serviceStatValue { font-family: 'Syne', sans-serif; font-size: 1rem; font-weight: 700; color: #a5b4fc; }
+.serviceStatLabel { font-size: 0.7rem; color: var(--text-4); text-transform: uppercase; letter-spacing: 0.07em; }
+.serviceStatValue { font-family: 'Syne', sans-serif; font-size: 1rem; font-weight: 700; color: var(--indigo-mid); }
 
 /* ─── Animations ─── */
 @keyframes fadeUp {

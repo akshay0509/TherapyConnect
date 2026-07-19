@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { getAccount, updateAccount, changePassword } from "../api/user";
 import { updateTherapistEmail } from "../api/therapistProfile";
+import { getTheme, setTheme } from "../theme";
 import styles from "./AccountSettingsPage.module.css";
 
 // mirror of the backend rule in UserService.validateUsername
@@ -52,6 +53,10 @@ export default function AccountSettingsPage() {
   const { user, role } = useAuth();
 
   const [activeSection, setActiveSection] = useState("profile");
+
+  // theme preference — applied instantly, persisted per browser
+  const [theme, setThemeState] = useState(getTheme());
+  const chooseTheme = (t) => { setTheme(t); setThemeState(t); };
 
   // current values from the server — everything is read-only until Edit
   const [account, setAccount] = useState(null);
@@ -363,14 +368,18 @@ export default function AccountSettingsPage() {
       <div className={styles.subCard}>
         <h3 className={styles.subCardTitle}>Theme</h3>
         <div className={styles.themeRow}>
-          <button type="button" className={`${styles.themeOption} ${styles.themeOptionActive}`}>
+          <button type="button"
+            className={`${styles.themeOption} ${theme === "dark" ? styles.themeOptionActive : ""}`}
+            onClick={() => chooseTheme("dark")}>
             🌙 Dark
           </button>
-          <button type="button" className={styles.themeOption} disabled title="Light theme is coming soon">
-            ☀️ Light <span className={styles.soonTag}>soon</span>
+          <button type="button"
+            className={`${styles.themeOption} ${theme === "light" ? styles.themeOptionActive : ""}`}
+            onClick={() => chooseTheme("light")}>
+            ☀️ Light
           </button>
         </div>
-        <span className={styles.hint}>Light theme arrives with the upcoming design refresh.</span>
+        <span className={styles.hint}>Applies immediately and is remembered on this browser.</span>
       </div>
     </>
   );

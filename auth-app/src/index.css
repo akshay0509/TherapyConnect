@@ -1,3 +1,56 @@
+/* ── Design tokens ──────────────────────────────────────────────
+   Dark is the default theme; [data-theme="light"] overrides.
+   All page CSS modules reference these variables — never hardcode
+   grays/surfaces/status-text colors in components again.
+   Brand accents (#10b981, #6366f1, reds/ambers) and #fff-on-colored
+   stay literal: they read correctly on both themes. */
+:root {
+  color-scheme: dark;
+
+  --bg-page: #080d0f;              /* app background */
+  --bg-elev: #121a24;              /* modals, dropdowns, elevated panels */
+
+  --wash-1: rgba(255,255,255,0.03);  /* faint surface (cards) */
+  --wash-2: rgba(255,255,255,0.06);  /* inputs, soft borders */
+  --wash-3: rgba(255,255,255,0.10);  /* borders, hover surfaces */
+  --wash-4: rgba(255,255,255,0.25);  /* strong borders / hover accents */
+
+  --text-1: #eef2f7;               /* primary text */
+  --text-2: #a9b7c6;               /* secondary text */
+  --text-3: #64748b;               /* muted text */
+  --text-4: #475569;               /* faint text */
+
+  /* status text that needs different strength per theme */
+  --ok-mid: #34d399;     --ok-soft: #6ee7b7;
+  --danger-mid: #f87171; --danger-soft: #fca5a5;
+  --warn-mid: #fbbf24;   --warn-soft: #fcd34d;
+  --indigo-mid: #a5b4fc; --indigo-soft: #c7d2fe;
+  --info-mid: #38bdf8;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --bg-page: #f3f5f8;
+  --bg-elev: #ffffff;
+
+  --wash-1: rgba(15,23,42,0.045);
+  --wash-2: rgba(15,23,42,0.075);
+  --wash-3: rgba(15,23,42,0.12);
+  --wash-4: rgba(15,23,42,0.22);
+
+  --text-1: #0f172a;
+  --text-2: #3f4c5e;
+  --text-3: #5b6878;
+  --text-4: #94a3b8;
+
+  --ok-mid: #059669;     --ok-soft: #047857;
+  --danger-mid: #dc2626; --danger-soft: #b91c1c;
+  --warn-mid: #b45309;   --warn-soft: #92400e;
+  --indigo-mid: #4f46e5; --indigo-soft: #4338ca;
+  --info-mid: #0284c7;
+}
+
 *, *::before, *::after {
   box-sizing: border-box;
   margin: 0;
@@ -11,4 +64,6 @@ html, body, #root {
 body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  background: var(--bg-page);
+  color: var(--text-1);
 }

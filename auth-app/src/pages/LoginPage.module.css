@@ -5,7 +5,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #0a0a0f;
+  background: var(--bg-page);
   font-family: 'DM Sans', sans-serif;
   position: relative;
   overflow: hidden;
@@ -45,8 +45,8 @@
   position: absolute;
   inset: 0;
   background-image:
-    linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+    linear-gradient(var(--wash-1) 1px, transparent 1px),
+    linear-gradient(90deg, var(--wash-1) 1px, transparent 1px);
   background-size: 40px 40px;
 }
 
@@ -66,12 +66,12 @@
   width: 100%;
   max-width: 420px;
   padding: 48px 44px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--wash-1);
+  border: 1px solid var(--wash-3);
   border-radius: 20px;
   backdrop-filter: blur(20px);
   box-shadow:
-    0 0 0 1px rgba(255,255,255,0.05) inset,
+    0 0 0 1px var(--wash-2) inset,
     0 32px 80px rgba(0,0,0,0.5);
   animation: slideUp 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
@@ -105,14 +105,14 @@
   font-family: 'Syne', sans-serif;
   font-size: 1.75rem;
   font-weight: 800;
-  color: #f1f5f9;
+  color: var(--text-1);
   margin: 0 0 6px;
   letter-spacing: -0.03em;
 }
 
 .subtitle {
   font-size: 0.9rem;
-  color: #64748b;
+  color: var(--text-3);
   margin: 0;
   font-weight: 300;
 }
@@ -121,8 +121,8 @@
 .tabs {
   display: flex;
   gap: 4px;
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.07);
+  background: var(--wash-1);
+  border: 1px solid var(--wash-2);
   border-radius: 10px;
   padding: 4px;
   margin-bottom: 28px;
@@ -134,7 +134,7 @@
   border: none;
   border-radius: 7px;
   background: transparent;
-  color: #64748b;
+  color: var(--text-3);
   font-family: 'DM Sans', sans-serif;
   font-size: 0.875rem;
   font-weight: 500;
@@ -143,12 +143,12 @@
 }
 
 .tab:hover:not(.tabActive) {
-  color: #94a3b8;
+  color: var(--text-2);
 }
 
 .tabActive {
   background: rgba(99, 102, 241, 0.2);
-  color: #a5b4fc;
+  color: var(--indigo-mid);
 }
 
 /* ─── Success ─── */
@@ -160,7 +160,7 @@
   background: rgba(16, 185, 129, 0.1);
   border: 1px solid rgba(16, 185, 129, 0.25);
   border-radius: 10px;
-  color: #6ee7b7;
+  color: var(--ok-soft);
   font-size: 0.875rem;
 }
 
@@ -180,7 +180,7 @@
 .inlineLink {
   background: none;
   border: none;
-  color: #34d399;
+  color: var(--ok-mid);
   font-family: 'DM Sans', sans-serif;
   font-size: inherit;
   font-weight: 600;
@@ -190,7 +190,7 @@
   padding: 0;
 }
 
-.inlineLink:hover { color: #6ee7b7; }
+.inlineLink:hover { color: var(--ok-soft); }
 
 /* ─── Form ─── */
 .form {
@@ -208,7 +208,7 @@
 .label {
   font-size: 0.78rem;
   font-weight: 500;
-  color: #94a3b8;
+  color: var(--text-2);
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
@@ -216,10 +216,10 @@
 .input {
   width: 100%;
   padding: 13px 16px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--wash-2);
+  border: 1px solid var(--wash-3);
   border-radius: 10px;
-  color: #f1f5f9;
+  color: var(--text-1);
   font-size: 0.95rem;
   font-family: 'DM Sans', sans-serif;
   transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
@@ -227,7 +227,7 @@
   outline: none;
 }
 
-.input::placeholder { color: #475569; }
+.input::placeholder { color: var(--text-4); }
 
 .input:focus {
   border-color: #6366f1;
@@ -250,7 +250,7 @@
   transform: translateY(-50%);
   background: none;
   border: none;
-  color: #64748b;
+  color: var(--text-3);
   font-size: 0.78rem;
   cursor: pointer;
   font-family: 'DM Sans', sans-serif;
@@ -259,7 +259,7 @@
   transition: color 0.2s;
 }
 
-.toggle:hover { color: #94a3b8; }
+.toggle:hover { color: var(--text-2); }
 
 /* ─── Error ─── */
 .error {
@@ -270,7 +270,7 @@
   background: rgba(239, 68, 68, 0.1);
   border: 1px solid rgba(239, 68, 68, 0.25);
   border-radius: 10px;
-  color: #fca5a5;
+  color: var(--danger-soft);
   font-size: 0.875rem;
   animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both;
 }
@@ -336,7 +336,7 @@
   background: transparent;
   border: 1px solid rgba(99, 102, 241, 0.4);
   border-radius: 10px;
-  color: #a5b4fc;
+  color: var(--indigo-mid);
   font-size: 0.95rem;
   font-weight: 600;
   font-family: 'Syne', sans-serif;
@@ -351,7 +351,7 @@
 .buttonSecondary:hover:not(:disabled) {
   background: rgba(99, 102, 241, 0.1);
   border-color: rgba(99, 102, 241, 0.7);
-  color: #c7d2fe;
+  color: var(--indigo-soft);
   transform: translateY(-1px);
 }
 
@@ -368,7 +368,7 @@
 .spinner {
   width: 18px;
   height: 18px;
-  border: 2px solid rgba(255,255,255,0.3);
+  border: 2px solid var(--wash-4);
   border-top-color: #fff;
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
@@ -383,15 +383,15 @@
 
 .roleOption {
   padding: 12px 10px; border-radius: 10px;
-  border: 1px solid rgba(255,255,255,0.1);
-  background: rgba(255,255,255,0.03);
-  color: #94a3b8; font-size: 0.875rem; font-weight: 600;
+  border: 1px solid var(--wash-3);
+  background: var(--wash-1);
+  color: var(--text-2); font-size: 0.875rem; font-weight: 600;
   cursor: pointer; transition: background 0.15s, border-color 0.15s, color 0.15s;
   font-family: inherit;
 }
-.roleOption:hover { background: rgba(255,255,255,0.07); color: #f1f5f9; border-color: rgba(255,255,255,0.2); }
-.roleOptionActive { background: rgba(16,185,129,0.15) !important; border-color: #10b981 !important; color: #34d399 !important; }
+.roleOption:hover { background: var(--wash-2); color: var(--text-1); border-color: var(--wash-4); }
+.roleOptionActive { background: rgba(16,185,129,0.15) !important; border-color: #10b981 !important; color: var(--ok-mid) !important; }
 
 /* ─── Forgot password link ─── */
-.forgotLink { background: none; border: none; color: #64748b; font-family: 'DM Sans', sans-serif; font-size: 0.82rem; cursor: pointer; text-align: center; width: 100%; margin-top: 4px; transition: color 0.15s; display: block; }
-.forgotLink:hover { color: #a5b4fc; }
+.forgotLink { background: none; border: none; color: var(--text-3); font-family: 'DM Sans', sans-serif; font-size: 0.82rem; cursor: pointer; text-align: center; width: 100%; margin-top: 4px; transition: color 0.15s; display: block; }
+.forgotLink:hover { color: var(--indigo-mid); }
