@@ -90,7 +90,6 @@ class TherapistServiceScheduleChangeTest {
 		TherapistServicesDto dto = new TherapistServicesDto();
 		dto.setTherapistId(THERAPIST_ID);
 		dto.setDuration(60);
-		dto.setPrice(new BigDecimal("1500"));
 		dto.setIsActive(true);
 		return dto;
 	}
@@ -141,7 +140,7 @@ class TherapistServiceScheduleChangeTest {
 		verifyRegenerationTriggered();
 	}
 
-	// ── therapist services (slots carry service duration + price) ────────────
+	// ── therapist services (slots carry service duration; pricing is on modes) ──
 
 	@Test
 	void creatingServiceTriggersImmediateRegeneration() throws Exception {

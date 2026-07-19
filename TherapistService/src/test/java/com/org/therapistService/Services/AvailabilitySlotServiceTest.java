@@ -80,7 +80,6 @@ class AvailabilitySlotServiceTest {
 		service.setServiceId("SRV1");
 		service.setTherapistId(THERAPIST_ID);
 		service.setDuration(60);
-		service.setPrice(new BigDecimal("1500"));
 		service.setActive(true);
 		return service;
 	}
@@ -154,7 +153,9 @@ class AvailabilitySlotServiceTest {
 		assertThat(saved).extracting(TherapistAvailability::getEndTime).containsExactly(
 				MONDAY.atTime(10, 0), MONDAY.atTime(10, 30), MONDAY.atTime(11, 0));
 		assertThat(saved).allSatisfy(slot -> {
-			assertThat(slot.getSessionFee()).isEqualByComparingTo("1500");
+			// slots deliberately carry no fee: pricing lives on delivery
+			// modes and is resolved at booking time
+			assertThat(slot.getSessionFee()).isNull();
 			assertThat(slot.getServiceId()).isEqualTo("SRV1");
 		});
 

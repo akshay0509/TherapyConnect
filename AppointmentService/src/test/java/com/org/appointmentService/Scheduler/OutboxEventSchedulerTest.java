@@ -12,6 +12,7 @@ import static org.mockito.Mockito.when;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -25,9 +26,14 @@ import com.org.appointmentService.Messaging.Producer.OutboxEventProducer;
 import com.org.appointmentService.Repository.OutboxEventRepository;
 
 /**
- * Verifies the outbox publisher's at-least-once semantics and the purge:
+ * Verifies the outbox publisher's at-least-once semantics, the poison-event
+ * park-and-skip guard, and the purge:
  * - events are marked published only after a successful send
- * - a send failure stops the batch (ordering preserved, retried next tick)
+ * - a transient send failure stops the batch (ordering preserved, retried
+ *   next tick) and counts a retry
+ * - a fatal failure (e.g. record too large — can never succeed) parks the
+ *   event and the batch continues past it
+ * - exhausting the retry budget parks the event
  * - the purge removes only published rows past the 7-day retention
  */
 @ExtendWith(MockitoExtension.class)
@@ -60,7 +66,7 @@ class OutboxEventSchedulerTest {
 	void publishedEventsAreMarkedAndSaved() {
 		OutboxEvent first = event("OUT1", "AGG1");
 		OutboxEvent second = event("OUT2", "AGG2");
-		when(outboxEventRepository.findTop100ByPublishedFalseOrderByCreatedAtAsc())
+		when(outboxEventRepository.findTop100ByPublishedFalseAndParkedFalseOrderByCreatedAtAsc())
 				.thenReturn(List.of(first, second));
 
 		scheduler.publishPendingEvents();
@@ -74,27 +80,64 @@ class OutboxEventSchedulerTest {
 	}
 
 	@Test
-	void sendFailureStopsTheBatchWithoutMarkingAnything() {
+	void transientFailureStopsTheBatchAndCountsARetry() {
 		OutboxEvent first = event("OUT1", "AGG1");
 		OutboxEvent second = event("OUT2", "AGG2");
-		when(outboxEventRepository.findTop100ByPublishedFalseOrderByCreatedAtAsc())
+		when(outboxEventRepository.findTop100ByPublishedFalseAndParkedFalseOrderByCreatedAtAsc())
 				.thenReturn(List.of(first, second));
 		doThrow(new RuntimeException("kafka down"))
 				.when(outboxEventProducer).sendMessage(eq("AGG1"), any());
 
 		scheduler.publishPendingEvents();
 
-		// failed event stays unpublished, and the batch stops so ordering
-		// is preserved — the next tick retries from the same point
+		// failed event stays unpublished with the attempt recorded, and the
+		// batch stops so ordering is preserved — the next tick retries
 		assertThat(first.isPublished()).isFalse();
+		assertThat(first.isParked()).isFalse();
+		assertThat(first.getRetryCount()).isEqualTo(1);
 		assertThat(second.isPublished()).isFalse();
 		verify(outboxEventProducer, never()).sendMessage(eq("AGG2"), any());
-		verify(outboxEventRepository, never()).save(any(OutboxEvent.class));
+		verify(outboxEventRepository).save(first);
+		verify(outboxEventRepository, never()).save(second);
+	}
+
+	@Test
+	void fatalFailureParksTheEventAndTheBatchContinues() {
+		OutboxEvent poison = event("OUT1", "AGG1");
+		OutboxEvent healthy = event("OUT2", "AGG2");
+		when(outboxEventRepository.findTop100ByPublishedFalseAndParkedFalseOrderByCreatedAtAsc())
+				.thenReturn(List.of(poison, healthy));
+		doThrow(new RuntimeException("Kafka publish failed", new RecordTooLargeException()))
+				.when(outboxEventProducer).sendMessage(eq("AGG1"), any());
+
+		scheduler.publishPendingEvents();
+
+		assertThat(poison.isParked()).isTrue();
+		assertThat(poison.isPublished()).isFalse();
+		// the event behind the poison one is no longer blocked
+		assertThat(healthy.isPublished()).isTrue();
+		verify(outboxEventRepository).save(poison);
+		verify(outboxEventRepository).save(healthy);
+	}
+
+	@Test
+	void exhaustedRetryBudgetParksTheEvent() {
+		OutboxEvent stuck = event("OUT1", "AGG1");
+		stuck.setRetryCount(149); // one attempt away from the 150 ceiling
+		when(outboxEventRepository.findTop100ByPublishedFalseAndParkedFalseOrderByCreatedAtAsc())
+				.thenReturn(List.of(stuck));
+		doThrow(new RuntimeException("kafka down"))
+				.when(outboxEventProducer).sendMessage(eq("AGG1"), any());
+
+		scheduler.publishPendingEvents();
+
+		assertThat(stuck.getRetryCount()).isEqualTo(150);
+		assertThat(stuck.isParked()).isTrue();
 	}
 
 	@Test
 	void emptyOutboxSendsNothing() {
-		when(outboxEventRepository.findTop100ByPublishedFalseOrderByCreatedAtAsc())
+		when(outboxEventRepository.findTop100ByPublishedFalseAndParkedFalseOrderByCreatedAtAsc())
 				.thenReturn(List.of());
 
 		scheduler.publishPendingEvents();
