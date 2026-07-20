@@ -9,6 +9,7 @@
 
   --bg-page: #080d0f;              /* app background */
   --bg-elev: #121a24;              /* modals, dropdowns, elevated panels */
+  --bg-veil: rgba(8,13,15,0.85);   /* translucent sticky headers (blur) */
 
   --wash-1: rgba(255,255,255,0.03);  /* faint surface (cards) */
   --wash-2: rgba(255,255,255,0.06);  /* inputs, soft borders */
@@ -33,6 +34,7 @@
 
   --bg-page: #f3f5f8;
   --bg-elev: #ffffff;
+  --bg-veil: rgba(243,245,248,0.88);
 
   --wash-1: rgba(15,23,42,0.045);
   --wash-2: rgba(15,23,42,0.075);
