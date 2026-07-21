@@ -114,10 +114,12 @@ public class AppointmentEventConsumer {
 
 		ZoneId zone = resolveZone(appointmentEvent.getTherapistId());
 
+		String title = "Therapy Session with " + clientProjection.getFirstName() + " " + clientProjection.getLastName();
+
 		String googleCalendarEventId = googleCalendarService.createAppointmentEvent(
 				clientProjection.getEmail(),
 				resolveTherapistEmail(appointmentEvent.getTherapistId()),
-				"Therapy Session",
+				title,
 				"Appointment ID: " + appointmentEvent.getAppointmentId(),
 				appointmentEvent.getStartTime(),
 				appointmentEvent.getEndTime(),
@@ -147,11 +149,13 @@ public class AppointmentEventConsumer {
 
 		ZoneId zone = resolveZone(appointmentEvent.getTherapistId());
 
+		String title = "Therapy Session with " + clientProjection.getFirstName() + " " + clientProjection.getLastName();
+
 		googleCalendarService.updateAppointmentEvent(
 				existingCalendarEvent.get().getGoogleCalendarEventId(),
 				clientProjection.getEmail(),
 				resolveTherapistEmail(appointmentEvent.getTherapistId()),
-				"Therapy Session",
+				title,
 				"Appointment ID: " + appointmentEvent.getAppointmentId(),
 				appointmentEvent.getStartTime(),
 				appointmentEvent.getEndTime(),
