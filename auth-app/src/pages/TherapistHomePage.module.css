@@ -57,6 +57,10 @@
   -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
 }
 
+/* ─── Session timer ─── */
+/* sits between the hero and the layout; renders nothing when off-session */
+.homeTimer { margin-bottom: 28px; }
+
 /* ─── Two-column layout ─── */
 .layout {
   display: grid;

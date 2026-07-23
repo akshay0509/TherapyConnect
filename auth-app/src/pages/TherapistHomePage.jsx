@@ -3,6 +3,7 @@ import { useAuth } from "../context/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { getAvailability, getDashboardStats } from "../api/appointments";
 import { useModeMap } from "../context/DeliveryModesContext";
+import SessionTimer from "../components/SessionTimer";
 import styles from "./TherapistHomePage.module.css";
 
 const MODE_TYPE_ICON = {
@@ -103,6 +104,12 @@ export default function TherapistHomePage() {
             {getGreeting()}, <span className={styles.accent}>{displayName}</span>
           </h1>
         </div>
+
+        <SessionTimer
+          appointments={appointments}
+          onOpen={() => navigate("/therapist/appointments")}
+          className={styles.homeTimer}
+        />
 
         <div className={styles.layout}>
           {/* ── Left column ── */}

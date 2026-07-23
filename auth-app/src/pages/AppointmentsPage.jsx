@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { getAvailability, createAppointment, generateSlots, updateAppointmentStatus, rescheduleAppointment, createAvailabilityOverride, deleteAvailabilityOverride, bulkAvailabilityOverrides, searchAppointments, getPaymentInfo, ensurePaymentLink } from "../api/appointments";
 import { getTherapistClients } from "../api/therapistClients";
 import { useModeMap, useAllModes } from "../context/DeliveryModesContext";
+import SessionTimer from "../components/SessionTimer";
 import styles from "./AppointmentsPage.module.css";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -172,6 +173,15 @@ export default function AppointmentsPage() {
   const [slotsError, setSlotsError] = useState(null);
   const [clients, setClients] = useState([]);
 
+  // Today's appointments back the session timer. They're loaded separately from
+  // the week view so the timer survives the therapist browsing another week —
+  // which is exactly what happens when they book a follow-up mid-session.
+  const [todayAppointments, setTodayAppointments] = useState([]);
+
+  // Coarse re-render so the red "now" line drifts down the timeline.
+  // The timer keeps its own 1s clock, so this doesn't need to be frequent.
+  const [, setNowTick] = useState(0);
+
   // Drag to create override
   const [dragging, setDragging] = useState(false);
   const [dragStart, setDragStart] = useState(null);
@@ -262,6 +272,24 @@ export default function AppointmentsPage() {
   useEffect(() => {
     fetchWeekData(weekStart);
   }, [weekStart]);
+
+  const refreshToday = useCallback(() => {
+    const today = toISODate(new Date());
+    getAvailability(today, today)
+      .then(data => setTodayAppointments(data.appointments || []))
+      .catch(() => {}); // the timer is ambient — a failed poll shouldn't shout
+  }, []);
+
+  useEffect(() => {
+    refreshToday();
+    const id = setInterval(refreshToday, 60000);
+    return () => clearInterval(id);
+  }, [refreshToday]);
+
+  useEffect(() => {
+    const id = setInterval(() => setNowTick(t => t + 1), 30000);
+    return () => clearInterval(id);
+  }, []);
 
   useEffect(() => {
     const h = (e) => { if (e.key === "Escape") setPanel(null); };
@@ -372,6 +400,26 @@ export default function AppointmentsPage() {
   };
 
   // ─── Actions ───────────────────────────────────────────────────────────────
+
+  // The panels speak "slot"; the timeline and the session timer both hand over
+  // appointments. therapistId/slotId can be absent when the appointment came
+  // from today's feed while another week is loaded — neither is required, the
+  // backend re-derives the therapist from the JWT.
+  const toApptSlot = useCallback((appt) => {
+    const slot = slots.find(s => s.appointmentId === appt.appointmentId);
+    return {
+      appointmentId: appt.appointmentId,
+      therapistId: appt.therapistId || slot?.therapistId,
+      clientId: appt.clientId,
+      clientName: appt.clientName,
+      startTime: appt.startTime,
+      endTime: appt.endTime,
+      appointmentStatus: appt.status,
+      modeId: appt.modeId,
+      slotId: slot?.slotId,
+    };
+  }, [slots]);
+
   const openBook = (slot) => {
     setPanelSlot(slot);
     // Pre-select the slot's own modeId if available; filter modes for the slot's service
@@ -484,6 +532,8 @@ export default function AppointmentsPage() {
       await updateAppointmentStatus({ appointmentId: panelSlot.appointmentId, therapistId: panelSlot.therapistId, status: updateStatus, reason: updateReason || undefined });
       setSlots(prev => prev.map(s => s.slotId === panelSlot.slotId ? { ...s, appointmentStatus: updateStatus } : s));
       setAppointments(prev => prev.map(a => a.appointmentId === panelSlot.appointmentId ? { ...a, status: updateStatus } : a));
+      // keep the timer honest: completing a session should retire the card at once
+      setTodayAppointments(prev => prev.map(a => a.appointmentId === panelSlot.appointmentId ? { ...a, status: updateStatus } : a));
       setPanel(null);
     } catch (err) { setUpdateError(friendlyError(err.message)); }
     finally { setUpdateLoading(false); }
@@ -564,6 +614,7 @@ export default function AppointmentsPage() {
     setSlots(data.slots || []);
     setAppointments(data.appointments || []);
     setOverrides(data.overrides || []);
+    refreshToday();
   };
 
   const handleReschedule = async () => {
@@ -658,6 +709,12 @@ export default function AppointmentsPage() {
       <div className={styles.scheduleLayout}>
         {/* ── Left: week strip + timeline canvas ── */}
         <div className={styles.canvasArea}>
+          <SessionTimer
+            appointments={todayAppointments}
+            onOpen={(appt) => openUpdate(toApptSlot(appt))}
+            sticky
+          />
+
           <div className={styles.canvasTop}>
             <div>
               <h1 className={styles.heading}>Schedule</h1>
@@ -847,17 +904,7 @@ export default function AppointmentsPage() {
                   const top = minutesToPx(toMinutes(appt.startTime));
                   const height = Math.max(minutesToPx(toMinutes(appt.endTime)) - top, 28);
                   const colors = APPT_STATUS_COLORS[appt.status] || APPT_STATUS_COLORS.CONFIRMED;
-                  const apptAsSlot = {
-                    appointmentId: appt.appointmentId,
-                    therapistId: appt.therapistId || slots.find(s => s.appointmentId === appt.appointmentId)?.therapistId,
-                    clientId: appt.clientId,
-                    clientName: appt.clientName,
-                    startTime: appt.startTime,
-                    endTime: appt.endTime,
-                    appointmentStatus: appt.status,
-                    modeId: appt.modeId,
-                    slotId: slots.find(s => s.appointmentId === appt.appointmentId)?.slotId,
-                  };
+                  const apptAsSlot = toApptSlot(appt);
                   const modeName = modeMap[appt.modeId]?.displayName;
                   return (
                     <div

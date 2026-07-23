@@ -1,0 +1,131 @@
+/* Live session countdown.
+   Every phase drives the same card through --accent; the accent itself is a
+   theme token so the big number keeps its contrast in light mode too. */
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid var(--accent-line);
+  /* opaque base under the tint so nothing shows through when sticky */
+  background: linear-gradient(var(--accent-wash), var(--accent-wash)), var(--bg-page);
+  flex-shrink: 0;
+}
+
+/* --accent carries the big number and the fills; --accent-text is the stronger
+   sibling used for label-sized text, which needs 4.5:1 rather than 3:1. */
+.live     { --accent: var(--ok-mid);     --accent-text: var(--ok-soft);     --accent-wash: rgba(16,185,129,0.10); --accent-line: rgba(16,185,129,0.30); }
+.upcoming { --accent: var(--indigo-mid); --accent-text: var(--indigo-soft); --accent-wash: rgba(99,102,241,0.10); --accent-line: rgba(99,102,241,0.30); }
+.wrap     { --accent: var(--warn-mid);   --accent-text: var(--warn-soft);   --accent-wash: rgba(245,158,11,0.12); --accent-line: rgba(245,158,11,0.35); }
+.overtime { --accent: var(--danger-mid); --accent-text: var(--danger-soft); --accent-wash: rgba(239,68,68,0.12);  --accent-line: rgba(239,68,68,0.35); }
+
+.sticky {
+  position: sticky;
+  top: 0;
+  z-index: 15;
+  backdrop-filter: blur(12px);
+}
+
+/* ─── Top row ─── */
+.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+
+.phase {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--accent-text);
+  white-space: nowrap;
+}
+
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+.live .dot, .wrap .dot, .overtime .dot { animation: pulse 1.6s ease-in-out infinite; }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1;    transform: scale(1); }
+  50%      { opacity: 0.45; transform: scale(0.82); }
+}
+
+.client {
+  font-family: 'Syne', sans-serif;
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--text-1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ─── Readout ─── */
+.readout { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
+
+.big { display: flex; flex-direction: column; gap: 3px; }
+
+.bigValue {
+  font-family: 'Syne', sans-serif;
+  font-size: 2.1rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums; /* digits must not shuffle each tick */
+}
+
+.small { display: flex; flex-direction: column; gap: 3px; text-align: right; }
+
+.smallValue {
+  font-family: 'Syne', sans-serif;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.caption { font-size: 0.72rem; color: var(--text-3); }
+
+/* ─── Progress ─── */
+.track { height: 5px; border-radius: 999px; background: var(--wash-2); overflow: hidden; }
+
+.fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent);
+  transition: width 1s linear, background 0.4s ease;
+}
+
+/* ─── Footer ─── */
+.foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.when { font-size: 0.76rem; color: var(--text-3); }
+
+.openBtn {
+  background: none;
+  border: 1px solid var(--accent-line);
+  border-radius: 8px;
+  color: var(--accent-text);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.76rem;
+  font-weight: 600;
+  padding: 5px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, transform 0.15s;
+}
+
+.openBtn:hover { background: var(--accent-wash); transform: translateY(-1px); }
+
+@media (max-width: 560px) {
+  .readout { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .small { text-align: left; }
+  .foot { flex-wrap: wrap; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live .dot, .wrap .dot, .overtime .dot { animation: none; }
+  .fill { transition: none; }
+  .openBtn:hover { transform: none; }
+}
