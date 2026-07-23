@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useCallback, useEffect, useRef } from "react";
 import { loginRequest, refreshRequest, logoutRequest } from "../api/auth";
-import { setAccessToken, clearAccessToken } from "../api/client";
+import { setAccessToken, clearAccessToken, setOnTokenRefreshed } from "../api/client";
+import SessionExpiry from "../components/SessionExpiry";
 
 const AuthContext = createContext(null);
 
@@ -40,6 +41,7 @@ export function AuthProvider({ children }) {
 
   const role = getRoleFromToken(token);
   const therapistId = getTherapistIdFromToken(token);
+  const sessionExpiresAt = getTokenExpiry(token);
 
   const warningTimerRef = useRef(null);
   const expireTimerRef  = useRef(null);
@@ -117,6 +119,17 @@ export function AuthProvider({ children }) {
     return clearTimers;
   }, [token]);
 
+  // The axios interceptor silently refreshes on a 401 without going through
+  // this context. Adopt that token so the expiry timers — and the countdown
+  // the user is watching — track the token actually in use.
+  useEffect(() => {
+    setOnTokenRefreshed((jwt) => {
+      setToken(jwt);
+      setShowTimeoutWarning(false);
+    });
+    return () => setOnTokenRefreshed(null);
+  }, []);
+
   const login = useCallback(async (username, password) => {
     setLoading(true); setError(null);
     try {
@@ -159,38 +172,15 @@ export function AuthProvider({ children }) {
   }, [applyToken, logout]);
 
   return (
-    <AuthContext.Provider value={{ token, user, role, therapistId, login, logout, completeSetup, error, loading, showTimeoutWarning, staySignedIn }}>
+    <AuthContext.Provider value={{ token, user, role, therapistId, login, logout, completeSetup, error, loading, showTimeoutWarning, staySignedIn, sessionExpiresAt }}>
       {children}
-      {showTimeoutWarning && (
-        <div style={{
-          position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 9999,
-          display: "flex", alignItems: "center", justifyContent: "center",
-        }}>
-          <div style={{
-            background: "#0f1923", border: "1px solid rgba(245,158,11,0.3)", borderRadius: 16,
-            padding: "28px 32px", maxWidth: 400, width: "90%",
-            fontFamily: "'DM Sans', sans-serif", color: "#e2e8f0",
-            boxShadow: "0 24px 64px rgba(0,0,0,0.6)",
-          }}>
-            <div style={{ fontSize: "1.8rem", marginBottom: 12 }}>&#x23F1;</div>
-            <h2 style={{ fontFamily: "'Syne', sans-serif", fontSize: "1.1rem", fontWeight: 800, margin: "0 0 8px", color: "#fbbf24" }}>
-              Session expiring soon
-            </h2>
-            <p style={{ fontSize: "0.875rem", color: "#94a3b8", margin: "0 0 20px", lineHeight: 1.6 }}>
-              Your session will expire in less than 2 minutes. You will be signed out automatically.
-            </p>
-            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-              <button onClick={() => logout(true)} style={{
-                padding: "9px 18px", background: "transparent", border: "1px solid rgba(255,255,255,0.12)",
-                borderRadius: 9, color: "#64748b", fontSize: "0.875rem", cursor: "pointer",
-              }}>Sign out now</button>
-              <button onClick={staySignedIn} style={{
-                padding: "9px 18px", background: "rgba(245,158,11,0.15)", border: "1px solid rgba(245,158,11,0.35)",
-                borderRadius: 9, color: "#fbbf24", fontSize: "0.875rem", fontWeight: 700, cursor: "pointer",
-              }}>Stay signed in</button>
-            </div>
-          </div>
-        </div>
+      {token && (
+        <SessionExpiry
+          expiresAt={sessionExpiresAt}
+          showWarning={showTimeoutWarning}
+          onExtend={staySignedIn}
+          onSignOut={() => logout(true)}
+        />
       )}
     </AuthContext.Provider>
   );

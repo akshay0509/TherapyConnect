@@ -30,6 +30,13 @@ function formatDate(iso) {
   } catch { return iso; }
 }
 
+function formatCountdown(ms) {
+  if (ms <= 0) return "Expired";
+  const secs = Math.round(ms / 1000);
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${pad(Math.floor(secs / 60))}:${pad(secs % 60)}`;
+}
+
 // coarse, dependency-free UA description — enough for "was that me?"
 function describeDevice(ua) {
   if (!ua) return "Unknown device";
@@ -50,9 +57,23 @@ function describeDevice(ua) {
 
 export default function AccountSettingsPage() {
   const navigate = useNavigate();
-  const { user, role } = useAuth();
+  const { user, role, sessionExpiresAt, staySignedIn } = useAuth();
 
   const [activeSection, setActiveSection] = useState("profile");
+
+  // live countdown for the "This session" card — only ticks while Security is open
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  const [extending, setExtending] = useState(false);
+  useEffect(() => {
+    if (activeSection !== "security") return;
+    const id = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [activeSection]);
+
+  const handleExtend = async () => {
+    setExtending(true);
+    try { await staySignedIn(); } finally { setExtending(false); }
+  };
 
   // theme preference — applied instantly, persisted per browser
   const [theme, setThemeState] = useState(getTheme());
@@ -287,7 +308,26 @@ export default function AccountSettingsPage() {
   const renderSecurity = () => (
     <>
       <h2 className={styles.sectionTitle}>Security</h2>
-      <p className={styles.sectionSub}>Sign-in activity and password.</p>
+      <p className={styles.sectionSub}>Your current session, sign-in activity and password.</p>
+
+      <div className={styles.subCard}>
+        <h3 className={styles.subCardTitle}>This session</h3>
+        <div className={styles.sessionRow}>
+          <div className={styles.metaItem}>
+            <span className={styles.label}>Signs you out in</span>
+            <span className={styles.sessionClock}>
+              {sessionExpiresAt ? formatCountdown(sessionExpiresAt - nowMs) : "—"}
+            </span>
+          </div>
+          <button type="button" className={styles.extendBtn} onClick={handleExtend} disabled={extending}>
+            {extending ? "Extending…" : "Extend session"}
+          </button>
+        </div>
+        <span className={styles.hint}>
+          Extending renews it without signing you out. A reminder appears automatically as the
+          time runs low.
+        </span>
+      </div>
 
       <div className={styles.subCard}>
         <h3 className={styles.subCardTitle}>Last sign-in</h3>

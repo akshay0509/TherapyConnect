@@ -45,6 +45,13 @@
 .viewRow:last-of-type { border-bottom: none; padding-bottom: 0; }
 .viewValue { font-size: 1rem; color: var(--text-1); font-weight: 500; word-break: break-all; }
 
+/* ── This session ── */
+.sessionRow { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.sessionClock { font-family: 'Syne', sans-serif; font-size: 1.5rem; font-weight: 800; color: var(--text-1); font-variant-numeric: tabular-nums; line-height: 1.1; }
+.extendBtn { background: var(--wash-2); border: 1px solid var(--wash-3); border-radius: 10px; color: var(--text-1); font-family: 'DM Sans', sans-serif; font-size: 0.85rem; font-weight: 600; padding: 9px 16px; cursor: pointer; white-space: nowrap; transition: background 0.15s, border-color 0.15s; }
+.extendBtn:hover:not(:disabled) { background: var(--wash-3); border-color: var(--wash-4); }
+.extendBtn:disabled { opacity: 0.6; cursor: default; }
+
 .metaGrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
 .metaItem { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
 .metaItem .viewValue { font-size: 0.9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

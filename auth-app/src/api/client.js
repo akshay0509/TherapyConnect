@@ -7,6 +7,15 @@ let _accessToken = null;
 let _isRefreshing = false;
 let _refreshQueue = [];
 
+// AuthContext registers here so a silent refresh below also re-arms its expiry
+// timers. Without it the context keeps counting down the token it last saw and
+// signs the user out while a perfectly valid one is in play.
+let _onTokenRefreshed = null;
+
+export function setOnTokenRefreshed(cb) {
+  _onTokenRefreshed = cb;
+}
+
 export function setAccessToken(token) {
   _accessToken = token;
 }
@@ -61,6 +70,7 @@ api.interceptors.response.use(
         );
         const newToken = data.token;
         setAccessToken(newToken);
+        _onTokenRefreshed?.(newToken);
         _refreshQueue.forEach(({ resolve }) => resolve(newToken));
         _refreshQueue = [];
         originalRequest.headers.Authorization = `Bearer ${newToken}`;
