@@ -63,7 +63,9 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
-  // Schedule warning 2 min before expiry, then auto-logout at expiry
+  // Raise the blocking dialog 1 min before expiry, then auto-logout at expiry.
+  // SessionExpiry shows a non-blocking chip from 5 min out (red from 2), so by
+  // the time this interrupts, the session has already been flagged for a while.
   const scheduleTimeoutWarning = useCallback((jwt) => {
     clearTimers();
     const expiry = getTokenExpiry(jwt);
@@ -71,7 +73,7 @@ export function AuthProvider({ children }) {
     const now = Date.now();
     const msToExpiry = expiry - now;
     if (msToExpiry <= 0) { logout(true); return; }
-    const WARNING_BEFORE = 2 * 60 * 1000;
+    const WARNING_BEFORE = 60 * 1000;
     const msToWarning = msToExpiry - WARNING_BEFORE;
 
     if (msToWarning > 0) {

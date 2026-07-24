@@ -2,9 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import styles from "./SessionExpiry.module.css";
 
 // The chip surfaces before the blocking dialog does, so the session can be
-// extended without being interrupted. AuthContext owns the dialog's threshold.
+// extended without being interrupted. AuthContext owns the dialog's threshold
+// (WARNING_BEFORE) — keep URGENT_AT_MS above it, or the chip is replaced by the
+// dialog before it ever turns red.
 const CHIP_AT_MS   = 5 * 60 * 1000;
-const URGENT_AT_MS = 60 * 1000;
+const URGENT_AT_MS = 2 * 60 * 1000;
 
 function pad(n) {
   return String(n).padStart(2, "0");
