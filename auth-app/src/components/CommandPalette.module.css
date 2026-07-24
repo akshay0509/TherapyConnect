@@ -1,0 +1,170 @@
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500;600&display=swap');
+
+/* Mounted above every therapist page, so it carries its own font import
+   rather than relying on whichever page happens to be underneath. */
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9990; /* below SessionExpiry (9998/9999) — an expiring session wins */
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 12vh 20px 20px;
+  background: rgba(2,6,12,0.5);
+  backdrop-filter: blur(3px);
+  animation: fade 0.12s ease-out both;
+}
+
+.panel {
+  width: 100%;
+  max-width: 560px;
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  border-radius: 16px;
+  border: 1px solid var(--wash-3);
+  background: var(--bg-elev);
+  box-shadow: 0 24px 64px rgba(0,0,0,0.45);
+  font-family: 'DM Sans', sans-serif;
+  overflow: hidden;
+  animation: rise 0.16s cubic-bezier(0.22,1,0.36,1) both;
+}
+
+/* ─── Search row ─── */
+.searchRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--wash-2);
+  flex-shrink: 0;
+}
+
+.searchIcon { font-size: 1.05rem; color: var(--text-3); }
+
+.input {
+  flex: 1;
+  min-width: 0;
+  background: none;
+  border: none;
+  outline: none;
+  color: var(--text-1);
+  font-family: inherit;
+  font-size: 0.98rem;
+}
+
+.input::placeholder { color: var(--text-4); }
+
+/* ─── Results ─── */
+.list { overflow-y: auto; padding: 8px; }
+.list::-webkit-scrollbar { width: 4px; }
+.list::-webkit-scrollbar-thumb { background: var(--wash-3); border-radius: 2px; }
+
+.item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 10px;
+  background: none;
+  color: inherit;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.itemActive { background: var(--wash-2); }
+
+.avatar, .pageIcon {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 0.9rem;
+}
+
+.avatar {
+  background: rgba(99,102,241,0.18);
+  color: var(--indigo-soft);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.pageIcon { background: var(--wash-2); }
+
+.itemText { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+
+.itemLabel {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.itemHint {
+  font-size: 0.75rem;
+  color: var(--text-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.itemKind {
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-4);
+  flex-shrink: 0;
+}
+
+.empty { padding: 26px 12px; text-align: center; color: var(--text-3); font-size: 0.86rem; }
+
+/* ─── Footer ─── */
+.foot {
+  display: flex;
+  gap: 16px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--wash-2);
+  font-size: 0.72rem;
+  color: var(--text-4);
+  flex-shrink: 0;
+}
+
+.foot span { display: inline-flex; align-items: center; gap: 4px; }
+
+.kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  padding: 1px 5px;
+  border-radius: 5px;
+  border: 1px solid var(--wash-3);
+  background: var(--wash-1);
+  color: var(--text-3);
+  font-family: inherit;
+  font-size: 0.68rem;
+  line-height: 1.5;
+}
+
+@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes rise { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+
+@media (max-width: 560px) {
+  .backdrop { padding: 8vh 12px 12px; }
+  .foot { display: none; } /* no physical keyboard to hint at */
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .backdrop, .panel { animation: none; }
+}

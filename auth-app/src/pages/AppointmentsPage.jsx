@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { getAvailability, createAppointment, generateSlots, updateAppointmentStatus, rescheduleAppointment, createAvailabilityOverride, deleteAvailabilityOverride, bulkAvailabilityOverrides, searchAppointments, getPaymentInfo, ensurePaymentLink } from "../api/appointments";
-import { getTherapistClients } from "../api/therapistClients";
+import { getTherapistClients, createSessionNotes } from "../api/therapistClients";
 import { useModeMap, useAllModes } from "../context/DeliveryModesContext";
 import SessionTimer from "../components/SessionTimer";
 import styles from "./AppointmentsPage.module.css";
@@ -208,6 +208,10 @@ export default function AppointmentsPage() {
   const [updateError, setUpdateError] = useState(null);
   const [panelPayment, setPanelPayment] = useState(null); // payment info for the selected appointment
   const [paymentRetryLoading, setPaymentRetryLoading] = useState(false);
+  // Session notes, offered at the moment a session is marked COMPLETED —
+  // the one point where the therapist has just finished and has it fresh.
+  const [sessionNotes, setSessionNotes] = useState("");
+  const [notesWarning, setNotesWarning] = useState(null);
 
   // Reschedule
   const [reschedWeekStart, setReschedWeekStart] = useState(() => getWeekStart(new Date()));
@@ -438,6 +442,7 @@ export default function AppointmentsPage() {
     setUpdateStatus(slot.appointmentStatus || "");
     setUpdateReason(""); setUpdateError(null);
     setPanelPayment(null); setLinkCopied(false);
+    setSessionNotes(""); setNotesWarning(null);
     setPanel("update");
     if (slot.appointmentId) {
       getPaymentInfo(slot.appointmentId).then(setPanelPayment).catch(() => setPanelPayment(null));
@@ -527,13 +532,35 @@ export default function AppointmentsPage() {
 
   const handleUpdateStatus = async () => {
     if (!updateStatus) { setUpdateError("Please select a status."); return; }
-    setUpdateLoading(true); setUpdateError(null);
+    setUpdateLoading(true); setUpdateError(null); setNotesWarning(null);
+    const notes = sessionNotes.trim();
+    // Re-sending the current status would be rejected as an invalid transition,
+    // so a notes-only save (adding notes to an already-completed session) skips
+    // the status call entirely.
+    const statusChanged = updateStatus !== panelSlot.appointmentStatus;
     try {
-      await updateAppointmentStatus({ appointmentId: panelSlot.appointmentId, therapistId: panelSlot.therapistId, status: updateStatus, reason: updateReason || undefined });
-      setSlots(prev => prev.map(s => s.slotId === panelSlot.slotId ? { ...s, appointmentStatus: updateStatus } : s));
-      setAppointments(prev => prev.map(a => a.appointmentId === panelSlot.appointmentId ? { ...a, status: updateStatus } : a));
-      // keep the timer honest: completing a session should retire the card at once
-      setTodayAppointments(prev => prev.map(a => a.appointmentId === panelSlot.appointmentId ? { ...a, status: updateStatus } : a));
+      if (statusChanged) {
+        await updateAppointmentStatus({ appointmentId: panelSlot.appointmentId, therapistId: panelSlot.therapistId, status: updateStatus, reason: updateReason || undefined });
+        setSlots(prev => prev.map(s => s.slotId === panelSlot.slotId ? { ...s, appointmentStatus: updateStatus } : s));
+        setAppointments(prev => prev.map(a => a.appointmentId === panelSlot.appointmentId ? { ...a, status: updateStatus } : a));
+        // keep the timer honest: completing a session should retire the card at once
+        setTodayAppointments(prev => prev.map(a => a.appointmentId === panelSlot.appointmentId ? { ...a, status: updateStatus } : a));
+      }
+
+      // Notes are saved after the status call, never before: the status change
+      // emits the appointment event and is the action that must not be lost.
+      // If the note fails, the completion still stands and the panel stays open
+      // so the text can be retried or copied out rather than silently binned.
+      if (notes) {
+        try {
+          await createSessionNotes(panelSlot.clientId, panelSlot.appointmentId, notes);
+        } catch (noteErr) {
+          setNotesWarning(statusChanged
+            ? `Session marked ${updateStatus.toLowerCase()}, but the note didn't save: ${noteErr.message}`
+            : `The note didn't save: ${noteErr.message}`);
+          return;
+        }
+      }
       setPanel(null);
     } catch (err) { setUpdateError(friendlyError(err.message)); }
     finally { setUpdateLoading(false); }
@@ -823,6 +850,31 @@ export default function AppointmentsPage() {
                   <span className={`${styles.slotBadge} ${styles[`apptStatus_${a.status}`] || styles.apptStatusDefault}`}>{a.status}</span>
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* First-run guidance: a therapist with no slots anywhere in the week
+              sees an empty grid with no hint that Generate Slots is the missing
+              step. Only shown when the week is genuinely bare — not merely when
+              today happens to be free. */}
+          {!loadingSlots && !slotsError && slots.length === 0 && appointments.length === 0 && (
+            <div className={styles.setupHint}>
+              <span className={styles.setupHintIcon}>🗓</span>
+              <div className={styles.setupHintText}>
+                <h3 className={styles.setupHintTitle}>No slots this week</h3>
+                <p className={styles.setupHintBody}>
+                  Bookable slots are generated from your availability rules. Set your weekly hours
+                  first, then generate slots for the dates you want to open up.
+                </p>
+              </div>
+              <div className={styles.setupHintActions}>
+                <button className={styles.setupHintGhost} onClick={() => navigate("/therapist/availability-rules")}>
+                  Availability rules
+                </button>
+                <button className={styles.generateBtn} onClick={() => { setPanel("generate"); setGenSuccess(false); setGenError(null); }}>
+                  ⚡ Generate Slots
+                </button>
+              </div>
             </div>
           )}
 
@@ -1122,16 +1174,35 @@ export default function AppointmentsPage() {
                     ))}
                   </div>
                 </div>
+                {updateStatus === "COMPLETED" && (
+                  <div className={styles.field}>
+                    <label className={styles.label}>
+                      Session notes <span className={styles.optionalTag}>(optional)</span>
+                    </label>
+                    <textarea className={styles.reasonTextarea} rows={5}
+                      placeholder="What came up, what to pick up next time…"
+                      value={sessionNotes} onChange={e => setSessionNotes(e.target.value)}/>
+                    <span className={styles.notesHint}>
+                      Saved against this session and visible on{" "}
+                      <span className={styles.clientLink} onClick={() => navigate(`/therapist/clients/${panelSlot.clientId}`)}>
+                        {panelSlot.clientName}
+                      </span>'s history.
+                    </span>
+                  </div>
+                )}
                 <div className={styles.field}><label className={styles.label}>Reason <span className={styles.optionalTag}>(optional)</span></label>
                   <textarea className={styles.reasonTextarea} rows={3} placeholder="Reason…" value={updateReason} onChange={e => setUpdateReason(e.target.value)}/>
                 </div>
                 {updateError && <div className={styles.errorBox}><span className={styles.errorIcon}>!</span>{updateError}</div>}
+                {notesWarning && <div className={styles.warnBox}><span className={styles.warnIcon}>!</span>{notesWarning}</div>}
                 <div className={styles.formActions}>
                   <button className={styles.cancelBtn} onClick={() => setPanel(null)}>Cancel</button>
                   {!["COMPLETED", "CANCELLED", "ABANDONED"].includes(panelSlot.appointmentStatus) && (
                     <button className={styles.rescheduleActionBtn} onClick={() => openReschedule(panelSlot)}>↺ Reschedule</button>
                   )}
-                  <button className={styles.submitBtn} onClick={handleUpdateStatus} disabled={updateLoading || !updateStatus || updateStatus === panelSlot.appointmentStatus}>
+                  <button className={styles.submitBtn} onClick={handleUpdateStatus}
+                    disabled={updateLoading || !updateStatus ||
+                      (updateStatus === panelSlot.appointmentStatus && !sessionNotes.trim())}>
                     {updateLoading ? <span className={styles.btnSpinner}/> : "Save"}
                   </button>
                 </div>

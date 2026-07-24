@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { DeliveryModesProvider } from "./context/DeliveryModesContext";
+import CommandPalette from "./components/CommandPalette";
 import LoginPage from "./pages/LoginPage";
 import HomePage from "./pages/HomePage";
 import TherapistHomePage from "./pages/TherapistHomePage";
@@ -57,6 +58,8 @@ export default function App() {
     <AuthProvider>
       <BrowserRouter>
         <SessionExpiredRedirect />
+        {/* Ctrl/Cmd-K jump-to launcher — renders nothing unless a therapist is signed in */}
+        <CommandPalette />
         <DeliveryModesProvider>
           <Routes>
             {/* ── Admin routes — independent of therapist/client auth ── */}
