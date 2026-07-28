@@ -285,3 +285,12 @@
 @media (max-width: 640px)  { .kpiGrid { grid-template-columns: 1fr; } }
 
 .presets { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* Service mix: donut beside the figures, stacking on narrow screens */
+.serviceMix { display: grid; grid-template-columns: 300px 1fr; gap: 24px; align-items: center; }
+@media (max-width: 900px) { .serviceMix { grid-template-columns: 1fr; } }
+.serviceMixChart { min-width: 0; }
+.swatch {
+  display: inline-block; width: 9px; height: 9px; border-radius: 3px;
+  margin-right: 9px; vertical-align: middle; flex-shrink: 0;
+}

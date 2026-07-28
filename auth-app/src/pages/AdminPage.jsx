@@ -49,6 +49,15 @@ function timeAgo(isoString) {
   }
 }
 
+function titleCase(value) {
+  return String(value || "")
+    .toLowerCase()
+    .split("_")
+    .filter(Boolean)
+    .map(w => w[0].toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
 export default function AdminPage() {
   const navigate = useNavigate();
 
@@ -299,7 +308,7 @@ export default function AdminPage() {
   function renderOutboxCard() {
     if (!apptHealth) {
       return (
-        <div className={`${styles.card} ${styles.cardNeutral}`}>
+        <div className={`card ${styles.statCard} ${styles.cardNeutral}`}>
           <div className={styles.cardLabel}>Outbox / Kafka Producer</div>
           <div className={`${styles.statusBadge} ${styles.neutral}`}>
             <span className={`${styles.statusDot} ${styles.dotNeutral}`} />
@@ -318,7 +327,7 @@ export default function AdminPage() {
     const dotClass = isBad ? styles.dotError : styles.dotOk;
 
     return (
-      <div className={`${styles.card} ${cardClass}`}>
+      <div className={`card ${styles.statCard} ${cardClass}`}>
         <div className={styles.cardLabel}>Outbox / Kafka Producer</div>
         <div className={`${styles.statusBadge} ${badgeClass}`}>
           <span className={`${styles.statusDot} ${dotClass}`} />
@@ -358,7 +367,7 @@ export default function AdminPage() {
   function renderAnalyticsCard() {
     if (!analyticsHealth) {
       return (
-        <div className={`${styles.card} ${styles.cardNeutral}`}>
+        <div className={`card ${styles.statCard} ${styles.cardNeutral}`}>
           <div className={styles.cardLabel}>Analytics Consumer</div>
           <div className={`${styles.statusBadge} ${styles.neutral}`}>
             <span className={`${styles.statusDot} ${styles.dotNeutral}`} />
@@ -381,7 +390,7 @@ export default function AdminPage() {
       `BEHIND BY ${daysBehind} DAY${daysBehind !== 1 ? "S" : ""}`;
 
     return (
-      <div className={`${styles.card} ${cardClass}`}>
+      <div className={`card ${styles.statCard} ${cardClass}`}>
         <div className={styles.cardLabel}>Analytics Consumer</div>
         <div className={`${styles.statusBadge} ${badgeClass}`}>
           <span className={`${styles.statusDot} ${dotClass}`} />
@@ -407,7 +416,7 @@ export default function AdminPage() {
   function renderKafkaCard() {
     if (!kafka) {
       return (
-        <div className={`${styles.card} ${styles.cardNeutral}`}>
+        <div className={`card ${styles.statCard} ${styles.cardNeutral}`}>
           <div className={styles.cardLabel}>Kafka / Dead Letters</div>
           <div className={`${styles.statusBadge} ${styles.neutral}`}>
             <span className={`${styles.statusDot} ${styles.dotNeutral}`} />
@@ -432,7 +441,7 @@ export default function AdminPage() {
         : "ALL CLEAR";
 
     return (
-      <div className={`${styles.card} ${cardClass}`}>
+      <div className={`card ${styles.statCard} ${cardClass}`}>
         <div className={styles.cardLabel}>Kafka / Dead Letters</div>
         <div className={`${styles.statusBadge} ${badgeClass}`}>
           <span className={`${styles.statusDot} ${dotClass}`} />
@@ -457,12 +466,12 @@ export default function AdminPage() {
     const groups = kafka?.groups || [];
     const stableStates = ["Stable", "STABLE"];
     return (
-      <div className={styles.tablePanel}>
+      <div className={`card ${styles.tablePanel}`}>
         {kafkaError && <div className={styles.fetchError}>{kafkaError}</div>}
         {dltResult && (
           <div className={`${styles.replayResult} ${styles[dltResult.type]}`}>{dltResult.message}</div>
         )}
-        <table className={styles.table}>
+        <table className="data-table">
           <thead>
             <tr>
               <th>DLT Topic</th>
@@ -478,9 +487,9 @@ export default function AdminPage() {
                 <td className={styles.cellUsername}>{d.topic}</td>
                 <td>
                   {d.pending > 0 ? (
-                    <span className={`${styles.pill} ${styles.pillDisabled}`}>{d.pending}</span>
+                    <span className="chip chip-warn">{d.pending}</span>
                   ) : (
-                    <span className={`${styles.pill} ${styles.pillActive}`}>0</span>
+                    <span className="chip chip-ok">0</span>
                   )}
                 </td>
                 <td className={styles.cellMuted}>{d.total}</td>
@@ -496,11 +505,11 @@ export default function AdminPage() {
                 </td>
                 <td>
                   <div className={styles.rowActions}>
-                    <button className={styles.miniBtn} onClick={() => openDltMessages(d.topic)}>
+                    <button className="btn btn-sm" onClick={() => openDltMessages(d.topic)}>
                       View
                     </button>
                     <button
-                      className={`${styles.miniBtn} ${styles.miniBtnOk}`}
+                      className={`btn btn-sm ${styles.okBtn}`}
                       disabled={dltReplaying || d.pending === 0}
                       onClick={() => setDltReplayTarget(d.topic)}
                     >
@@ -520,7 +529,7 @@ export default function AdminPage() {
           </tbody>
         </table>
         <div className={styles.groupsSubTitle}>Consumer Groups</div>
-        <table className={styles.table}>
+        <table className="data-table">
           <thead>
             <tr>
               <th>Group</th>
@@ -534,13 +543,13 @@ export default function AdminPage() {
               <tr key={g.groupId}>
                 <td className={styles.cellUsername}>{g.groupId}</td>
                 <td>
-                  <span className={`${styles.pill} ${stableStates.includes(g.state) ? styles.pillActive : styles.pillLocked}`}>
+                  <span className={`chip ${stableStates.includes(g.state) ? "chip-ok" : "chip-bad"}`}>
                     {g.state}
                   </span>
                 </td>
                 <td>
                   {g.totalLag > 0 ? (
-                    <span className={`${styles.pill} ${styles.pillLocked}`}>{g.totalLag}</span>
+                    <span className="chip chip-bad">{g.totalLag}</span>
                   ) : (
                     <span className={styles.cellMuted}>0</span>
                   )}
@@ -574,13 +583,13 @@ export default function AdminPage() {
           const dotClass = isUp ? styles.dotOk : isDegraded ? styles.dotWarn : styles.dotError;
           const nameClass = isUp ? "" : styles.serviceNameDown;
           return (
-            <div key={svc.name} className={styles.serviceChip}>
+            <span key={svc.name} className={`chip chip-${isUp ? "ok" : isDegraded ? "warn" : "bad"} ${styles.serviceChip}`}>
               <span className={`${styles.statusDot} ${dotClass}`} />
               <span className={`${styles.serviceName} ${nameClass}`}>
                 {svc.name.replace("-service", "")}
               </span>
-              <span className={styles.serviceStatus}>{svc.status}</span>
-            </div>
+              <span className={styles.serviceStatus}>{titleCase(svc.status)}</span>
+            </span>
           );
         })}
       </div>
@@ -590,9 +599,9 @@ export default function AdminPage() {
   // ── Users table ──────────────────────────────────────────────────
   function renderUsersTable() {
     return (
-      <div className={styles.tablePanel}>
+      <div className={`card ${styles.tablePanel}`}>
         {usersError && <div className={styles.fetchError}>{usersError}</div>}
-        <table className={styles.table}>
+        <table className="data-table">
           <thead>
             <tr>
               <th>Username</th>
@@ -609,17 +618,17 @@ export default function AdminPage() {
                 <td className={styles.cellUsername}>{u.username}</td>
                 <td className={styles.cellMuted}>{u.email}</td>
                 <td>
-                  <span className={styles.roleBadge}>{u.userRole || "—"}</span>
+                  <span className="chip chip-info">{u.userRole ? titleCase(u.userRole) : "—"}</span>
                 </td>
                 <td>
                   {!u.enabled ? (
-                    <span className={`${styles.pill} ${styles.pillDisabled}`}>DISABLED</span>
+                    <span className="chip chip-mut">Disabled</span>
                   ) : u.accountLocked ? (
-                    <span className={`${styles.pill} ${styles.pillLocked}`}>
-                      LOCKED{u.failedAttempts > 0 ? ` (${u.failedAttempts})` : ""}
+                    <span className="chip chip-bad">
+                      Locked{u.failedAttempts > 0 ? ` · ${u.failedAttempts}` : ""}
                     </span>
                   ) : (
-                    <span className={`${styles.pill} ${styles.pillActive}`}>ACTIVE</span>
+                    <span className="chip chip-ok">Active</span>
                   )}
                 </td>
                 <td className={styles.cellMuted}>
@@ -629,7 +638,7 @@ export default function AdminPage() {
                   <div className={styles.rowActions}>
                     {u.enabled ? (
                       <button
-                        className={`${styles.miniBtn} ${styles.miniBtnDanger}`}
+                        className={`btn btn-sm ${styles.dangerBtn}`}
                         disabled={userActionId === u.userId}
                         onClick={() => requestUserAction(u, "enabled", false, `Disable account "${u.username}"? The user will not be able to log in.`)}
                       >
@@ -637,7 +646,7 @@ export default function AdminPage() {
                       </button>
                     ) : (
                       <button
-                        className={`${styles.miniBtn} ${styles.miniBtnOk}`}
+                        className={`btn btn-sm ${styles.okBtn}`}
                         disabled={userActionId === u.userId}
                         onClick={() => requestUserAction(u, "enabled", true, `Enable account "${u.username}"?`)}
                       >
@@ -646,7 +655,7 @@ export default function AdminPage() {
                     )}
                     {u.accountLocked ? (
                       <button
-                        className={`${styles.miniBtn} ${styles.miniBtnOk}`}
+                        className={`btn btn-sm ${styles.okBtn}`}
                         disabled={userActionId === u.userId}
                         onClick={() => requestUserAction(u, "locked", false, `Unlock account "${u.username}"? Failed attempts will be reset.`)}
                       >
@@ -654,7 +663,7 @@ export default function AdminPage() {
                       </button>
                     ) : (
                       <button
-                        className={styles.miniBtn}
+                        className="btn btn-sm"
                         disabled={userActionId === u.userId}
                         onClick={() => requestUserAction(u, "locked", true, `Lock account "${u.username}"?`)}
                       >
@@ -662,7 +671,7 @@ export default function AdminPage() {
                       </button>
                     )}
                     <button
-                      className={styles.miniBtn}
+                      className="btn btn-sm"
                       disabled={userActionId === u.userId}
                       onClick={() => openResetDialog(u)}
                     >
@@ -690,7 +699,7 @@ export default function AdminPage() {
 
   function renderAuditTable() {
     return (
-      <div className={styles.tablePanel}>
+      <div className={`card ${styles.tablePanel}`}>
         {auditError && <div className={styles.fetchError}>{auditError}</div>}
         <div className={styles.auditFilters}>
           {["all", "success", "failure"].map((f) => (
@@ -706,7 +715,7 @@ export default function AdminPage() {
             {filteredAudit.length} of last {audit.length} events
           </span>
         </div>
-        <table className={styles.table}>
+        <table className="data-table">
           <thead>
             <tr>
               <th>Time</th>
@@ -726,9 +735,9 @@ export default function AdminPage() {
                 <td className={styles.cellUsername}>{a.username || "—"}</td>
                 <td>
                   {a.success ? (
-                    <span className={`${styles.pill} ${styles.pillActive}`}>SUCCESS</span>
+                    <span className="chip chip-ok">Success</span>
                   ) : (
-                    <span className={`${styles.pill} ${styles.pillDisabled}`}>FAILED</span>
+                    <span className="chip chip-bad">Failed</span>
                   )}
                 </td>
                 <td className={styles.cellMuted}>{a.ipAddress || "—"}</td>
@@ -778,13 +787,13 @@ export default function AdminPage() {
 
         {/* Services */}
         <div className={styles.section}>
-          <div className={styles.sectionTitle}>Services</div>
+          <h2 className={styles.sectionTitle}>Services</h2>
           {renderServicesGrid()}
         </div>
 
         {/* System status */}
         <div className={styles.section}>
-          <div className={styles.sectionTitle}>System Status</div>
+          <h2 className={styles.sectionTitle}>System Status</h2>
           <div className={styles.cardsRow}>
             {renderOutboxCard()}
             {renderAnalyticsCard()}
@@ -794,25 +803,25 @@ export default function AdminPage() {
 
         {/* Kafka / DLQ */}
         <div className={styles.section}>
-          <div className={styles.sectionTitle}>Dead Letter Queues</div>
+          <h2 className={styles.sectionTitle}>Dead Letter Queues</h2>
           {renderKafkaSection()}
         </div>
 
         {/* User management */}
         <div className={styles.section}>
-          <div className={styles.sectionTitle}>Users</div>
+          <h2 className={styles.sectionTitle}>Users</h2>
           {renderUsersTable()}
         </div>
 
         {/* Login audit */}
         <div className={styles.section}>
-          <div className={styles.sectionTitle}>Login Activity</div>
+          <h2 className={styles.sectionTitle}>Login Activity</h2>
           {renderAuditTable()}
         </div>
 
         {/* Recovery actions */}
         <div className={styles.section}>
-          <div className={styles.sectionTitle}>Recovery Actions</div>
+          <h2 className={styles.sectionTitle}>Recovery Actions</h2>
           <div className={styles.recoveryPanel}>
             <p className={styles.recoveryDesc}>
               If Kafka went down, events may be marked as published but were never consumed.
@@ -847,7 +856,7 @@ export default function AdminPage() {
 
         {/* Portainer */}
         <div className={styles.section}>
-          <div className={styles.sectionTitle}>Container Management</div>
+          <h2 className={styles.sectionTitle}>Container Management</h2>
           <div className={styles.portainerPanel}>
             <div className={styles.portainerText}>
               <h3><Icon name="server" size={17} /> Portainer</h3>
@@ -909,7 +918,7 @@ export default function AdminPage() {
                 onChange={(e) => setResetPw(e.target.value)}
                 autoFocus
               />
-              <button type="button" className={styles.miniBtn} onClick={generatePassword}>
+              <button type="button" className="btn btn-sm" onClick={generatePassword}>
                 Generate
               </button>
             </div>

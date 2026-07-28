@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useAuth } from "../context/AuthContext";
+import { useTherapistProfile } from "../context/TherapistProfileContext";
 import { useNavigate } from "react-router-dom";
 import { getAvailability, getDashboardStats } from "../api/appointments";
 import { useModeMap } from "../context/DeliveryModesContext";
@@ -79,7 +79,6 @@ const ACTIONS = [
 ];
 
 export default function TherapistHomePage() {
-  const { user } = useAuth();
   const navigate = useNavigate();
   const modeMap = useModeMap();
 
@@ -89,7 +88,9 @@ export default function TherapistHomePage() {
   const [stats, setStats] = useState(null);
   const [statsLoading, setStatsLoading] = useState(true);
 
-  const displayName = user?.username || user?.name || "Therapist";
+  // Greet by first name rather than login username — the shell already
+  // fetched the profile, so this reuses it instead of refetching.
+  const { firstName } = useTherapistProfile();
 
   useEffect(() => {
     getDashboardStats()
@@ -135,7 +136,7 @@ export default function TherapistHomePage() {
       <div className={`page-head ${styles.reveal}`}>
         <div>
           <div className="eyebrow">Therapist workspace</div>
-          <h1>{getGreeting()}, <span className="g">{displayName}</span></h1>
+          <h1>{getGreeting()}, <span className="g">{firstName}</span></h1>
           <div className="sub">{fullDate()}</div>
         </div>
         <button className="btn btn-primary" onClick={() => navigate("/therapist/appointments")}>

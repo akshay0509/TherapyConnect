@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { NavLink, useNavigate, Outlet } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { TherapistProfileProvider, useTherapistProfile } from "../context/TherapistProfileContext";
 import Icon from "./icons";
 import styles from "./TherapistShell.module.css";
 
@@ -37,11 +38,24 @@ function initials(name) {
 
 // Renders `children` when given (used for routes that are shared with other
 // roles, e.g. Account Settings), otherwise the matched child route via Outlet.
+// The shell provides the profile and also consumes it, so the consuming part
+// lives one level down from the provider.
 export default function TherapistShell({ children }) {
+  const { user } = useAuth();
+  return (
+    <TherapistProfileProvider fallbackName={user?.username || user?.name}>
+      <TherapistShellInner>{children}</TherapistShellInner>
+    </TherapistProfileProvider>
+  );
+}
+
+function TherapistShellInner({ children }) {
   const navigate = useNavigate();
-  const { user, logout } = useAuth();
+  const { logout } = useAuth();
   const [drawer, setDrawer] = useState(false);
-  const name = user?.username || user?.name || "Therapist";
+  // Address the therapist by name, not by login username.
+  const { displayName } = useTherapistProfile();
+  const name = displayName;
 
   const handleSignOut = () => { logout(); navigate("/login"); };
 

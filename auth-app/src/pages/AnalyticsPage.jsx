@@ -8,6 +8,7 @@ import {
   getAnalyticsSummary, getAnalyticsDaily, getAnalyticsServices,
   getAnalyticsRetention, getAnalyticsRetentionFrequency,
 } from "../api/analytics";
+import api from "../api/client";
 import Icon from "../components/icons";
 import { useChartTheme, KEEP_ORDER, dateTick, dateLabel, makePieLabel } from "../components/chartTheme";
 import styles from "./AnalyticsPage.module.css";
@@ -57,6 +58,11 @@ const C = {
 // is only applied when two or more slices are actually drawn.
 const gapFor = (data) => (data.filter((d) => d.value > 0).length > 1 ? 2 : 0);
 
+// Service mix is open-ended, so it needs a ramp rather than named states.
+// Brand cyan and green first, then amber, alternating light/deep so adjacent
+// slices stay distinguishable. No violet/pink — those are avatar identity hues.
+const SERVICE_MIX_COLORS = ["#22d3ee", "#34d399", "#fbbf24", "#0891b2", "#10b981", "#8497b1"];
+
 const CHART_COLORS = {
   completed:   C.green,
   cancelled:   C.red,
@@ -94,6 +100,9 @@ export default function AnalyticsPage() {
   const [summary, setSummary]       = useState(null);
   const [daily, setDaily]           = useState([]);
   const [services, setServices]     = useState([]);
+  // The analytics endpoint returns serviceIds only; the catalogue supplies the
+  // human names so the breakdown isn't a column of opaque identifiers.
+  const [serviceCatalog, setServiceCatalog] = useState({});
   const [loading, setLoading]       = useState(false);
   const [error, setError]           = useState(null);
 
@@ -141,6 +150,13 @@ export default function AnalyticsPage() {
   useEffect(() => {
     loadData(fromDate, toDate);
     loadRetention();
+    api.get("/therapist/therapist-services")
+      .then(res => {
+        const byId = {};
+        (res.data ?? []).forEach(svc => { byId[svc.serviceId] = svc; });
+        setServiceCatalog(byId);
+      })
+      .catch(() => setServiceCatalog({}));
   }, []);
 
   function applyPreset(preset) {
@@ -164,6 +180,19 @@ export default function AnalyticsPage() {
     { name: "Paid", value: summary.totalPaid },
     { name: "DSF",  value: summary.totalDsf  },
   ] : [];
+
+  // Fall back to the raw id if the catalogue hasn't loaded or the service was
+  // deleted — better a bare id than a blank slice.
+  const serviceName = (serviceId) => {
+    const svc = serviceCatalog[serviceId];
+    if (!svc?.serviceType) return serviceId;
+    return svc.serviceType.toLowerCase().split("_")
+      .filter(Boolean).map(w => w[0].toUpperCase() + w.slice(1)).join(" ");
+  };
+
+  const serviceMixData = services
+    .filter(s => (s.completedCount ?? 0) > 0)
+    .map(s => ({ name: serviceName(s.serviceId), value: s.completedCount }));
 
   const retentionPieData = retention ? [
     { name: "Retained",    value: retention.retainedClients },
@@ -317,24 +346,56 @@ export default function AnalyticsPage() {
         {services.length > 0 && (
           <div className={`card ${styles.tableCard}`}>
             <h2 className={styles.chartTitle}>Breakdown by service</h2>
-            <table className={styles.table}>
-              <thead>
-                <tr>
-                  <th className={styles.th}>Service ID</th>
-                  <th className={styles.th}>Completed sessions</th>
-                  <th className={styles.th}>Earnings</th>
-                </tr>
-              </thead>
-              <tbody>
-                {services.map((s) => (
-                  <tr key={s.serviceId} className={styles.tr}>
-                    <td className={styles.td}>{s.serviceId}</td>
-                    <td className={styles.td}>{s.completedCount}</td>
-                    <td className={styles.td}>{formatCurrency(s.earnings)}</td>
+            <div className={styles.serviceMix}>
+              {serviceMixData.length > 0 && (
+                <div className={styles.serviceMixChart}>
+                  <ResponsiveContainer width="100%" height={230}>
+                    <PieChart>
+                      <Pie
+                        data={serviceMixData}
+                        dataKey="value"
+                        nameKey="name"
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={52}
+                        outerRadius={84}
+                        stroke="none"
+                        paddingAngle={gapFor(serviceMixData)}
+                        label={pieLabel}
+                        labelLine={false}
+                      >
+                        {serviceMixData.map((_, i) => (
+                          <Cell key={i} fill={SERVICE_MIX_COLORS[i % SERVICE_MIX_COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip {...TOOLTIP} formatter={(v) => [v, "Sessions"]} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+              <table className={styles.table}>
+                <thead>
+                  <tr>
+                    <th className={styles.th}>Service</th>
+                    <th className={styles.th}>Completed sessions</th>
+                    <th className={styles.th}>Earnings</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {services.map((s, i) => (
+                    <tr key={s.serviceId} className={styles.tr}>
+                      <td className={styles.td}>
+                        <span className={styles.swatch}
+                          style={{ background: SERVICE_MIX_COLORS[i % SERVICE_MIX_COLORS.length] }} />
+                        {serviceName(s.serviceId)}
+                      </td>
+                      <td className={styles.td}>{s.completedCount}</td>
+                      <td className={styles.td}>{formatCurrency(s.earnings)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
 
