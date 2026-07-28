@@ -84,6 +84,9 @@ export default function MyClientsPage() {
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
+  const previewName = [form.firstName, form.lastName].filter(p => p && p.trim()).join(" ").trim();
+  const previewInitials = ((form.firstName?.[0] ?? "") + (form.lastName?.[0] ?? "")).toUpperCase();
+
   const openDrawer = () => { setForm(EMPTY_FORM); setFormError(null); setDrawerOpen(true); };
   const closeDrawer = () => { setDrawerOpen(false); setFormError(null); };
 
@@ -253,62 +256,48 @@ export default function MyClientsPage() {
         </div>
 
         <form onSubmit={handleSubmit} className={styles.form}>
-          {/* Name row */}
+
+          {/* Live preview: the client is represented by an initials avatar
+              everywhere else in the app, so the form builds one as you type
+              instead of opening as a bare stack of inputs. */}
+          <div className={styles.preview}>
+            <span className={`avatar avatar-l ${styles.previewAvatar}`}>
+              {previewInitials || <Icon name="users" size={22} />}
+            </span>
+            <div className={styles.previewText}>
+              <b>{previewName || "New client"}</b>
+              <span>{form.email || "No email yet"}</span>
+            </div>
+          </div>
+
+          <div className={styles.groupLabel}>Identity</div>
           <div className={styles.formRow}>
             <div className={styles.field}>
-              <label className={styles.label} htmlFor="firstName">First Name</label>
+              <label className={styles.label} htmlFor="firstName">First name</label>
               <input id="firstName" name="firstName" type="text" required
                 value={form.firstName} onChange={handleChange}
-                className={styles.input} placeholder="Jane" />
+                className="input" placeholder="Jane" />
             </div>
             <div className={styles.field}>
-              <label className={styles.label} htmlFor="lastName">Last Name</label>
+              <label className={styles.label} htmlFor="lastName">Last name</label>
               <input id="lastName" name="lastName" type="text" required
                 value={form.lastName} onChange={handleChange}
-                className={styles.input} placeholder="Doe" />
+                className="input" placeholder="Doe" />
             </div>
           </div>
-
-          {/* Contact row */}
           <div className={styles.formRow}>
             <div className={styles.field}>
-              <label className={styles.label} htmlFor="email">Email</label>
-              <input id="email" name="email" type="email" required
-                value={form.email} onChange={handleChange}
-                className={styles.input} placeholder="jane@example.com" />
-            </div>
-            <div className={styles.field}>
-              <label className={styles.label} htmlFor="phoneNumber">Phone Number</label>
-              <input id="phoneNumber" name="phoneNumber" type="tel" required
-                value={form.phoneNumber} onChange={handleChange}
-                className={styles.input} placeholder="+91 98765 43210" />
-            </div>
-          </div>
-
-          {/* Emergency + DOB */}
-          <div className={styles.formRow}>
-            <div className={styles.field}>
-              <label className={styles.label} htmlFor="emergencyPhoneNumber">Emergency Phone</label>
-              <input id="emergencyPhoneNumber" name="emergencyPhoneNumber" type="tel" required
-                value={form.emergencyPhoneNumber} onChange={handleChange}
-                className={styles.input} placeholder="+91 91234 56789" />
-            </div>
-            <div className={styles.field}>
-              <label className={styles.label} htmlFor="dob">Date of Birth</label>
+              <label className={styles.label} htmlFor="dob">Date of birth</label>
               <input id="dob" name="dob" type="date" required
                 value={form.dob} onChange={handleChange}
-                className={`${styles.input} ${styles.dateInput}`}
+                className={`input ${styles.dateInput}`}
                 max={new Date().toISOString().split("T")[0]} />
             </div>
-          </div>
-
-          {/* Gender + Pronouns */}
-          <div className={styles.formRow}>
             <div className={styles.field}>
               <label className={styles.label} htmlFor="gender">Gender</label>
               <select id="gender" name="gender" required
                 value={form.gender} onChange={handleChange}
-                className={`${styles.input} ${styles.select}`}>
+                className={`input ${styles.select}`}>
                 <option value="" disabled>Select gender</option>
                 <option value="Male">Male</option>
                 <option value="Female">Female</option>
@@ -317,12 +306,55 @@ export default function MyClientsPage() {
                 <option value="Prefer not to say">Prefer not to say</option>
               </select>
             </div>
+          </div>
+          <div className={styles.field}>
+            <label className={styles.label} htmlFor="pronouns">
+              Pronouns <span className={styles.optional}>optional</span>
+            </label>
+            <input id="pronouns" name="pronouns" type="text"
+              value={form.pronouns} onChange={handleChange}
+              className="input" placeholder="e.g. she/her" />
+          </div>
+
+          <div className={styles.groupLabel}>Contact</div>
+          <div className={styles.formRow}>
             <div className={styles.field}>
-              <label className={styles.label} htmlFor="pronouns">Pronouns</label>
-              <input id="pronouns" name="pronouns" type="text"
-                value={form.pronouns} onChange={handleChange}
-                className={styles.input} placeholder="e.g. she/her" />
+              <label className={styles.label} htmlFor="email">Email</label>
+              <input id="email" name="email" type="email" required
+                value={form.email} onChange={handleChange}
+                className="input" placeholder="jane@example.com" />
             </div>
+            <div className={styles.field}>
+              <label className={styles.label} htmlFor="phoneNumber">Phone number</label>
+              <input id="phoneNumber" name="phoneNumber" type="tel" required
+                value={form.phoneNumber} onChange={handleChange}
+                className="input" placeholder="+91 98765 43210" />
+            </div>
+          </div>
+
+          <div className={styles.groupLabel}>Emergency &amp; billing</div>
+          <div className={styles.field}>
+            <label className={styles.label} htmlFor="emergencyPhoneNumber">Emergency phone</label>
+            <input id="emergencyPhoneNumber" name="emergencyPhoneNumber" type="tel" required
+              value={form.emergencyPhoneNumber} onChange={handleChange}
+              className="input" placeholder="+91 91234 56789" />
+            <span className={styles.hint}>Someone to reach if the client can&apos;t be contacted.</span>
+          </div>
+
+          {/* "DSF" alone meant nothing outside this codebase. */}
+          <div className={styles.toggleRow}>
+            <div className={styles.toggleText}>
+              <b>Charge a did-not-show fee</b>
+              <span>Bills the session fee when this client misses an appointment without cancelling.</span>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={form.dsf}
+              aria-label="Charge a did-not-show fee"
+              className={`switch ${form.dsf ? "on" : ""}`}
+              onClick={() => setForm(prev => ({ ...prev, dsf: !prev.dsf }))}
+            />
           </div>
 
           {formError && (
@@ -331,23 +363,10 @@ export default function MyClientsPage() {
             </div>
           )}
 
-          {/* DSF */}
-          <div className={styles.dsfRow}>
-            <label className={styles.dsfLabel}>
-              <input
-                type="checkbox"
-                className={styles.dsfCheckbox}
-                checked={form.dsf}
-                onChange={(e) => setForm(prev => ({ ...prev, dsf: e.target.checked }))}
-              />
-              <span>DSF</span>
-            </label>
-          </div>
-
           <div className={styles.formActions}>
-            <button type="button" className={styles.cancelBtn} onClick={closeDrawer}>Cancel</button>
-            <button type="submit" className={styles.submitBtn} disabled={formLoading}>
-              {formLoading ? <span className={styles.btnSpinner} /> : "Save Client"}
+            <button type="button" className="btn" onClick={closeDrawer}>Cancel</button>
+            <button type="submit" className="btn btn-primary" disabled={formLoading}>
+              {formLoading ? <span className={styles.btnSpinner} /> : "Add client"}
             </button>
           </div>
         </form>

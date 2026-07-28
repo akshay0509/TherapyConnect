@@ -185,19 +185,6 @@
   font-size: 0.72rem; color: var(--text-2);
   text-transform: uppercase; letter-spacing: 0.08em; font-weight: 500;
 }
-.input {
-  padding: 11px 14px;
-  background: var(--wash-2); border: 1px solid var(--wash-3);
-  border-radius: 9px; color: var(--text-1);
-  font-size: 0.9rem; font-family: var(--font-sans);
-  outline: none; transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
-  box-sizing: border-box; width: 100%;
-}
-.input::placeholder { color: var(--text-4); }
-.input:focus {
-  border-color: #10b981; background: rgba(16,185,129,0.05);
-  box-shadow: 0 0 0 3px rgba(16,185,129,0.12);
-}
 .dateInput::-webkit-calendar-picker-indicator { filter: invert(0.5); cursor: pointer; }
 .select {
   appearance: none; cursor: pointer;
@@ -211,25 +198,6 @@
   display: flex; gap: 12px;
   justify-content: flex-end; padding-top: 6px; margin-top: auto;
 }
-.cancelBtn {
-  padding: 11px 22px; background: transparent;
-  border: 1px solid var(--wash-3); border-radius: 10px;
-  color: var(--text-2); font-family: var(--font-sans); font-size: 0.9rem;
-  cursor: pointer; transition: border-color 0.2s, color 0.2s;
-}
-.cancelBtn:hover { border-color: var(--wash-4); color: var(--text-1); }
-.submitBtn {
-  padding: 11px 26px;
-  background: var(--brand);
-  border: none; border-radius: 10px; color: var(--on-primary);
-  font-family: var(--font-sans); font-size: 0.95rem; font-weight: 700;
-  cursor: pointer; min-width: 130px;
-  display: flex; align-items: center; justify-content: center;
-  transition: opacity 0.2s, transform 0.15s;
-  box-shadow: 0 4px 18px rgba(16,185,129,0.3);
-}
-.submitBtn:hover:not(:disabled) { opacity: 0.9; transform: translateY(-1px); }
-.submitBtn:disabled { opacity: 0.6; cursor: not-allowed; }
 .btnSpinner {
   width: 18px; height: 18px;
   border: 2px solid var(--wash-4);
@@ -244,10 +212,6 @@
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* ─── DSF ─── */
-.dsfRow { display: flex; align-items: center; padding: 4px 0 12px; }
-.dsfLabel { display: flex; align-items: center; gap: 10px; cursor: pointer; font-family: var(--font-sans); font-size: 0.9rem; color: var(--text-2); user-select: none; }
-.dsfLabel:hover { color: var(--text-1); }
-.dsfCheckbox { width: 16px; height: 16px; accent-color: #10b981; cursor: pointer; }
 .dsfBadge { font-size: 0.65rem; padding: 2px 8px; border-radius: 20px; font-weight: 700; white-space: nowrap; background: rgba(99,102,241,0.12); color: var(--indigo-mid); border: 1px solid rgba(99,102,241,0.25); }
 
 /* enriched card (data from Phase-B backend; degrades to "—" until then) */
@@ -257,3 +221,50 @@
 
 /* active filter button (on top of the global .btn) */
 .filterOn { border-color: rgba(34,211,238,0.4) !important; color: var(--primary-soft) !important; background: rgba(34,211,238,0.12) !important; }
+
+/* ── Add client drawer ───────────────────────────────────────────────── */
+
+/* Identity preview — mirrors the initials avatar used on the client cards, so
+   the record you're creating looks like the thing you'll see in the list. */
+.preview {
+  display: flex; align-items: center; gap: 14px;
+  padding: 16px; margin-bottom: 4px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+.previewAvatar { flex-shrink: 0; color: var(--text-3); }
+.previewText { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.previewText b { font-size: 0.95rem; letter-spacing: -0.01em; }
+.previewText span {
+  font-size: 0.78rem; color: var(--text-4);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* Section dividers: eight fields in a row read as a wall without them */
+.groupLabel {
+  font-size: 0.68rem; font-weight: 800; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--text-4);
+  margin: 14px 0 -4px; padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.groupLabel:first-of-type { border-top: none; padding-top: 0; margin-top: 0; }
+
+.optional {
+  font-size: 0.62rem; font-weight: 600; letter-spacing: 0.04em;
+  color: var(--text-4); text-transform: none; margin-left: 6px;
+}
+.hint { font-size: 0.72rem; color: var(--text-4); margin-top: 6px; }
+
+/* Did-not-show fee: a labelled toggle with an explanation, replacing a
+   checkbox labelled only "DSF". */
+.toggleRow {
+  display: flex; align-items: center; gap: 16px;
+  padding: 14px 16px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+.toggleText { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.toggleText b { font-size: 0.86rem; }
+.toggleText span { font-size: 0.75rem; color: var(--text-4); line-height: 1.45; }
