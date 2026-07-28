@@ -75,7 +75,10 @@ const CHART_COLORS = {
   online:      C.cyan,
   offline:     C.green,
   paid:        C.green, // fee collected
-  dsf:         C.amber, // did-not-show fee — attention, and always a minority slice
+  // DSF is the partner non-profit whose students are seen pro bono. These are
+  // completed sessions like any other, just unpaid — not an error state, so
+  // brand cyan rather than the amber used for things needing attention.
+  dsf:         C.cyan,
   retained:    C.green,
   churned:     C.red,
   frequency:   C.cyan,

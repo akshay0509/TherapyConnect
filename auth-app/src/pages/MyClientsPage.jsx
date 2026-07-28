@@ -341,17 +341,19 @@ export default function MyClientsPage() {
             <span className={styles.hint}>Someone to reach if the client can&apos;t be contacted.</span>
           </div>
 
-          {/* "DSF" alone meant nothing outside this codebase. */}
+          {/* DSF is the partner non-profit; its students are seen pro bono.
+              Earnings queries exclude these clients (c.dsf = false) and count
+              their sessions separately, so this flag drives real reporting. */}
           <div className={styles.toggleRow}>
             <div className={styles.toggleText}>
-              <b>Charge a did-not-show fee</b>
-              <span>Bills the session fee when this client misses an appointment without cancelling.</span>
+              <b>DSF student &mdash; pro bono</b>
+              <span>Sessions with this client are provided free of charge. They&apos;re counted separately and excluded from earnings.</span>
             </div>
             <button
               type="button"
               role="switch"
               aria-checked={form.dsf}
-              aria-label="Charge a did-not-show fee"
+              aria-label="DSF student, seen pro bono"
               className={`switch ${form.dsf ? "on" : ""}`}
               onClick={() => setForm(prev => ({ ...prev, dsf: !prev.dsf }))}
             />
