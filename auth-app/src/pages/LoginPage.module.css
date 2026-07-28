@@ -1,14 +1,53 @@
-@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap');
-
 .page {
   min-height: 100vh;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  align-items: stretch;
   background: var(--bg-page);
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-sans);
   position: relative;
   overflow: hidden;
+}
+
+/* ── Brand side (prototype split layout) ── */
+.brandSide {
+  flex: 1;
+  padding: 56px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 32px;
+  border-right: 1px solid var(--line);
+  background:
+    radial-gradient(700px 500px at 30% 20%, rgba(34,211,238,0.16), transparent),
+    radial-gradient(600px 500px at 80% 90%, rgba(52,211,153,0.14), transparent),
+    var(--bg-2);
+  position: relative; z-index: 2;
+}
+.brandTop { display: flex; align-items: center; gap: 12px; font-size: 1.05rem; font-weight: 800; letter-spacing: -0.02em; color: var(--text-1); }
+.brandMark {
+  width: 38px; height: 38px; border-radius: 11px; background: var(--brand); color: var(--on-primary);
+  display: flex; align-items: center; justify-content: center; box-shadow: 0 6px 18px rgba(34,211,238,0.28);
+}
+.brandHeading {
+  font-size: clamp(1.8rem, 3.2vw, 2.4rem); font-weight: 800; letter-spacing: -0.03em;
+  line-height: 1.1; max-width: 460px; margin: 0 0 14px; color: var(--text-1);
+}
+.brandAccent { background: var(--brand); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+.brandCopy { color: var(--text-2); max-width: 420px; font-size: 1rem; margin: 0; }
+.trustList { list-style: none; margin: 0; padding: 0; display: flex; gap: 22px; flex-wrap: wrap; }
+.trustList li { display: flex; align-items: center; gap: 8px; color: var(--text-2); font-size: 0.85rem; }
+.trustList svg { color: var(--ok-mid); flex-shrink: 0; }
+
+/* ── Form side ── */
+.formSide {
+  width: 480px; max-width: 100%;
+  display: flex; align-items: center; justify-content: center;
+  padding: 40px; position: relative; z-index: 2;
+}
+
+@media (max-width: 1040px) {
+  .brandSide { display: none; }
+  .formSide { width: 100%; }
 }
 
 /* ─── Animated background ─── */
@@ -24,7 +63,7 @@
   width: 600px;
   height: 600px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(99, 102, 241, 0.15) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(34, 211, 238, 0.15) 0%, transparent 70%);
   top: -200px;
   right: -150px;
   animation: drift1 12s ease-in-out infinite alternate;
@@ -35,7 +74,7 @@
   width: 500px;
   height: 500px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(16, 185, 129, 0.1) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(52, 211, 153, 0.12) 0%, transparent 70%);
   bottom: -200px;
   left: -100px;
   animation: drift2 15s ease-in-out infinite alternate;
@@ -64,15 +103,7 @@
   position: relative;
   z-index: 1;
   width: 100%;
-  max-width: 420px;
-  padding: 48px 44px;
-  background: var(--wash-1);
-  border: 1px solid var(--wash-3);
-  border-radius: 20px;
-  backdrop-filter: blur(20px);
-  box-shadow:
-    0 0 0 1px var(--wash-2) inset,
-    0 32px 80px rgba(0,0,0,0.5);
+  max-width: 360px;
   animation: slideUp 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
@@ -81,74 +112,61 @@
   to   { opacity: 1; transform: translateY(0); }
 }
 
-/* ─── Brand ─── */
+/* ─── Heading (left-aligned, prototype style) ─── */
 .brand {
-  text-align: center;
-  margin-bottom: 36px;
-}
-
-.logo {
-  font-size: 2.5rem;
-  color: #6366f1;
-  margin-bottom: 16px;
-  display: block;
-  filter: drop-shadow(0 0 12px rgba(99,102,241,0.5));
-  animation: pulse 3s ease-in-out infinite;
-}
-
-@keyframes pulse {
-  0%, 100% { filter: drop-shadow(0 0 10px rgba(99,102,241,0.4)); }
-  50%       { filter: drop-shadow(0 0 20px rgba(99,102,241,0.8)); }
+  text-align: left;
+  margin-bottom: 26px;
 }
 
 .title {
-  font-family: 'Syne', sans-serif;
-  font-size: 1.75rem;
+  font-family: var(--font-sans);
+  font-size: 1.5rem;
   font-weight: 800;
   color: var(--text-1);
   margin: 0 0 6px;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.02em;
 }
 
 .subtitle {
   font-size: 0.9rem;
-  color: var(--text-3);
+  color: var(--text-2);
   margin: 0;
-  font-weight: 300;
 }
 
-/* ─── Tabs ─── */
+/* ─── Tabs (underline style — lighter than the old pill box) ─── */
 .tabs {
   display: flex;
   gap: 4px;
-  background: var(--wash-1);
-  border: 1px solid var(--wash-2);
-  border-radius: 10px;
-  padding: 4px;
-  margin-bottom: 28px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 24px;
 }
 
 .tab {
   flex: 1;
-  padding: 9px 0;
+  padding: 10px 0;
   border: none;
-  border-radius: 7px;
-  background: transparent;
+  border-bottom: 2px solid transparent;
+  background: none;
   color: var(--text-3);
-  font-family: 'DM Sans', sans-serif;
-  font-size: 0.875rem;
-  font-weight: 500;
+  font-family: var(--font-sans);
+  font-size: 0.9rem;
+  font-weight: 600;
   cursor: pointer;
-  transition: background 0.2s, color 0.2s;
+  transition: color 0.15s, border-color 0.15s;
 }
 
-.tab:hover:not(.tabActive) {
-  color: var(--text-2);
-}
+.tab:hover:not(.tabActive) { color: var(--text-2); }
 
 .tabActive {
-  background: rgba(99, 102, 241, 0.2);
-  color: var(--indigo-mid);
+  color: var(--text-1);
+  border-bottom-color: var(--primary);
+}
+
+.footNote {
+  text-align: center;
+  margin: 22px 0 0;
+  font-size: 0.82rem;
+  color: var(--text-4);
 }
 
 /* ─── Success ─── */
@@ -157,7 +175,7 @@
   align-items: center;
   gap: 10px;
   padding: 12px 16px;
-  background: rgba(16, 185, 129, 0.1);
+  background: rgba(52, 211, 153, 0.12);
   border: 1px solid rgba(16, 185, 129, 0.25);
   border-radius: 10px;
   color: var(--ok-soft);
@@ -181,7 +199,7 @@
   background: none;
   border: none;
   color: var(--ok-mid);
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-sans);
   font-size: inherit;
   font-weight: 600;
   cursor: pointer;
@@ -221,7 +239,7 @@
   border-radius: 10px;
   color: var(--text-1);
   font-size: 0.95rem;
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-sans);
   transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
   box-sizing: border-box;
   outline: none;
@@ -230,9 +248,9 @@
 .input::placeholder { color: var(--text-4); }
 
 .input:focus {
-  border-color: #6366f1;
-  background: rgba(99, 102, 241, 0.08);
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+  border-color: var(--primary);
+  background: rgba(34, 211, 238, 0.08);
+  box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.15);
 }
 
 .inputWrapper {
@@ -253,7 +271,7 @@
   color: var(--text-3);
   font-size: 0.78rem;
   cursor: pointer;
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-sans);
   font-weight: 500;
   letter-spacing: 0.03em;
   transition: color 0.2s;
@@ -299,26 +317,26 @@
 .button {
   margin-top: 4px;
   padding: 14px;
-  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  background: var(--brand);
   border: none;
   border-radius: 10px;
-  color: #fff;
+  color: var(--on-primary);
   font-size: 0.95rem;
   font-weight: 600;
-  font-family: 'Syne', sans-serif;
+  font-family: var(--font-sans);
   letter-spacing: 0.02em;
   cursor: pointer;
   transition: opacity 0.2s, transform 0.15s, box-shadow 0.2s;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 20px rgba(99, 102, 241, 0.35);
+  box-shadow: 0 4px 20px rgba(34, 211, 238, 0.30);
 }
 
 .button:hover:not(:disabled) {
   opacity: 0.92;
   transform: translateY(-1px);
-  box-shadow: 0 8px 30px rgba(99, 102, 241, 0.5);
+  box-shadow: 0 8px 30px rgba(34, 211, 238, 0.40);
 }
 
 .button:active:not(:disabled) {
@@ -334,12 +352,12 @@
 .buttonSecondary {
   padding: 13px;
   background: transparent;
-  border: 1px solid rgba(99, 102, 241, 0.4);
+  border: 1px solid rgba(34, 211, 238, 0.4);
   border-radius: 10px;
   color: var(--indigo-mid);
   font-size: 0.95rem;
   font-weight: 600;
-  font-family: 'Syne', sans-serif;
+  font-family: var(--font-sans);
   letter-spacing: 0.02em;
   cursor: pointer;
   transition: background 0.2s, border-color 0.2s, color 0.2s, transform 0.15s;
@@ -349,8 +367,8 @@
 }
 
 .buttonSecondary:hover:not(:disabled) {
-  background: rgba(99, 102, 241, 0.1);
-  border-color: rgba(99, 102, 241, 0.7);
+  background: rgba(34, 211, 238, 0.1);
+  border-color: rgba(34, 211, 238, 0.7);
   color: var(--indigo-soft);
   transform: translateY(-1px);
 }
@@ -393,5 +411,5 @@
 .roleOptionActive { background: rgba(16,185,129,0.15) !important; border-color: #10b981 !important; color: var(--ok-mid) !important; }
 
 /* ─── Forgot password link ─── */
-.forgotLink { background: none; border: none; color: var(--text-3); font-family: 'DM Sans', sans-serif; font-size: 0.82rem; cursor: pointer; text-align: center; width: 100%; margin-top: 4px; transition: color 0.15s; display: block; }
-.forgotLink:hover { color: var(--indigo-mid); }
+.forgotLink { background: none; border: none; color: var(--text-3); font-family: var(--font-sans); font-size: 0.82rem; cursor: pointer; text-align: center; width: 100%; margin-top: 4px; transition: color 0.15s; display: block; }
+.forgotLink:hover { color: var(--primary); }

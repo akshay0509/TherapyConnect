@@ -4,9 +4,9 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
-import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Set;
+import java.util.Map;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,12 +22,10 @@ import com.org.events.TherapistAvailability.Slot;
 import com.org.therapistService.Entity.TherapistAvailability;
 import com.org.therapistService.Entity.TherapistAvailabilityOverrides;
 import com.org.therapistService.Entity.TherapistAvailabilityRules;
-import com.org.therapistService.Entity.TherapistServices;
 import com.org.therapistService.Repository.AppointmentProjectionRepository;
 import com.org.therapistService.Repository.TherapistAvailabilityOverridesRepository;
 import com.org.therapistService.Repository.TherapistAvailabilityRepository;
 import com.org.therapistService.Repository.TherapistAvailabilityRulesRepository;
-import com.org.therapistService.Repository.TherapistServicesRepository;
 
 import jakarta.transaction.Transactional;
 
@@ -47,15 +45,13 @@ public class AvailabilitySlotService {
 	private TherapistAvailabilityRepository therapistAvailabilityRepository;
 
 	@Autowired
-	private TherapistServicesRepository therapistServicesRepository;
-
-	@Autowired
 	private OutboxService outboxService;
 
 	@Autowired
 	private AppointmentProjectionRepository appointmentProjectionRepository;
 
 	private static final Logger logger = LoggerFactory.getLogger(AvailabilitySlotService.class);
+	private static final int AVAILABILITY_BLOCK_MINUTES = 30;
 
 	/**
 	 * Regenerates availability day by day (manual generation and rule-change
@@ -152,12 +148,7 @@ public class AvailabilitySlotService {
 	}
 
 	private List<TherapistAvailability> generateBaseSlotsFromRules(String therapistId, LocalDate startDate, LocalDate endDate) {
-		List<TherapistAvailability> newSlotsToSave = new ArrayList<>();
-		List<TherapistServices> therapistServices = therapistServicesRepository.findByTherapistIdAndIsActiveTrue(therapistId);
-
-		if (therapistServices.isEmpty()) {
-			return new ArrayList<>();
-		}
+		Map<String, TherapistAvailability> uniqueSlots = new LinkedHashMap<>();
 
 		List<TherapistAvailabilityRules> therapistAvailabilityRulesList = therapistAvailabilityRulesRepository.findByTherapistIdAndIsActiveTrue(therapistId);
 
@@ -168,16 +159,13 @@ public class AvailabilitySlotService {
 					.toList();
 
 			for (TherapistAvailabilityRules rule : applicableRules) {
-				newSlotsToSave.addAll(
-						chopTimeBlockIntoSlots(
-								therapistId,
-								date,
-								rule.getStartTime(),
-								rule.getEndTime(),
-								therapistServices));
+				for (TherapistAvailability slot : chopTimeBlockIntoSlots(
+						therapistId, date, rule.getStartTime(), rule.getEndTime())) {
+					uniqueSlots.putIfAbsent(slotKey(slot), slot);
+				}
 			}
 		}
-		return newSlotsToSave;
+		return new ArrayList<>(uniqueSlots.values());
 	}
 
 	@Transactional
@@ -230,25 +218,24 @@ public class AvailabilitySlotService {
 		validateSingleDayWindow(windowStart, windowEnd);
 
 		LocalDate date = windowStart.toLocalDate();
-		List<TherapistServices> therapistServices = therapistServicesRepository.findByTherapistIdAndIsActiveTrue(therapistId);
 		List<TherapistAvailability> slotsToSave = new ArrayList<>();
 
 		List<TherapistAvailability> existing = therapistAvailabilityRepository
 				.findByTherapistIdAndStartTimeLessThanAndEndTimeGreaterThan(therapistId, windowEnd, windowStart);
-		Set<String> existingKeys = new HashSet<String>();
+		Map<String, Boolean> existingKeys = new LinkedHashMap<>();
 		for (TherapistAvailability s : existing) {
-			existingKeys.add(s.getServiceId() + "|" + s.getStartTime() + "|" + s.getEndTime());
+			existingKeys.put(slotKey(s), Boolean.TRUE);
 		}
 
 		for (TherapistAvailability slot : chopTimeBlockIntoSlots(
 				therapistId,
 				date,
 				windowStart.toLocalTime(),
-				windowEnd.toLocalTime(),
-				therapistServices)) {
-			String key = slot.getServiceId() + "|" + slot.getStartTime() + "|" + slot.getEndTime();
-			if (!existingKeys.contains(key)) {
+				windowEnd.toLocalTime())) {
+			String key = slotKey(slot);
+			if (!existingKeys.containsKey(key)) {
 				slotsToSave.add(slot);
+				existingKeys.put(key, Boolean.TRUE);
 			}
 		}
 
@@ -308,36 +295,34 @@ public class AvailabilitySlotService {
 		}
 	}
 
-	private List<TherapistAvailability> chopTimeBlockIntoSlots(String therapistId, LocalDate date, LocalTime startTime, LocalTime endTime, List<TherapistServices> therapistServices) {
+	private List<TherapistAvailability> chopTimeBlockIntoSlots(String therapistId, LocalDate date, LocalTime startTime, LocalTime endTime) {
 		List<TherapistAvailability> newSlots = new ArrayList<>();
+		LocalTime currentSlotTime = startTime;
 
-		for (TherapistServices service : therapistServices) {
-			int slotDurationMinutes = service.getDuration();
-			String serviceId = service.getServiceId();
-			LocalTime currentSlotTime = startTime;
+		while (currentSlotTime.isBefore(endTime)) {
+			LocalDateTime slotStartTime = LocalDateTime.of(date, currentSlotTime);
+			LocalDateTime slotEndTime = slotStartTime.plusMinutes(AVAILABILITY_BLOCK_MINUTES);
 
-			while (currentSlotTime.isBefore(endTime)) {
-				LocalDateTime slotStartTime = LocalDateTime.of(date, currentSlotTime);
-				LocalDateTime slotEndTime = slotStartTime.plusMinutes(slotDurationMinutes);
-
-				if (slotEndTime.isAfter(LocalDateTime.of(date, endTime))) {
-					break;
-				}
-
-				TherapistAvailability slot = new TherapistAvailability();
-				slot.setTherapistId(therapistId);
-				slot.setStartTime(slotStartTime);
-				slot.setEndTime(slotEndTime);
-				slot.setServiceId(serviceId);
-				// no fee on slots: pricing lives on delivery modes and is
-				// resolved at booking time; slot sessionFee was written but
-				// never read anywhere downstream
-
-				newSlots.add(slot);
-				currentSlotTime = currentSlotTime.plusMinutes(30);
+			if (slotEndTime.isAfter(LocalDateTime.of(date, endTime))) {
+				break;
 			}
+
+			TherapistAvailability slot = new TherapistAvailability();
+			slot.setTherapistId(therapistId);
+			slot.setStartTime(slotStartTime);
+			slot.setEndTime(slotEndTime);
+			// Service, duration and price are selected at appointment creation.
+			slot.setServiceId(null);
+			slot.setSessionFee(null);
+
+			newSlots.add(slot);
+			currentSlotTime = currentSlotTime.plusMinutes(AVAILABILITY_BLOCK_MINUTES);
 		}
 		return newSlots;
+	}
+
+	private String slotKey(TherapistAvailability slot) {
+		return slot.getStartTime() + "|" + slot.getEndTime();
 	}
 
 	private AvailabilitySlotsGeneratedEvent buildSlotsGeneratedEvent(String therapistId, LocalDate startDate, LocalDate endDate, List<TherapistAvailability> newSlots) {

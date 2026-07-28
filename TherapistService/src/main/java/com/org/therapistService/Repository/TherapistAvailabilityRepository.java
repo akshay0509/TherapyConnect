@@ -15,11 +15,10 @@ public interface TherapistAvailabilityRepository extends JpaRepository<Therapist
 
 	boolean existsByTherapistIdAndStartTime(String therapistId, LocalDateTime startTime);
 
-	boolean existsByTherapistIdAndServiceIdAndStartTimeAndEndTime(
-            String therapistId,
-            String serviceId,
-            LocalDateTime startTime,
-            LocalDateTime endTime);
+	boolean existsByTherapistIdAndStartTimeAndEndTime(
+			String therapistId,
+			LocalDateTime startTime,
+			LocalDateTime endTime);
 
 	List<TherapistAvailability> findByTherapistId(String therapistId);
 

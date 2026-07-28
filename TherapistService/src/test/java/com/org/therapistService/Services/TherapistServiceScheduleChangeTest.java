@@ -50,6 +50,9 @@ class TherapistServiceScheduleChangeTest {
 	@Mock
 	private AvailabilitySlotService availabilitySlotService;
 
+	@Mock
+	private OutboxService outboxService;
+
 	@InjectMocks
 	private TherapistService therapistService;
 
@@ -143,32 +146,57 @@ class TherapistServiceScheduleChangeTest {
 	// ── therapist services (slots carry service duration; pricing is on modes) ──
 
 	@Test
-	void creatingServiceTriggersImmediateRegeneration() throws Exception {
+	void creatingServicePublishesProjectionEventWithoutRegeneration() throws Exception {
+		when(therapistServicesRepository.save(any())).thenAnswer(invocation -> {
+			TherapistServices service = invocation.getArgument(0);
+			service.setServiceId("SRV1");
+			return service;
+		});
+
 		therapistService.createTherapistServices(serviceDto());
 
-		verifyRegenerationTriggered();
+		verify(outboxService).saveOutboxEvent(
+				eq("THERAPIST_AVAILABILITY"), eq(THERAPIST_ID),
+				eq("TherapistServiceDefinitionUpserted"), any());
+		verifyNoInteractions(availabilitySlotService);
 	}
 
 	@Test
-	void updatingServiceTriggersImmediateRegeneration() throws Exception {
+	void updatingServicePublishesProjectionEventWithoutRegeneration() throws Exception {
 		when(therapistServicesRepository.findByServiceIdAndTherapistId("SRV1", THERAPIST_ID))
 				.thenReturn(Optional.of(serviceEntity()));
 		when(therapistServicesRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
 		therapistService.updateTherapistService(THERAPIST_ID, "SRV1", serviceDto());
 
-		verifyRegenerationTriggered();
+		verify(outboxService).saveOutboxEvent(
+				eq("THERAPIST_AVAILABILITY"), eq(THERAPIST_ID),
+				eq("TherapistServiceDefinitionUpserted"), any());
+		verifyNoInteractions(availabilitySlotService);
 	}
 
 	@Test
-	void deletingServiceTriggersImmediateRegeneration() throws Exception {
+	void deletingServicePublishesDeleteEventWithoutRegeneration() throws Exception {
 		when(therapistServicesRepository.findByServiceIdAndTherapistId("SRV1", THERAPIST_ID))
 				.thenReturn(Optional.of(serviceEntity()));
 
 		therapistService.deleteTherapistService(THERAPIST_ID, "SRV1");
 
 		verify(therapistServicesRepository).delete(any(TherapistServices.class));
-		verifyRegenerationTriggered();
+		verify(outboxService).saveOutboxEvent(
+				eq("THERAPIST_AVAILABILITY"), eq(THERAPIST_ID),
+				eq("TherapistServiceDefinitionDeleted"), any());
+		verifyNoInteractions(availabilitySlotService);
+	}
+
+	@Test
+	void serviceDurationMustUseWholeGenericBlocks() {
+		TherapistServicesDto invalid = serviceDto();
+		invalid.setDuration(45);
+
+		assertThrows(IllegalArgumentException.class,
+				() -> therapistService.createTherapistServices(invalid));
+		verifyNoInteractions(therapistServicesRepository, availabilitySlotService, outboxService);
 	}
 
 	// ── failure semantics ─────────────────────────────────────────────────────

@@ -1,16 +1,30 @@
 import { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { getAvailability, createAppointment, generateSlots, updateAppointmentStatus, rescheduleAppointment, createAvailabilityOverride, deleteAvailabilityOverride, bulkAvailabilityOverrides, searchAppointments, getPaymentInfo, ensurePaymentLink } from "../api/appointments";
+import { getAvailability, createAppointment, generateSlots, updateAppointmentStatus, rescheduleAppointment, createAvailabilityOverride, deleteAvailabilityOverride, bulkAvailabilityOverrides, getPaymentInfo, ensurePaymentLink } from "../api/appointments";
 import { getTherapistClients, createSessionNotes } from "../api/therapistClients";
+import api from "../api/client";
 import { useModeMap, useAllModes } from "../context/DeliveryModesContext";
 import SessionTimer from "../components/SessionTimer";
+import Icon from "../components/icons";
 import styles from "./AppointmentsPage.module.css";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const DAY_SHORT = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 const MONTHS_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-const STATUS_ICON = { CONFIRMED:"✅", COMPLETED:"🏁", CANCELLED:"✕", ABANDONED:"⚠️", SCHEDULED:"🗓️", RESCHEDULED:"🔄" };
+const STATUS_ICON = { CONFIRMED:"check", COMPLETED:"flag", CANCELLED:"x", ABANDONED:"alert", SCHEDULED:"calendar", RESCHEDULED:"refresh" };
+
+// Status rides on the chip, the way the prototype does it — the timeline block
+// itself only distinguishes booked (cyan) from live (green), instead of being
+// recoloured six different ways.
+const STATUS_CHIP = {
+  CONFIRMED:   "online",
+  SCHEDULED:   "warn",
+  RESCHEDULED: "warn",
+  COMPLETED:   "ok",
+  CANCELLED:   "bad",
+  ABANDONED:   "warn",
+};
 
 const CONFLICT_ERRORS = {
   SLOT_ALREADY_BOOKED:                  "This slot has already been booked.",
@@ -27,14 +41,9 @@ function friendlyError(message) {
   const key = Object.keys(CONFLICT_ERRORS).find(k => message.includes(k));
   return key ? CONFLICT_ERRORS[key] : message;
 }
-const APPT_STATUS_COLORS = {
-  CONFIRMED:   { bg: "rgba(99,102,241,0.18)",  border: "#6366f1", text: "#a5b4fc" },
-  SCHEDULED:   { bg: "rgba(16,185,129,0.15)",  border: "#10b981", text: "#34d399" },
-  RESCHEDULED: { bg: "rgba(245,158,11,0.12)",  border: "#f59e0b", text: "#fbbf24" },
-  COMPLETED:   { bg: "rgba(16,185,129,0.15)",  border: "#10b981", text: "#34d399" },
-  CANCELLED:   { bg: "rgba(239,68,68,0.12)",   border: "#ef4444", text: "#f87171" },
-  ABANDONED:   { bg: "rgba(245,158,11,0.12)",  border: "#f59e0b", text: "#fbbf24" },
-};
+function titleCase(s) {
+  return s ? s.charAt(0) + s.slice(1).toLowerCase() : "";
+}
 
 // ─── Time helpers ─────────────────────────────────────────────────────────────
 const HOUR_START = 6;
@@ -42,6 +51,10 @@ const HOUR_END   = 22;
 const TOTAL_HOURS = HOUR_END - HOUR_START;
 const PX_PER_HOUR = 80;
 const CANVAS_HEIGHT = TOTAL_HOURS * PX_PER_HOUR;
+// visual separation between consecutive blocks, taken off the bottom only
+const BLOCK_GAP = 4;
+// availability grid size; a session rounds up to whole blocks
+const BLOCK_MINUTES = 30;
 
 function toMinutes(dt) {
   const d = new Date(dt);
@@ -96,12 +109,12 @@ function ClientDropdown({ clients, value, onChange }) {
     <div className={styles.customDropdown} ref={ref}>
       <button type="button" className={`${styles.dropdownTrigger} ${open ? styles.dropdownTriggerOpen : ""}`} onClick={() => setOpen(o => !o)}>
         <span className={selected ? styles.dropdownValueSet : styles.dropdownPlaceholder}>{selected ? selected.clientName : "Select a client"}</span>
-        <span className={`${styles.dropdownChevron} ${open ? styles.dropdownChevronOpen : ""}`}>▾</span>
+        <Icon name="chevron" size={16} className={`${styles.dropdownChevron} ${open ? styles.dropdownChevronOpen : ""}`} />
       </button>
       {open && (
         <div className={styles.dropdownMenu}>
           <div className={styles.dropdownSearch}>
-            <span className={styles.dropdownSearchIcon}>⌕</span>
+            <span className={styles.dropdownSearchIcon}><Icon name="search" size={15} /></span>
             <input className={styles.dropdownSearchInput} type="text" placeholder="Search clients…" value={search} onChange={e => setSearch(e.target.value)} autoFocus />
           </div>
           <div className={styles.dropdownList}>
@@ -109,6 +122,49 @@ function ClientDropdown({ clients, value, onChange }) {
             {filtered.map(c => (
               <div key={c.clientId} className={`${styles.dropdownItem} ${c.clientId === value ? styles.dropdownItemActive : ""}`} onClick={() => { onChange(c.clientId, c.clientName); setOpen(false); setSearch(""); }}>
                 <span className={styles.dropdownItemAvatar}>{c.clientName?.[0]?.toUpperCase() ?? "?"}</span>{c.clientName}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function serviceLabel(svc) {
+  const name = (svc.serviceType || "").toLowerCase().split("_")
+    .filter(Boolean)
+    .map(w => w[0].toUpperCase() + w.slice(1))
+    .join(" ");
+  return name || svc.serviceId;
+}
+
+function ServiceDropdown({ services, value, onChange }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  const selected = services.find(s => s.serviceId === value);
+  useEffect(() => {
+    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", h); return () => document.removeEventListener("mousedown", h);
+  }, []);
+  return (
+    <div className={styles.customDropdown} ref={ref}>
+      <button type="button" className={`${styles.dropdownTrigger} ${open ? styles.dropdownTriggerOpen : ""}`} onClick={() => setOpen(o => !o)}>
+        <span className={selected ? styles.dropdownValueSet : styles.dropdownPlaceholder}>
+          {selected ? `${serviceLabel(selected)} · ${selected.duration} min` : "Select a service"}
+        </span>
+        <Icon name="chevron" size={16} className={`${styles.dropdownChevron} ${open ? styles.dropdownChevronOpen : ""}`} />
+      </button>
+      {open && (
+        <div className={styles.dropdownMenu}>
+          <div className={styles.dropdownList}>
+            {services.length === 0 && <div className={styles.dropdownEmpty}>No active services</div>}
+            {services.map(svc => (
+              <div key={svc.serviceId} className={`${styles.dropdownItem} ${svc.serviceId === value ? styles.dropdownItemActive : ""}`}
+                onClick={() => { onChange(svc.serviceId); setOpen(false); }}>
+                <span className={styles.dropdownItemAvatar}><Icon name="clipboard" size={15} /></span>
+                <span>{serviceLabel(svc)}</span>
+                <span className={styles.modePrice}> · {svc.duration} min</span>
               </div>
             ))}
           </div>
@@ -126,14 +182,16 @@ function ModeDropdown({ modes, value, onChange }) {
     const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
     document.addEventListener("mousedown", h); return () => document.removeEventListener("mousedown", h);
   }, []);
-  const modeIcon = { ONLINE: "💻", OFFLINE_AT_HALUSURU: "📍", OFFLINE_AT_SESHADRIPURAM: "📍" };
+  const modeIcon = { ONLINE: "video", OFFLINE_AT_HALUSURU: "pin", OFFLINE_AT_SESHADRIPURAM: "pin" };
   return (
     <div className={styles.customDropdown} ref={ref}>
       <button type="button" className={`${styles.dropdownTrigger} ${open ? styles.dropdownTriggerOpen : ""}`} onClick={() => setOpen(o => !o)}>
         <span className={selected ? styles.dropdownValueSet : styles.dropdownPlaceholder}>
-          {selected ? `${modeIcon[selected.modeType] ?? "💬"} ${selected.displayName}` : "Select delivery mode"}
+          {selected ? (
+            <><Icon name={modeIcon[selected.modeType] ?? "chat"} size={15} /> {selected.displayName}</>
+          ) : "Select delivery mode"}
         </span>
-        <span className={`${styles.dropdownChevron} ${open ? styles.dropdownChevronOpen : ""}`}>▾</span>
+        <Icon name="chevron" size={16} className={`${styles.dropdownChevron} ${open ? styles.dropdownChevronOpen : ""}`} />
       </button>
       {open && (
         <div className={styles.dropdownMenu}>
@@ -141,7 +199,7 @@ function ModeDropdown({ modes, value, onChange }) {
             {modes.length === 0 && <div className={styles.dropdownEmpty}>No modes available for this service</div>}
             {modes.map(m => (
               <div key={m.modeId} className={`${styles.dropdownItem} ${m.modeId === value ? styles.dropdownItemActive : ""}`} onClick={() => { onChange(m.modeId); setOpen(false); }}>
-                <span className={styles.dropdownItemAvatar}>{modeIcon[m.modeType] ?? "💬"}</span>
+                <span className={styles.dropdownItemAvatar}><Icon name={modeIcon[m.modeType] ?? "chat"} size={15} /></span>
                 <span>{m.displayName}</span>
                 {m.price != null && <span className={styles.modePrice}> · ₹{parseFloat(m.price).toFixed(0)}</span>}
               </div>
@@ -158,6 +216,11 @@ export default function AppointmentsPage() {
   const navigate = useNavigate();
   const now = new Date();
   const canvasRef = useRef(null);
+  const timelineRef = useRef(null);
+  const panelRef = useRef(null);
+  // The timeline matches the booking panel's height rather than the panel
+  // scrolling: the panel sizes to its content and the canvas scrolls inside.
+  const [timelineHeight, setTimelineHeight] = useState(null);
   const modeMap = useModeMap();
   const allModes = useAllModes();
 
@@ -172,6 +235,9 @@ export default function AppointmentsPage() {
   const [loadingSlots, setLoadingSlots] = useState(true);
   const [slotsError, setSlotsError] = useState(null);
   const [clients, setClients] = useState([]);
+  // Availability blocks are a fixed 30-minute grid now, so the appointment
+  // length comes from the service chosen at booking time.
+  const [services, setServices] = useState([]);
 
   // Today's appointments back the session timer. They're loaded separately from
   // the week view so the timer survives the therapist browsing another week —
@@ -181,6 +247,12 @@ export default function AppointmentsPage() {
   // Coarse re-render so the red "now" line drifts down the timeline.
   // The timer keeps its own 1s clock, so this doesn't need to be frequent.
   const [, setNowTick] = useState(0);
+
+  useEffect(() => {
+    api.get("/therapist/therapist-services")
+      .then(res => setServices((res.data ?? []).filter(svc => svc.isActive !== false)))
+      .catch(() => setServices([]));
+  }, []);
 
   // Drag to create override
   const [dragging, setDragging] = useState(false);
@@ -192,7 +264,7 @@ export default function AppointmentsPage() {
   const [panelSlot, setPanelSlot] = useState(null);
 
   // Booking form
-  const [booking, setBooking] = useState({ clientId: "", clientName: "", modeId: "", useCustomPrice: false, customPrice: "" });
+  const [booking, setBooking] = useState({ clientId: "", clientName: "", serviceId: "", modeId: "", useCustomPrice: false, customPrice: "" });
   const [bookingModes, setBookingModes] = useState([]); // modes for the slot's service
   const [bookingLoading, setBookingLoading] = useState(false);
   const [bookingError, setBookingError] = useState(null);
@@ -248,11 +320,6 @@ export default function AppointmentsPage() {
   const [holidaySuccess, setHolidaySuccess]     = useState(false);
 
   // Search / filter
-  const [searchClient, setSearchClient]         = useState("");
-  const [filterStatuses, setFilterStatuses]     = useState([]);
-  const [searchResults, setSearchResults]       = useState(null);
-  const [searchLoading, setSearchLoading]       = useState(false);
-  const [searchError, setSearchError]           = useState(null);
 
   const fetchWeekData = useCallback((wStart) => {
     const fromDate = toISODate(wStart);
@@ -326,17 +393,134 @@ export default function AppointmentsPage() {
   const dayAppointments = useMemo(() => getAppointmentsForDate(selectedDate), [selectedDate, appointmentsByDay]);
   const dayOverrides = useMemo(() => getOverridesForDate(selectedDate), [selectedDate, overridesByDay]);
 
+  // Cancelled/abandoned sessions stay in dayAppointments (the update panel and
+  // history still need them) but are never drawn on the canvas. Everything that
+  // describes the visible day derives from this list instead.
+  const activeDayAppointments = useMemo(
+    () => dayAppointments.filter(a => a.status !== "CANCELLED" && a.status !== "ABANDONED"),
+    [dayAppointments]
+  );
+
   const availableSlots = useMemo(() => {
-    const activeAppts = dayAppointments.filter(a =>
-      a.status !== "CANCELLED" && a.status !== "ABANDONED"
-    );
+    const activeAppts = activeDayAppointments;
     return daySlots.filter(s => {
       if (s.slotStatus !== "AVAILABLE") return false;
       if (new Date(s.startTime) <= now) return false;
       const ss = new Date(s.startTime).getTime(), se = new Date(s.endTime).getTime();
       return !activeAppts.some(a => ss < new Date(a.endTime).getTime() && se > new Date(a.startTime).getTime());
     });
-  }, [daySlots, dayAppointments]);
+  }, [daySlots, activeDayAppointments]);
+
+  // Slots are generated per service, so two services can offer the same time.
+  // Without lane assignment those blocks sit exactly on top of each other and
+  // only the last one is clickable. Greedy sweep: each item takes the first lane
+  // that's free at its start, and every overlapping group shares the width.
+  // Grouped by exact time range rather than by any overlap: a chain of
+  // half-hour-offset 60-minute slots all overlap transitively, and treating that
+  // as one group would squeeze every block on the day into a sliver. Blocks that
+  // merely overlap stay full width and remain readable because they sit at
+  // different heights — only exact duplicates need splitting.
+  const laneOf = useMemo(() => {
+    const items = [
+      ...availableSlots.map(s => ({ id: s.slotId, key: `${s.startTime}|${s.endTime}` })),
+      ...activeDayAppointments.map(a => ({ id: a.appointmentId, key: `${a.startTime}|${a.endTime}` })),
+    ];
+    const groups = {};
+    items.forEach(it => { (groups[it.key] ??= []).push(it.id); });
+    const map = {};
+    Object.values(groups).forEach(ids => {
+      ids.forEach((id, i) => { map[id] = { lane: i, of: ids.length }; });
+    });
+    return map;
+  }, [availableSlots, activeDayAppointments]);
+
+  // A booking runs for the service's duration, which spans several 30-minute
+  // blocks. Every block it covers must exist and still be free, otherwise the
+  // backend rejects the booking — so work that out here instead of letting the
+  // therapist find out on submit.
+  const bookingFit = useMemo(() => {
+    if (!panelSlot?.startTime) return null;
+    const svc = services.find(x => x.serviceId === booking.serviceId);
+    const minutes = svc ? svc.duration : null;
+    if (!minutes) return null;
+
+    const startMin = toMinutes(panelSlot.startTime);
+    // The session runs `minutes`, but it occupies whole 30-minute blocks rounded
+    // up — a 50-minute session holds a 60-minute footprint, which is what keeps
+    // the following session starting on the clock.
+    const blocks = Math.ceil(minutes / BLOCK_MINUTES);
+    const footprintEnd = startMin + blocks * BLOCK_MINUTES;
+    const freeStarts = new Set(
+      availableSlots.map(sl => toMinutes(sl.startTime)).concat(startMin)
+    );
+    const missing = [];
+    for (let m = startMin; m < footprintEnd; m += BLOCK_MINUTES) {
+      if (!freeStarts.has(m)) missing.push(m);
+    }
+    // Format via the same helper the rest of the panel uses, so the two ends of
+    // the range don't render in different styles ("05:30 pm" vs "6:30 PM").
+    const endDate = new Date(panelSlot.startTime);
+    endDate.setMinutes(endDate.getMinutes() + minutes);
+    const freeUntil = new Date(panelSlot.startTime);
+    freeUntil.setMinutes(freeUntil.getMinutes() + blocks * BLOCK_MINUTES);
+    return {
+      minutes,
+      endLabel: formatTime(endDate),
+      // what the therapist must actually have free, which can exceed the session
+      needsFreeUntilLabel: formatTime(freeUntil),
+      fits: missing.length === 0,
+    };
+  }, [panelSlot, booking.serviceId, services, availableSlots]);
+
+  useEffect(() => {
+    const el = panelRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const sync = () => setTimelineHeight(Math.max(Math.round(el.getBoundingClientRect().height), 500));
+    sync();
+    const ro = new ResizeObserver(sync);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // The canvas starts at 06:00 but a working day rarely does, so opening on
+  // empty early hours wastes the visible area. Scroll to the first thing on the
+  // day (or to "now" when that's within the day's span).
+  useEffect(() => {
+    const el = timelineRef.current;
+    if (!el || loadingSlots) return;
+    const starts = [
+      ...availableSlots.map(sl => toMinutes(sl.startTime)),
+      ...activeDayAppointments.map(a => toMinutes(a.startTime)),
+      ...dayOverrides.map(o => toMinutes(o.startTime)),
+    ];
+    if (!starts.length) return;
+    let target = Math.min(...starts);
+    if (nowMinutes !== null && nowMinutes > target && nowMinutes < Math.max(...starts)) {
+      target = nowMinutes;
+    }
+    // keep a little context above the first block
+    el.scrollTop = Math.max(minutesToPx(target) - PX_PER_HOUR / 2, 0);
+  }, [selectedDate, loadingSlots, availableSlots, activeDayAppointments, dayOverrides]);
+
+  // Rescheduling keeps the appointment's own length, so a slot button should
+  // show the session it would create, not the 30-minute block it starts in.
+  const reschedEndFor = (slot) => {
+    const mins = panelSlot?.startTime && panelSlot?.endTime
+      ? Math.round((new Date(panelSlot.endTime) - new Date(panelSlot.startTime)) / 60000)
+      : null;
+    if (!mins) return slot.endTime;
+    const end = new Date(slot.startTime);
+    end.setMinutes(end.getMinutes() + mins);
+    return end;
+  };
+
+  // Horizontal geometry for a block, given its lane within its overlap group.
+  const laneStyle = (id) => {
+    const l = laneOf[id];
+    if (!l || l.of < 2) return {};
+    const w = 100 / l.of;
+    return { left: `${l.lane * w}%`, width: `calc(${w}% - 6px)` };
+  };
 
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
   const weekEnd = addDays(weekStart, 6);
@@ -426,12 +610,12 @@ export default function AppointmentsPage() {
 
   const openBook = (slot) => {
     setPanelSlot(slot);
-    // Pre-select the slot's own modeId if available; filter modes for the slot's service
-    const slotModes = slot.serviceId
-      ? allModes.filter(m => m.serviceId === slot.serviceId && m.isActive)
-      : allModes.filter(m => m.isActive);
-    setBookingModes(slotModes);
-    setBooking({ clientId: "", clientName: "", modeId: slot.modeId || "", useCustomPrice: false, customPrice: "" });
+    // Blocks are service-agnostic now, so the service is picked here and the
+    // mode list follows from it. With a single active service there's nothing
+    // to choose — preselect it so the common case stays one step.
+    const only = services.length === 1 ? services[0].serviceId : "";
+    setBookingModes(only ? allModes.filter(m => m.serviceId === only && m.isActive) : []);
+    setBooking({ clientId: "", clientName: "", serviceId: only, modeId: "", useCustomPrice: false, customPrice: "" });
     setBookingError(null); setBookingSuccess(false);
     setBookingPayment(null); setLinkCopied(false);
     setPanel("book");
@@ -504,16 +688,12 @@ export default function AppointmentsPage() {
         modeId: booking.modeId,
         customPrice: booking.useCustomPrice ? parseFloat(booking.customPrice) : undefined,
       });
-      setSlots(prev => prev.map(s => s.slotId === panelSlot.slotId ? { ...s, slotStatus: "BOOKED", clientId: booking.clientId, clientName: booking.clientName } : s));
-      setAppointments(prev => [...prev, {
-        appointmentId: result?.appointmentId || `tmp-${Date.now()}`,
-        clientId: booking.clientId,
-        clientName: booking.clientName,
-        startTime: panelSlot.startTime,
-        endTime: panelSlot.endTime,
-        status: "SCHEDULED",
-        modeId: booking.modeId,
-      }]);
+      // A booking now spans however many 30-minute blocks the service needs, so
+      // the client cannot predict which blocks were consumed or when the session
+      // actually ends — patching local state from the clicked block drew a
+      // 30-minute appointment and left the following blocks looking free.
+      // The server is authoritative: refetch instead of guessing.
+      await reloadAll();
       setBookingSuccess(true);
       if (result?.paymentStatus) {
         // keep the panel open so the therapist can copy/share the payment link
@@ -541,10 +721,14 @@ export default function AppointmentsPage() {
     try {
       if (statusChanged) {
         await updateAppointmentStatus({ appointmentId: panelSlot.appointmentId, therapistId: panelSlot.therapistId, status: updateStatus, reason: updateReason || undefined });
-        setSlots(prev => prev.map(s => s.slotId === panelSlot.slotId ? { ...s, appointmentStatus: updateStatus } : s));
         setAppointments(prev => prev.map(a => a.appointmentId === panelSlot.appointmentId ? { ...a, status: updateStatus } : a));
         // keep the timer honest: completing a session should retire the card at once
         setTodayAppointments(prev => prev.map(a => a.appointmentId === panelSlot.appointmentId ? { ...a, status: updateStatus } : a));
+        // Cancelling releases every block the appointment owned, which the client
+        // can't enumerate — refetch so the freed time reappears as bookable.
+        if (updateStatus === "CANCELLED") {
+          await reloadAll();
+        }
       }
 
       // Notes are saved after the status call, never before: the status change
@@ -689,27 +873,7 @@ export default function AppointmentsPage() {
     finally { setHolidayLoading(false); }
   };
 
-  const handleSearch = async () => {
-    if (!searchClient && filterStatuses.length === 0) { clearSearch(); return; }
-    setSearchLoading(true); setSearchError(null);
-    try {
-      const results = await searchAppointments({
-        clientName: searchClient || undefined,
-        status: filterStatuses.length > 0 ? filterStatuses : undefined,
-        fromDate: toISODate(weekStart),
-        toDate: toISODate(addDays(weekStart, 6)),
-      });
-      setSearchResults(results);
-    } catch (err) { setSearchError(err.message); }
-    finally { setSearchLoading(false); }
-  };
 
-  const clearSearch = () => {
-    setSearchClient("");
-    setFilterStatuses([]);
-    setSearchResults(null);
-    setSearchError(null);
-  };
 
   // ─── Render helpers ────────────────────────────────────────────────────────────
   const hourLabels = Array.from({ length: TOTAL_HOURS + 1 }, (_, i) => {
@@ -721,98 +885,69 @@ export default function AppointmentsPage() {
     ? now.getHours() * 60 + now.getMinutes() : null;
 
   return (
-    <div className={styles.page}>
-      {/* Header */}
-      <header className={styles.header}>
-        <div className={styles.headerInner}>
-          <button className={styles.back} onClick={() => navigate("/therapist-home")}>← Back</button>
-          <span className={styles.logo}>🧠 Therapy Connect</span>
-          <div className={styles.headerActions}>
-            <span className={styles.rolePill}>Therapist</span>
-          </div>
+    <div className="page-wrap">
+      <div className="page-head">
+        <div>
+          <div className="eyebrow">Calendar</div>
+          <h1>Schedule</h1>
+          <div className="sub">Book, reschedule and block time. Drag on the timeline to mark unavailable.</div>
         </div>
-      </header>
+        <div className="head-actions">
+          <button className="btn" onClick={() => { setPanel("holiday"); setHolidaySuccess(false); setHolidayError(null); setHolidayStartDate(""); setHolidayEndDate(""); setHolidayReason(""); }}>
+            <Icon name="umbrella" size={17} /> Block holiday
+          </button>
+          <button className="btn btn-primary" onClick={() => { setPanel("generate"); setGenSuccess(false); setGenError(null); }}>
+            <Icon name="zap" size={17} /> Generate slots
+          </button>
+        </div>
+      </div>
 
-      <div className={styles.scheduleLayout}>
-        {/* ── Left: week strip + timeline canvas ── */}
-        <div className={styles.canvasArea}>
-          <SessionTimer
-            appointments={todayAppointments}
-            onOpen={(appt) => openUpdate(toApptSlot(appt))}
-            sticky
-          />
+      <SessionTimer
+        appointments={todayAppointments}
+        onOpen={(appt) => openUpdate(toApptSlot(appt))}
+        sticky
+      />
 
-          <div className={styles.canvasTop}>
-            <div>
-              <h1 className={styles.heading}>Schedule</h1>
-              <p className={styles.sub}>Drag on the timeline to mark unavailable time</p>
-            </div>
-            <div className={styles.legend}>
-              <span className={styles.legendItem}><span className={styles.legendDot} style={{background:"#6366f1"}} />Booked</span>
-              <span className={styles.legendItem}><span className={styles.legendDot} style={{background:"#10b981"}} />Available</span>
-              <span className={styles.legendItem}><span className={styles.legendDot} style={{background:"rgba(239,68,68,0.6)"}} />Unavailable</span>
-            </div>
-          </div>
+      {/* Week navigation — prototype puts this on one row above the strip */}
+      <div className={styles.weekNavRow}>
+        <div className={styles.legend}>
+          <span className={styles.legendItem}><span className={styles.legendDot} style={{ background: "var(--primary)" }} />Booked</span>
+          <span className={styles.legendItem}><span className={styles.legendDot} style={{ background: "var(--ok-mid)" }} />Available</span>
+          <span className={styles.legendItem}><span className={styles.legendDot} style={{ background: "var(--danger-mid)" }} />Unavailable</span>
+        </div>
+        <div className={styles.weekNavRight}>
+          <button className="iconbtn" onClick={prevWeek} title="Previous week"><Icon name="back" size={17} /></button>
+          <b className={styles.weekLabel}>{weekLabel}</b>
+          <button className="iconbtn" onClick={nextWeek} title="Next week"><Icon name="chevron" size={17} /></button>
+          <button className="btn btn-sm" onClick={goToday}>Today</button>
+        </div>
+      </div>
 
-          {slotsError && <div className={styles.errorBox}><span className={styles.errorIcon}>!</span>{slotsError}</div>}
+      {slotsError && <div className={styles.errorBox}><span className={styles.errorIcon}>!</span>{slotsError}</div>}
 
-          {/* Week strip */}
-          <div className={styles.weekCard}>
-            <div className={styles.weekNav}>
-              <button className={styles.navBtn} onClick={prevWeek}>‹</button>
-              <div className={styles.weekNavCenter}>
-                <span className={styles.weekLabel}>{weekLabel}</span>
-                <button className={styles.todayBtn} onClick={goToday}>Today</button>
+      {/* Week strip */}
+      <div className="weekstrip">
+        {weekDays.map((date, i) => {
+          const isToday = date.toDateString() === new Date().toDateString();
+          const isSel = date.toDateString() === selectedDate.toDateString();
+          const avail = hasAvailable(date), booked = hasBooked(date);
+          return (
+            <div
+              key={i}
+              className={`day ${isSel ? "sel" : ""} ${isToday ? styles.dayToday : ""}`}
+              onClick={() => setSelectedDate(new Date(date))}
+            >
+              <div className="dn">{DAY_SHORT[date.getDay()]}</div>
+              <div className="dd">{date.getDate()}</div>
+              {/* One dot per signal: cyan = bookable slots, green = has bookings */}
+              <div className={styles.dotRow}>
+                {avail && <span className="dot" />}
+                {booked && <span className={`dot ${styles.dotBooked}`} />}
               </div>
-              <button className={styles.navBtn} onClick={nextWeek}>›</button>
             </div>
-            <div className={styles.weekGrid}>
-              {weekDays.map((date, i) => {
-                const isToday = date.toDateString() === new Date().toDateString();
-                const isSel = date.toDateString() === selectedDate.toDateString();
-                const avail = hasAvailable(date), booked = hasBooked(date);
-                return (
-                  <div key={i} className={`${styles.weekDay} ${isToday ? styles.weekDayToday:""} ${isSel ? styles.weekDaySelected:""}`} onClick={() => setSelectedDate(new Date(date))}>
-                    <span className={styles.weekDayName}>{DAY_SHORT[date.getDay()]}</span>
-                    <span className={styles.weekDayNum}>{date.getDate()}</span>
-                    <div className={styles.weekDotRow}>
-                      {avail && <span className={styles.dotAvailable}/>}
-                      {booked && <span className={styles.dotBooked}/>}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Search / filter bar */}
-          <div className={styles.searchBar}>
-            <input
-              className={styles.searchInput}
-              placeholder="Search by client name…"
-              value={searchClient}
-              onChange={e => setSearchClient(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && handleSearch()}
-            />
-            <div className={styles.statusFilterChips}>
-              {["SCHEDULED","CONFIRMED","COMPLETED","CANCELLED","ABANDONED","RESCHEDULED"].map(s => (
-                <button
-                  key={s}
-                  className={`${styles.filterChip} ${filterStatuses.includes(s) ? styles.filterChipActive : ""}`}
-                  onClick={() => setFilterStatuses(prev => prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s])}
-                >{s}</button>
-              ))}
-            </div>
-            <div className={styles.searchActions}>
-              <button className={styles.searchBtn} onClick={handleSearch} disabled={searchLoading}>
-                {searchLoading ? <span className={styles.btnSpinner}/> : "🔍 Search"}
-              </button>
-              {searchResults !== null && (
-                <button className={styles.clearSearchBtn} onClick={clearSearch}>✕ Clear</button>
-              )}
-            </div>
-            {searchError && <p className={styles.searchError}>{searchError}</p>}
-          </div>
+          );
+        })}
+      </div>
 
           <div className={styles.dayLabel}>
             <h2 className={styles.dayLabelText}>
@@ -820,38 +955,22 @@ export default function AppointmentsPage() {
             </h2>
             <div className={styles.dayLabelRight}>
               <div className={styles.dayStats}>
-                <span>{dayAppointments.length} booked</span>
+                {/* Count only what the timeline actually draws — cancelled and
+                    abandoned sessions are filtered out of the canvas, so
+                    including them here reported "1 booked" against an empty day. */}
+                <span>{activeDayAppointments.length} booked</span>
                 <span>·</span>
                 <span>{availableSlots.length} available</span>
                 {dayOverrides.length > 0 && <><span>·</span><span>{dayOverrides.length} override{dayOverrides.length !== 1 ? "s" : ""}</span></>}
               </div>
-              <button className={styles.holidayBtn} onClick={() => { setPanel("holiday"); setHolidaySuccess(false); setHolidayError(null); setHolidayStartDate(""); setHolidayEndDate(""); setHolidayReason(""); }}>🏖 Block Holiday</button>
-              <button className={styles.generateBtn} onClick={() => { setPanel("generate"); setGenSuccess(false); setGenError(null); }}>⚡ Generate Slots</button>
             </div>
           </div>
 
-          {/* Search results list */}
-          {searchResults !== null && (
-            <div className={styles.searchResultsPanel}>
-              <h3 className={styles.searchResultsTitle}>
-                {searchResults.length} result{searchResults.length !== 1 ? "s" : ""}
-                {searchClient ? ` for "${searchClient}"` : ""}
-                {filterStatuses.length > 0 ? ` · ${filterStatuses.join(", ")}` : ""}
-              </h3>
-              {searchResults.length === 0 && (
-                <p className={styles.searchEmpty}>No appointments match your search.</p>
-              )}
-              {searchResults.map(a => (
-                <div key={a.appointmentId} className={styles.searchResultItem}>
-                  <div className={styles.searchResultLeft}>
-                    <span className={styles.searchResultClient}>{a.clientName}</span>
-                    <span className={styles.searchResultTime}>{formatTime(a.startTime)} – {formatTime(a.endTime)}</span>
-                  </div>
-                  <span className={`${styles.slotBadge} ${styles[`apptStatus_${a.status}`] || styles.apptStatusDefault}`}>{a.status}</span>
-                </div>
-              ))}
-            </div>
-          )}
+      <div className={`grid-2 ${styles.scheduleGrid}`}>
+        {/* ── Left: timeline canvas ── */}
+        <div className={styles.canvasArea}>
+
+
 
           {/* First-run guidance: a therapist with no slots anywhere in the week
               sees an empty grid with no hint that Generate Slots is the missing
@@ -859,7 +978,7 @@ export default function AppointmentsPage() {
               today happens to be free. */}
           {!loadingSlots && !slotsError && slots.length === 0 && appointments.length === 0 && (
             <div className={styles.setupHint}>
-              <span className={styles.setupHintIcon}>🗓</span>
+              <span className={styles.setupHintIcon}><Icon name="calendar" size={24} /></span>
               <div className={styles.setupHintText}>
                 <h3 className={styles.setupHintTitle}>No slots this week</h3>
                 <p className={styles.setupHintBody}>
@@ -872,7 +991,7 @@ export default function AppointmentsPage() {
                   Availability rules
                 </button>
                 <button className={styles.generateBtn} onClick={() => { setPanel("generate"); setGenSuccess(false); setGenError(null); }}>
-                  ⚡ Generate Slots
+                  <Icon name="zap" size={15} /> Generate slots
                 </button>
               </div>
             </div>
@@ -882,7 +1001,8 @@ export default function AppointmentsPage() {
           {loadingSlots ? (
             <div className={styles.canvasLoading}><div className={styles.spinner}/></div>
           ) : (
-            <div className={styles.timelineWrapper}>
+            <div className={`card ${styles.timelineCard}`} style={timelineHeight ? { height: timelineHeight } : undefined}>
+             <div className={styles.timelineScroll} ref={timelineRef}>
               <div className={styles.timeGutter}>
                 {hourLabels.map((label, i) => (
                   <div key={i} className={styles.hourLabel} style={{ top: i * PX_PER_HOUR }}>{label}</div>
@@ -917,7 +1037,7 @@ export default function AppointmentsPage() {
 
                 {dayOverrides.map(override => {
                   const top = minutesToPx(toMinutes(override.startTime));
-                  const height = Math.max(minutesToPx(toMinutes(override.endTime)) - top, 20);
+                  const height = Math.max(minutesToPx(toMinutes(override.endTime)) - top - BLOCK_GAP, 20);
                   return (
                     <div
                       key={override.overrideId}
@@ -926,68 +1046,97 @@ export default function AppointmentsPage() {
                       onClick={e => { e.stopPropagation(); setOverrideRange({ startMin: toMinutes(override.startTime), endMin: toMinutes(override.endTime), overrideId: override.overrideId, reason: override.reason }); setOverrideNote(override.reason || ""); setOverrideIsAvailable(override.available ?? false); setOverrideSyncGcal(false); setOverrideError(null); setPanel("override"); }}
                       title={`Unavailable: ${formatTime(override.startTime)} – ${formatTime(override.endTime)}${override.reason ? ` · ${override.reason}` : ""}`}
                     >
-                      <span className={styles.overrideBlockLabel}>⛔ {formatTime(override.startTime)}{override.reason ? ` · ${override.reason}` : ""}</span>
+                      <span className={styles.overrideBlockLabel}>
+                        <Icon name="ban" size={13} /> {formatTime(override.startTime)}{override.reason ? ` · ${override.reason}` : ""}
+                      </span>
                     </div>
                   );
                 })}
 
                 {availableSlots.map(slot => {
                   const top = minutesToPx(toMinutes(slot.startTime));
-                  const height = minutesToPx(toMinutes(slot.endTime)) - top;
+                  // trim the height (never the top) so consecutive blocks read as
+                  // separate without shifting either off its start time
+                  const height = Math.max(minutesToPx(toMinutes(slot.endTime)) - top - BLOCK_GAP, 18);
                   const slotStartMin = toMinutes(slot.startTime);
                   const slotEndMin = toMinutes(slot.endTime);
                   const overlapsD = dragging && dragStart !== null && dragEnd !== null && slotStartMin < dragEnd && slotEndMin > dragStart;
                   return (
                     <div
                       key={slot.slotId}
-                      className={`${styles.availableBlock} ${overlapsD ? styles.availableBlockDimmed : ""}`}
-                      style={{ top, height }}
+                      className={`tl-block avail ${styles.availableBlock} ${overlapsD ? styles.availableBlockDimmed : ""}`}
+                      style={{ top, height, ...laneStyle(slot.slotId) }}
                       onClick={e => { e.stopPropagation(); openBook(slot); }}
                       title={`Available: ${formatTime(slot.startTime)} – ${formatTime(slot.endTime)}`}
                     >
-                      <span className={styles.availableBlockLabel}>{formatTime(slot.startTime)}</span>
+                      <span className={styles.availableBlockLabel}>
+                        <Icon name="plus" size={14} />
+                        <span className={styles.availableBlockTime}>{formatTime(slot.startTime)}</span>
+                        {/* the prototype's full wording, only where it fits */}
+                        {height > 30 && <span className={styles.availableBlockHint}>Available · click to book</span>}
+                      </span>
                     </div>
                   );
                 })}
 
-                {dayAppointments
-                  .filter(appt => appt.status !== "CANCELLED" && appt.status !== "ABANDONED")
-                  .map(appt => {
+                {activeDayAppointments.map(appt => {
                   const top = minutesToPx(toMinutes(appt.startTime));
-                  const height = Math.max(minutesToPx(toMinutes(appt.endTime)) - top, 28);
-                  const colors = APPT_STATUS_COLORS[appt.status] || APPT_STATUS_COLORS.CONFIRMED;
+                  const height = Math.max(minutesToPx(toMinutes(appt.endTime)) - top - BLOCK_GAP, 28);
                   const apptAsSlot = toApptSlot(appt);
                   const modeName = modeMap[appt.modeId]?.displayName;
+                  // "Live" is the prototype's green treatment — only while the
+                  // session is actually running right now.
+                  const startMin = toMinutes(appt.startTime), endMin = toMinutes(appt.endTime);
+                  const isLive = nowMinutes !== null && nowMinutes >= startMin && nowMinutes < endMin
+                    && appt.status !== "COMPLETED";
                   return (
                     <div
                       key={appt.appointmentId}
-                      className={styles.bookedBlock}
-                      style={{ top, height, background: colors.bg, borderColor: colors.border }}
+                      className={`tl-block ${isLive ? "live" : "booked"} ${styles.bookedBlock}`}
+                      style={{ top, height, ...laneStyle(appt.appointmentId) }}
                       onClick={e => { e.stopPropagation(); openUpdate(apptAsSlot); }}
                       title={`${appt.clientName} · ${formatTime(appt.startTime)} – ${formatTime(appt.endTime)}`}
                     >
-                      <div className={styles.bookedBlockAccent} style={{ background: colors.border }}/>
                       <div className={styles.bookedBlockContent}>
-                        <span className={styles.bookedBlockTime} style={{ color: colors.text }}>{formatTime(appt.startTime)} – {formatTime(appt.endTime)}</span>
+                        <span className={styles.bookedBlockTime}>{formatTime(appt.startTime)} – {formatTime(appt.endTime)}</span>
                         {height > 36 && <span className={styles.bookedBlockClient}>{appt.clientName}</span>}
-                        {height > 52 && <span className={styles.bookedBlockStatus} style={{ color: colors.text }}>{STATUS_ICON[appt.status]} {appt.status}{modeName ? ` · ${modeName}` : ""}</span>}
+                        {height > 52 && (
+                          <span className={styles.bookedBlockMeta}>
+                            {modeName ? modeName : titleCase(appt.status)}
+                          </span>
+                        )}
                       </div>
-                      {height > 40 && appt.status !== "COMPLETED" && (
-                        <button className={styles.reschedBadge} onClick={e => { e.stopPropagation(); openReschedule(apptAsSlot); }} title="Reschedule">↺</button>
-                      )}
+                      <div className={styles.bookedBlockRight}>
+                        {height > 30 && (
+                          isLive ? (
+                            <span className={`chip chip-ok ${styles.liveChip}`}><i className={styles.livePulse} /> Live</span>
+                          ) : (
+                            <span className={`chip chip-${STATUS_CHIP[appt.status] || "mut"}`}>
+                              <Icon name={STATUS_ICON[appt.status] || "calendar"} size={11} />
+                              {titleCase(appt.status)}
+                            </span>
+                          )
+                        )}
+                        {height > 40 && appt.status !== "COMPLETED" && (
+                          <button className={styles.reschedBadge} onClick={e => { e.stopPropagation(); openReschedule(apptAsSlot); }} title="Reschedule">
+                            <Icon name="refresh" size={13} />
+                          </button>
+                        )}
+                      </div>
                     </div>
                   );
                 })}
               </div>
+             </div>
             </div>
           )}
         </div>
 
         {/* ── Right: action panel ── */}
-        <div className={`${styles.panel} ${panel ? styles.panelOpen : ""}`}>
+        <div className={`card ${styles.panel} ${panel ? styles.panelOpen : ""}`} ref={panelRef}>
           {!panel && (
             <div className={styles.panelEmpty}>
-              <span className={styles.panelEmptyIcon}>👆</span>
+              <span className={styles.panelEmptyIcon}><Icon name="cursor" size={26} /></span>
               <p>Click a slot or appointment<br/>to take action</p>
               <p className={styles.panelEmptyHint}>Drag on the timeline to<br/>mark unavailable time</p>
             </div>
@@ -999,13 +1148,17 @@ export default function AppointmentsPage() {
               <div className={styles.panelHeader}>
                 <div>
                   <h2 className={styles.panelTitle}>Book Appointment</h2>
-                  <p className={styles.panelSub}>{formatTime(panelSlot.startTime)} – {formatTime(panelSlot.endTime)}</p>
+                  {/* The clicked block is only where the session starts — showing its
+                      30-minute span here contradicted the real time below it. */}
+                  <p className={styles.panelSub}>
+                    {formatTime(panelSlot.startTime)} – {bookingFit ? bookingFit.endLabel : formatTime(panelSlot.endTime)}
+                  </p>
                 </div>
-                <button className={styles.closeBtn} onClick={() => setPanel(null)}>✕</button>
+                <button className={styles.closeBtn} onClick={() => setPanel(null)} title="Close"><Icon name="x" size={16} /></button>
               </div>
               {bookingSuccess ? (
                 <div className={styles.panelForm}>
-                  <div className={styles.successBox}><span className={styles.successIcon}>✓</span> Booked!</div>
+                  <div className={styles.successBox}><span className={styles.successIcon}><Icon name="check" size={14} /></span> Booked!</div>
                   {bookingPayment && bookingPayment.status === "LINK_CREATED" && (
                     <div className={styles.slotSummary}>
                       <div className={styles.summaryRow}>
@@ -1019,7 +1172,7 @@ export default function AppointmentsPage() {
                       </div>
                       <p className={styles.customFeeHint}>
                         {bookingPayment.clientNotified
-                          ? "✓ Link sent to the client by SMS/email. The appointment confirms automatically once paid."
+                          ? <><Icon name="check" size={13} /> Link sent to the client by SMS/email. The appointment confirms automatically once paid.</>
                           : "Client has no contact details on file — share this link manually. The appointment confirms automatically once paid."}
                       </p>
                     </div>
@@ -1049,6 +1202,16 @@ export default function AppointmentsPage() {
                 <form onSubmit={handleBook} className={styles.panelForm}>
                   <div className={styles.field}><label className={styles.label}>Client</label>
                     <ClientDropdown clients={clients} value={booking.clientId} onChange={(id,name) => setBooking(p => ({...p, clientId:id, clientName:name}))} />
+                  </div>
+                  <div className={styles.field}><label className={styles.label}>Service</label>
+                    <ServiceDropdown
+                      services={services}
+                      value={booking.serviceId}
+                      onChange={id => {
+                        setBookingModes(allModes.filter(m => m.serviceId === id && m.isActive));
+                        setBooking(p => ({ ...p, serviceId: id, modeId: "", useCustomPrice: false, customPrice: "" }));
+                      }}
+                    />
                   </div>
                   <div className={styles.field}><label className={styles.label}>Delivery Mode</label>
                     <ModeDropdown modes={bookingModes} value={booking.modeId} onChange={v => setBooking(p => ({...p, modeId:v, useCustomPrice: false, customPrice: ""}))} />
@@ -1087,13 +1250,25 @@ export default function AppointmentsPage() {
                     );
                   })()}
                   <div className={styles.slotSummary}>
-                    <div className={styles.summaryRow}><span className={styles.summaryLabel}>Time</span><span className={styles.summaryValue}>{formatTime(panelSlot.startTime)} – {formatTime(panelSlot.endTime)}</span></div>
+                    <div className={styles.summaryRow}>
+                      <span className={styles.summaryLabel}>Time</span>
+                      <span className={styles.summaryValue}>
+                        {formatTime(panelSlot.startTime)} – {bookingFit ? bookingFit.endLabel : formatTime(panelSlot.endTime)}
+                        {bookingFit && <span className={styles.durationNote}> · {bookingFit.minutes} min</span>}
+                      </span>
+                    </div>
                     <div className={styles.summaryRow}><span className={styles.summaryLabel}>Slot</span><span className={styles.summaryValue}>{panelSlot.slotId}</span></div>
                   </div>
+                  {bookingFit && !bookingFit.fits && (
+                    <div className={styles.errorBox}>
+                      <span className={styles.errorIcon}>!</span>
+                      This {bookingFit.minutes}-minute session holds the calendar until {bookingFit.needsFreeUntilLabel}, and that time isn't free. Pick an earlier slot or a shorter service.
+                    </div>
+                  )}
                   {bookingError && <div className={styles.errorBox}><span className={styles.errorIcon}>!</span>{bookingError}</div>}
                   <div className={styles.formActions}>
                     <button type="button" className={styles.cancelBtn} onClick={() => setPanel(null)}>Cancel</button>
-                    <button type="submit" className={styles.submitBtn} disabled={bookingLoading}>{bookingLoading ? <span className={styles.btnSpinner}/> : "Confirm"}</button>
+                    <button type="submit" className={styles.submitBtn} disabled={bookingLoading || (bookingFit && !bookingFit.fits)}>{bookingLoading ? <span className={styles.btnSpinner}/> : "Confirm"}</button>
                   </div>
                 </form>
               )}
@@ -1111,7 +1286,7 @@ export default function AppointmentsPage() {
                     {" · "}{formatTime(panelSlot.startTime)} – {formatTime(panelSlot.endTime)}
                   </p>
                 </div>
-                <button className={styles.closeBtn} onClick={() => setPanel(null)}>✕</button>
+                <button className={styles.closeBtn} onClick={() => setPanel(null)} title="Close"><Icon name="x" size={16} /></button>
               </div>
               <div className={styles.panelForm}>
                 <div className={styles.slotSummary}>
@@ -1120,7 +1295,7 @@ export default function AppointmentsPage() {
                     <span className={styles.clientLink} onClick={() => navigate(`/therapist/clients/${panelSlot.clientId}`)}>{panelSlot.clientName}</span>
                   </div>
                   <div className={styles.summaryRow}><span className={styles.summaryLabel}>Current</span>
-                    <span className={`${styles.slotBadge} ${styles[`apptStatus_${panelSlot.appointmentStatus}`] || styles.apptStatusDefault}`}>{panelSlot.appointmentStatus}</span>
+                    <span className={`chip chip-${STATUS_CHIP[panelSlot.appointmentStatus] || "mut"}`}>{titleCase(panelSlot.appointmentStatus)}</span>
                   </div>
                   {modeMap[panelSlot.modeId] && (
                     <div className={styles.summaryRow}>
@@ -1138,7 +1313,7 @@ export default function AppointmentsPage() {
                     <div className={styles.summaryRow}>
                       <span className={styles.summaryLabel}>Payment</span>
                       <span className={styles.summaryValue}>
-                        {panelPayment.status === "PAID" && `✓ Paid ₹${parseFloat(panelPayment.amount).toFixed(0)}`}
+                        {panelPayment.status === "PAID" && <><Icon name="check" size={13} /> Paid ₹{parseFloat(panelPayment.amount).toFixed(0)}</>}
                         {panelPayment.status === "LINK_CREATED" && (panelPayment.clientNotified ? "Awaiting payment (client notified)" : "Awaiting payment")}
                         {panelPayment.status === "LINK_FAILED" && "Link creation failed"}
                         {panelPayment.status === "EXPIRED" && "Link expired"}
@@ -1169,7 +1344,7 @@ export default function AppointmentsPage() {
                       <button key={s} type="button"
                         className={`${styles.statusOption} ${updateStatus === s ? styles.statusOptionActive : ""} ${styles[`statusOption_${s}`] || ""}`}
                         onClick={() => setUpdateStatus(s)}>
-                        {STATUS_ICON[s]} {s}
+                        <Icon name={STATUS_ICON[s]} size={15} /> {titleCase(s)}
                       </button>
                     ))}
                   </div>
@@ -1198,7 +1373,7 @@ export default function AppointmentsPage() {
                 <div className={styles.formActions}>
                   <button className={styles.cancelBtn} onClick={() => setPanel(null)}>Cancel</button>
                   {!["COMPLETED", "CANCELLED", "ABANDONED"].includes(panelSlot.appointmentStatus) && (
-                    <button className={styles.rescheduleActionBtn} onClick={() => openReschedule(panelSlot)}>↺ Reschedule</button>
+                    <button className={styles.rescheduleActionBtn} onClick={() => openReschedule(panelSlot)}><Icon name="refresh" size={15} /> Reschedule</button>
                   )}
                   <button className={styles.submitBtn} onClick={handleUpdateStatus}
                     disabled={updateLoading || !updateStatus ||
@@ -1221,15 +1396,15 @@ export default function AppointmentsPage() {
                     {" · "}{formatTime(panelSlot.startTime)} – {formatTime(panelSlot.endTime)}
                   </p>
                 </div>
-                <button className={styles.closeBtn} onClick={() => setPanel(null)}>✕</button>
+                <button className={styles.closeBtn} onClick={() => setPanel(null)} title="Close"><Icon name="x" size={16} /></button>
               </div>
               <div className={styles.panelForm}>
                 <div className={styles.field}><label className={styles.label}>Select New Date</label>
                   <div className={styles.reschedWeekCard}>
                     <div className={styles.reschedWeekNav}>
-                      <button className={styles.navBtn} onClick={() => { setReschedWeekStart(d => addDays(d,-7)); setReschedSelectedDate(null); setReschedNewSlot(null); }}>‹</button>
+                      <button className="iconbtn" onClick={() => { setReschedWeekStart(d => addDays(d,-7)); setReschedSelectedDate(null); setReschedNewSlot(null); }} title="Previous week"><Icon name="back" size={16} /></button>
                       <span className={styles.reschedWeekLabel}>{(() => { const e = addDays(reschedWeekStart,6); return reschedWeekStart.getMonth()===e.getMonth()?`${reschedWeekStart.getDate()}–${e.getDate()} ${MONTHS_SHORT[reschedWeekStart.getMonth()]}`: `${reschedWeekStart.getDate()} ${MONTHS_SHORT[reschedWeekStart.getMonth()]} – ${e.getDate()} ${MONTHS_SHORT[e.getMonth()]}`; })()}</span>
-                      <button className={styles.navBtn} onClick={() => { setReschedWeekStart(d => addDays(d,7)); setReschedSelectedDate(null); setReschedNewSlot(null); }}>›</button>
+                      <button className="iconbtn" onClick={() => { setReschedWeekStart(d => addDays(d,7)); setReschedSelectedDate(null); setReschedNewSlot(null); }} title="Next week"><Icon name="chevron" size={16} /></button>
                     </div>
                     <div className={styles.reschedDayRow}>
                       {Array.from({length:7},(_,i)=>addDays(reschedWeekStart,i)).map((date,i)=>{
@@ -1255,7 +1430,7 @@ export default function AppointmentsPage() {
                           const modeName = modeMap[s.modeId]?.displayName ?? s.modeId ?? "";
                           return (
                             <button key={s.slotId} type="button" className={`${styles.reschedSlotBtn} ${reschedNewSlot?.slotId===s.slotId?styles.reschedSlotBtnActive:""}`} onClick={()=>selectReschedSlot(s)}>
-                              {formatTime(s.startTime)} – {formatTime(s.endTime)}
+                              {formatTime(s.startTime)} – {formatTime(reschedEndFor(s))}
                               {modeName && <span className={styles.reschedSlotType}>{modeName}</span>}
                             </button>
                           );
@@ -1297,7 +1472,7 @@ export default function AppointmentsPage() {
                   <h2 className={styles.panelTitle}>{overrideRange.overrideId ? "Override Details" : "Time Override"}</h2>
                   <p className={styles.panelSub}>{formatTimeFromMinutes(overrideRange.startMin)} – {formatTimeFromMinutes(overrideRange.endMin)}</p>
                 </div>
-                <button className={styles.closeBtn} onClick={() => setPanel(null)}>✕</button>
+                <button className={styles.closeBtn} onClick={() => setPanel(null)} title="Close"><Icon name="x" size={16} /></button>
               </div>
               <div className={styles.panelForm}>
                 <div className={styles.overridePreview}>
@@ -1319,7 +1494,7 @@ export default function AppointmentsPage() {
                     <div className={styles.formActions}>
                       <button className={styles.cancelBtn} onClick={() => setPanel(null)}>Cancel</button>
                       <button className={styles.deleteBtn} onClick={handleOverrideDelete} disabled={overrideDeleteLoading}>
-                        {overrideDeleteLoading ? <span className={styles.btnSpinner}/> : "🗑 Delete Override"}
+                        {overrideDeleteLoading ? <span className={styles.btnSpinner}/> : "Delete Override"}
                       </button>
                     </div>
                   </>
@@ -1331,12 +1506,12 @@ export default function AppointmentsPage() {
                         <button type="button"
                           className={`${styles.overrideToggleBtn} ${!overrideIsAvailable ? styles.overrideToggleBtnUnavailable : ""}`}
                           onClick={() => { setOverrideIsAvailable(false); setOverrideSyncGcal(true); }}>
-                          ⛔ Unavailable
+                          <Icon name="ban" size={14} /> Unavailable
                         </button>
                         <button type="button"
                           className={`${styles.overrideToggleBtn} ${overrideIsAvailable ? styles.overrideToggleBtnAvailable : ""}`}
                           onClick={() => { setOverrideIsAvailable(true); setOverrideSyncGcal(false); }}>
-                          ✅ Available
+                          Available
                         </button>
                       </div>
                     </div>
@@ -1371,23 +1546,23 @@ export default function AppointmentsPage() {
                   <h2 className={styles.panelTitle}>Generate Slots</h2>
                   <p className={styles.panelSub}>Create availability for a date range</p>
                 </div>
-                <button className={styles.closeBtn} onClick={() => setPanel(null)}>✕</button>
+                <button className={styles.closeBtn} onClick={() => setPanel(null)} title="Close"><Icon name="x" size={16} /></button>
               </div>
               <div className={styles.panelForm}>
                 <div className={styles.dateRow}>
                   <div className={styles.field}><label className={styles.label}>From</label>
                     <input type="date" className={styles.dateInput} value={genStartDate} onChange={e=>{setGenStartDate(e.target.value);setGenSuccess(false);setGenError(null);}}/>
                   </div>
-                  <div className={styles.dateSep}>→</div>
+                  <div className={styles.dateSep}>to</div>
                   <div className={styles.field}><label className={styles.label}>To</label>
                     <input type="date" className={styles.dateInput} value={genEndDate} onChange={e=>{setGenEndDate(e.target.value);setGenSuccess(false);setGenError(null);}}/>
                   </div>
                 </div>
                 {genError && <div className={styles.errorBox}><span className={styles.errorIcon}>!</span>{genError}</div>}
-                {genSuccess && <div className={styles.successBox}><span className={styles.successIcon}>✓</span> Slots generated! Refreshing calendar…</div>}
+                {genSuccess && <div className={styles.successBox}><span className={styles.successIcon}><Icon name="check" size={14} /></span> Slots generated! Refreshing calendar…</div>}
                 <div className={styles.formActions}>
                   <button className={styles.cancelBtn} onClick={() => setPanel(null)}>Cancel</button>
-                  <button className={styles.generateSubmitBtn} onClick={handleGenerate} disabled={genLoading||!genStartDate||!genEndDate}>{genLoading?<span className={styles.btnSpinner}/>:"⚡ Generate"}</button>
+                  <button className={styles.generateSubmitBtn} onClick={handleGenerate} disabled={genLoading||!genStartDate||!genEndDate}>{genLoading?<span className={styles.btnSpinner}/>:<><Icon name="zap" size={15} /> Generate</>}</button>
                 </div>
               </div>
             </div>
@@ -1401,14 +1576,14 @@ export default function AppointmentsPage() {
                   <h2 className={styles.panelTitle}>Block Holiday</h2>
                   <p className={styles.panelSub}>Mark a date range as unavailable</p>
                 </div>
-                <button className={styles.closeBtn} onClick={() => setPanel(null)}>✕</button>
+                <button className={styles.closeBtn} onClick={() => setPanel(null)} title="Close"><Icon name="x" size={16} /></button>
               </div>
               <div className={styles.panelForm}>
                 <div className={styles.dateRow}>
                   <div className={styles.field}><label className={styles.label}>From</label>
                     <input type="date" className={styles.dateInput} value={holidayStartDate} onChange={e=>{setHolidayStartDate(e.target.value);setHolidaySuccess(false);setHolidayError(null);}}/>
                   </div>
-                  <div className={styles.dateSep}>→</div>
+                  <div className={styles.dateSep}>to</div>
                   <div className={styles.field}><label className={styles.label}>To</label>
                     <input type="date" className={styles.dateInput} value={holidayEndDate} onChange={e=>{setHolidayEndDate(e.target.value);setHolidaySuccess(false);setHolidayError(null);}}/>
                   </div>
@@ -1424,11 +1599,11 @@ export default function AppointmentsPage() {
                   </button>
                 </div>
                 {holidayError && <div className={styles.errorBox}><span className={styles.errorIcon}>!</span>{holidayError}</div>}
-                {holidaySuccess && <div className={styles.successBox}><span className={styles.successIcon}>✓</span> Holiday blocked successfully!</div>}
+                {holidaySuccess && <div className={styles.successBox}><span className={styles.successIcon}><Icon name="check" size={14} /></span> Holiday blocked successfully!</div>}
                 <div className={styles.formActions}>
                   <button className={styles.cancelBtn} onClick={() => setPanel(null)}>Cancel</button>
                   <button className={styles.generateSubmitBtn} onClick={handleHolidayBlock} disabled={holidayLoading||!holidayStartDate||!holidayEndDate}>
-                    {holidayLoading ? <span className={styles.btnSpinner}/> : "🏖 Block"}
+                    {holidayLoading ? <span className={styles.btnSpinner}/> : <><Icon name="umbrella" size={15} /> Block</>}
                   </button>
                 </div>
               </div>

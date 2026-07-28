@@ -131,17 +131,3 @@ export async function bulkAvailabilityOverrides(data) {
   }
 }
 
-export async function searchAppointments({ clientName, status, fromDate, toDate }) {
-  try {
-    const params = {};
-    if (clientName) params.clientName = clientName;
-    if (status && status.length > 0) params.status = status;
-    if (fromDate) params.fromDate = fromDate;
-    if (toDate) params.toDate = toDate;
-    const response = await api.get("/appointment/search", { params });
-    return response.data;
-  } catch (err) {
-    const message = err.response?.data?.message || err.response?.data?.error || "Failed to search appointments.";
-    throw new Error(message);
-  }
-}

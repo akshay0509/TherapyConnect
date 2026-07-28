@@ -1,66 +1,8 @@
-/* ── Layout ── */
-.page {
-  min-height: 100vh;
-  background: var(--bg-page);
-  color: var(--text-1);
-  font-family: 'DM Sans', sans-serif;
-}
-
-/* ── Header ── */
-.header {
-  position: sticky;
-  top: 0;
-  z-index: 50;
-  background: var(--bg-veil);
-  backdrop-filter: blur(12px);
-  border-bottom: 1px solid var(--wash-2);
-}
-
-.headerInner {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 14px 24px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.logo {
-  font-family: 'Syne', sans-serif;
-  font-weight: 700;
-  font-size: 1.1rem;
-  color: var(--text-1);
-}
-
-.headerRight {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.backBtn {
-  background: var(--wash-2);
-  border: 1px solid var(--wash-3);
-  border-radius: 8px;
-  color: var(--text-2);
-  font-size: 0.82rem;
-  font-family: 'DM Sans', sans-serif;
-  padding: 6px 14px;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.backBtn:hover {
-  background: var(--wash-3);
-  color: var(--text-1);
-}
+/* Renders inside TherapistShell — no page chrome here. */
+.page { color: var(--text-1); }
 
 /* ── Main ── */
-.main {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 40px 24px 64px;
-}
+.main { max-width: 1240px; padding: 30px; }
 
 /* ── Hero ── */
 .hero {
@@ -72,12 +14,12 @@
   font-weight: 600;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: #10b981;
+  color: var(--primary);
   margin: 0 0 8px;
 }
 
 .heading {
-  font-family: 'Syne', sans-serif;
+  font-family: var(--font-sans);
   font-size: 2rem;
   font-weight: 700;
   color: var(--text-1);
@@ -105,7 +47,7 @@
   border-radius: 8px;
   color: var(--text-2);
   font-size: 0.8rem;
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-sans);
   padding: 6px 14px;
   cursor: pointer;
   transition: all 0.15s;
@@ -114,7 +56,7 @@
 .presetBtn:hover {
   background: rgba(16,185,129,0.08);
   border-color: rgba(16,185,129,0.25);
-  color: #10b981;
+  color: var(--primary);
 }
 
 .dateInputs {
@@ -130,7 +72,7 @@
   border-radius: 8px;
   color: var(--text-1);
   font-size: 0.85rem;
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-sans);
   padding: 6px 12px;
 }
 
@@ -148,10 +90,10 @@
   background: rgba(16,185,129,0.12);
   border: 1px solid rgba(16,185,129,0.3);
   border-radius: 8px;
-  color: #10b981;
+  color: var(--primary);
   font-size: 0.85rem;
   font-weight: 600;
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-sans);
   padding: 6px 16px;
   cursor: pointer;
   transition: all 0.15s;
@@ -236,7 +178,7 @@
 }
 
 .kpiValue {
-  font-family: 'Syne', sans-serif;
+  font-family: var(--font-sans);
   font-size: 1.4rem;
   font-weight: 700;
   color: var(--text-1);
@@ -270,7 +212,7 @@
 }
 
 .chartTitle {
-  font-family: 'Syne', sans-serif;
+  font-family: var(--font-sans);
   font-size: 0.95rem;
   font-weight: 600;
   color: var(--text-2);
@@ -332,3 +274,14 @@
   font-size: 0.9rem;
   margin: 0;
 }
+
+/* ── Section divider (was referenced in JSX but never defined — pre-existing gap) ── */
+.sectionDivider { margin: 34px 0 16px; padding-top: 22px; border-top: 1px solid var(--line); }
+.sectionLabel { margin: 0; font-size: 1.05rem; font-weight: 700; letter-spacing: -0.01em; color: var(--text-1); }
+
+/* KPI grid — prototype uses 4 across */
+.kpiGrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 22px; }
+@media (max-width: 1080px) { .kpiGrid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 640px)  { .kpiGrid { grid-template-columns: 1fr; } }
+
+.presets { display: flex; gap: 8px; flex-wrap: wrap; }

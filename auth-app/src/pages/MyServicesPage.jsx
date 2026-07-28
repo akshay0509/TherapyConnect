@@ -5,15 +5,17 @@ import {
   getDeliveryModes, createDeliveryMode, updateDeliveryMode, deleteDeliveryMode,
 } from "../api/deliveryModes";
 import { useDeliveryModes } from "../context/DeliveryModesContext";
+import Icon from "../components/icons";
 import styles from "./MyServicesPage.module.css";
 
 const SERVICE_TYPE_LABEL = {
   INDIVIDUAL_THERAPY: "Individual Therapy",
   COUPLES_THERAPY: "Couples Therapy",
 };
+// maps to Icon names (see components/icons.jsx)
 const SERVICE_TYPE_ICON = {
-  INDIVIDUAL_THERAPY: "🧍",
-  COUPLES_THERAPY: "👫",
+  INDIVIDUAL_THERAPY: "heart",
+  COUPLES_THERAPY: "users",
 };
 
 const MODE_TYPE_LABEL = {
@@ -21,8 +23,8 @@ const MODE_TYPE_LABEL = {
   OFFLINE: "Offline",
 };
 const MODE_TYPE_ICON = {
-  ONLINE: "💻",
-  OFFLINE: "📍",
+  ONLINE: "video",
+  OFFLINE: "pin",
 };
 
 // no service-level price: pricing lives on delivery modes
@@ -42,7 +44,7 @@ const EMPTY_MODE_FORM = {
 
 export default function MyServicesPage() {
   const navigate = useNavigate();
-  const { refresh: refreshModeContext } = useDeliveryModes();
+  const { refresh: refreshModeContext, allModes } = useDeliveryModes();
 
   const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -277,25 +279,16 @@ export default function MyServicesPage() {
 
   return (
     <div className={styles.page}>
-      <header className={styles.header}>
-        <div className={styles.headerInner}>
-          <button className={styles.back} onClick={() => navigate("/therapist-home")}>← Back</button>
-          <span className={styles.logo}>🧠 Therapy Connect</span>
-          <span className={styles.rolePill}>Therapist</span>
-        </div>
-      </header>
-
       <main className={styles.main}>
-        <div className={styles.topRow}>
-          <div className={styles.topRowText}>
-            <h1 className={styles.heading}>My Services</h1>
-            <p className={styles.sub}>
-              {loading ? "Loading…" : `${services.length} service${services.length !== 1 ? "s" : ""} listed`}
-            </p>
+        <div className="page-head">
+          <div>
+            <div className="eyebrow">Offerings</div>
+            <h1>My Services</h1>
+            <div className="sub">What you offer, and how clients can book it</div>
           </div>
           {!loading && (
-            <button className={styles.addBtn} onClick={openForm}>
-              <span className={styles.addIcon}>+</span> Add Service
+            <button className="btn btn-primary" onClick={openForm}>
+              <Icon name="plus" size={16} /> Add service
             </button>
           )}
         </div>
@@ -315,44 +308,48 @@ export default function MyServicesPage() {
 
         {!loading && !error && services.length === 0 && (
           <div className={styles.center}>
-            <span className={styles.emptyIcon}>📋</span>
+            <span className={styles.emptyIcon}><Icon name="clipboard" size={38} /></span>
             <h2 className={styles.emptyTitle}>No services yet</h2>
             <p className={styles.emptyText}>Add your first therapy service to get started.</p>
-            <button className={styles.addBtnLarge} onClick={openForm}>+ Add Service</button>
+            <button className="btn btn-primary" onClick={openForm}><Icon name="plus" size={16} /> Add service</button>
           </div>
         )}
 
         {!loading && !error && services.length > 0 && (
           <div className={styles.grid}>
             {services.map((s, i) => (
-              <div className={styles.card} key={s.serviceId} style={{ animationDelay: `${i * 0.06}s` }}>
+              <div className={`card ${styles.card} ${!s.isActive ? styles.cardInactive : ""}`} key={s.serviceId} style={{ animationDelay: `${i * 0.06}s` }}>
                 <div className={styles.cardTop}>
-                  <span className={styles.serviceIcon}>{SERVICE_TYPE_ICON[s.serviceType] ?? "💬"}</span>
-                  <div className={styles.serviceInfo}>
-                    <span className={styles.serviceType}>
-                      {SERVICE_TYPE_LABEL[s.serviceType] ?? s.serviceType}
+                  <div className={styles.cardTopLeft}>
+                    <span className={`${styles.serviceIcon} ${s.isActive ? "ic-c" : "ic-v"}`}>
+                      <Icon name={SERVICE_TYPE_ICON[s.serviceType] || "clipboard"} size={20} />
                     </span>
-                    <span className={`${styles.badge} ${s.isActive ? styles.badgeActive : styles.badgeInactive}`}>
-                      {s.isActive ? "Active" : "Inactive"}
-                    </span>
+                    <div>
+                      <b className={styles.serviceType}>{SERVICE_TYPE_LABEL[s.serviceType] ?? s.serviceType}</b>
+                      <div className={styles.serviceDuration}>{s.duration} minutes</div>
+                    </div>
                   </div>
+                  {/* state indicator — change it via Edit (keeps the existing flow) */}
+                  <span className={`switch ${s.isActive ? "on" : ""}`} role="img"
+                    aria-label={s.isActive ? "Active" : "Inactive"} title={s.isActive ? "Active" : "Inactive"} />
                 </div>
 
-                <div className={styles.cardDivider} />
-
-                <div className={styles.statsRow}>
-                  <div className={styles.stat}>
-                    <span className={styles.statLabel}>Duration</span>
-                    <span className={styles.statValue}>{s.duration} <span className={styles.statUnit}>min</span></span>
-                  </div>
+                {/* delivery modes + pricing, straight from the modes context (no extra fetch) */}
+                <div className={styles.modeChips}>
+                  {(allModes || []).filter(m => m.serviceId === s.serviceId && m.isActive).map(m => (
+                    <span key={m.modeId} className={`chip ${m.modeType === "ONLINE" ? "chip-online" : "chip-clinic"}`}>
+                      <Icon name={m.modeType === "ONLINE" ? "video" : "pin"} size={14} />
+                      {m.displayName}{m.price != null ? ` · ₹${parseFloat(m.price).toFixed(0)}` : ""}
+                    </span>
+                  ))}
+                  {!s.isActive && <span className="chip chip-mut">Inactive</span>}
                 </div>
 
-                <div className={styles.serviceId}>ID: {s.serviceId}</div>
                 <div className={styles.cardActions}>
-                  <button className={styles.cardEditBtn} onClick={() => openEdit(s)}>✏️ Edit</button>
-                  <button className={styles.cardDeleteBtn} onClick={() => { setDeleteConfirm(s.serviceId); setDeleteError(null); }}>🗑 Delete</button>
-                  <button className={styles.modesToggleBtn} onClick={() => toggleExpand(s.serviceId)}>
-                    {expandedServiceId === s.serviceId ? "▲ Modes" : "▼ Delivery Modes"}
+                  <button className="btn btn-sm" onClick={() => openEdit(s)}><Icon name="edit" size={14} /> Edit</button>
+                  <button className={`btn btn-sm ${styles.dangerBtn}`} onClick={() => { setDeleteConfirm(s.serviceId); setDeleteError(null); }}>Delete</button>
+                  <button className="btn btn-sm" onClick={() => toggleExpand(s.serviceId)}>
+                    {expandedServiceId === s.serviceId ? "Hide modes" : "Manage modes"}
                   </button>
                 </div>
 
@@ -375,7 +372,7 @@ export default function MyServicesPage() {
                     {(modesMap[s.serviceId] || []).map(mode => (
                       <div key={mode.modeId} className={styles.modeItem}>
                         <div className={styles.modeItemLeft}>
-                          <span className={styles.modeItemIcon}>{MODE_TYPE_ICON[mode.modeType] ?? "💬"}</span>
+                          <span className={styles.modeItemIcon}><Icon name={MODE_TYPE_ICON[mode.modeType] || "video"} size={16} /></span>
                           <div className={styles.modeItemInfo}>
                             <span className={styles.modeItemName}>{mode.displayName}</span>
                             <span className={styles.modeItemType}>{MODE_TYPE_LABEL[mode.modeType] ?? mode.modeType}</span>
@@ -387,8 +384,8 @@ export default function MyServicesPage() {
                           <span className={`${styles.modeBadge} ${mode.isActive ? styles.badgeActive : styles.badgeInactive}`}>
                             {mode.isActive ? "Active" : "Inactive"}
                           </span>
-                          <button className={styles.modeEditBtn} onClick={() => openEditMode(mode)}>✏️</button>
-                          <button className={styles.modeDeleteBtn} onClick={() => { setDeleteModeConfirm({ modeId: mode.modeId, serviceId: s.serviceId }); setDeleteModeError(null); }}>🗑</button>
+                          <button className={styles.modeEditBtn} onClick={() => openEditMode(mode)}><Icon name="edit" size={14} /></button>
+                          <button className={styles.modeDeleteBtn} onClick={() => { setDeleteModeConfirm({ modeId: mode.modeId, serviceId: s.serviceId }); setDeleteModeError(null); }} aria-label="Delete mode"><Icon name="x" size={14} /></button>
                         </div>
                       </div>
                     ))}
@@ -408,7 +405,7 @@ export default function MyServicesPage() {
       <div className={`${styles.formPanel} ${showForm ? styles.formPanelOpen : ""}`}>
         <div className={styles.formPanelHeader}>
           <h2 className={styles.formPanelTitle}>Add New Service</h2>
-          <button className={styles.closeBtn} onClick={closeForm} aria-label="Close">✕</button>
+          <button className={styles.closeBtn} onClick={closeForm} aria-label="Close"><Icon name="x" size={18} /></button>
         </div>
 
         <form onSubmit={handleSubmit} className={styles.form}>
@@ -429,7 +426,7 @@ export default function MyServicesPage() {
                     className={styles.hiddenRadio}
                     required
                   />
-                  <span className={styles.typeOptionIcon}>{SERVICE_TYPE_ICON[value]}</span>
+                  <span className={styles.typeOptionIcon}><Icon name={SERVICE_TYPE_ICON[value] || "clipboard"} size={20} /></span>
                   <span className={styles.typeOptionLabel}>{label}</span>
                 </label>
               ))}
@@ -485,7 +482,7 @@ export default function MyServicesPage() {
         <div className={styles.modal}>
           <div className={styles.modalHeader}>
             <h2 className={styles.formPanelTitle}>Edit Service</h2>
-            <button className={styles.closeBtn} onClick={closeEdit}>✕</button>
+            <button className={styles.closeBtn} onClick={closeEdit}><Icon name="x" size={18} /></button>
           </div>
           <form onSubmit={handleEditSubmit} className={styles.form}>
             <div className={styles.field}>
@@ -497,7 +494,7 @@ export default function MyServicesPage() {
                       checked={editForm.serviceType === value}
                       onChange={() => setEditForm(p => ({ ...p, serviceType: value }))}
                       className={styles.hiddenRadio} required />
-                    <span className={styles.typeOptionIcon}>{SERVICE_TYPE_ICON[value]}</span>
+                    <span className={styles.typeOptionIcon}><Icon name={SERVICE_TYPE_ICON[value] || "clipboard"} size={18} /></span>
                     <span className={styles.typeOptionLabel}>{label}</span>
                   </label>
                 ))}
@@ -538,7 +535,7 @@ export default function MyServicesPage() {
         <div className={styles.modal}>
           <div className={styles.modalHeader}>
             <h2 className={styles.formPanelTitle}>Delete Service</h2>
-            <button className={styles.closeBtn} onClick={() => setDeleteConfirm(null)}>✕</button>
+            <button className={styles.closeBtn} onClick={() => setDeleteConfirm(null)}><Icon name="x" size={18} /></button>
           </div>
           <div className={styles.form}>
             <p className={styles.deleteWarning}>Are you sure you want to delete this service? This cannot be undone.</p>
@@ -546,7 +543,7 @@ export default function MyServicesPage() {
             <div className={styles.formActions}>
               <button className={styles.cancelBtn} onClick={() => setDeleteConfirm(null)}>Cancel</button>
               <button className={styles.deleteBtnConfirm} onClick={handleDelete} disabled={deleteLoading}>
-                {deleteLoading ? <span className={styles.btnSpinner}/> : "🗑 Delete"}
+                {deleteLoading ? <span className={styles.btnSpinner}/> : "Delete"}
               </button>
             </div>
           </div>
@@ -558,7 +555,7 @@ export default function MyServicesPage() {
         <div className={styles.modal}>
           <div className={styles.modalHeader}>
             <h2 className={styles.formPanelTitle}>Add Delivery Mode</h2>
-            <button className={styles.closeBtn} onClick={closeModeForm}>✕</button>
+            <button className={styles.closeBtn} onClick={closeModeForm}><Icon name="x" size={18} /></button>
           </div>
           <form onSubmit={handleModeSubmit} className={styles.form}>
             <div className={styles.field}>
@@ -570,7 +567,7 @@ export default function MyServicesPage() {
                       checked={modeForm.modeType === value}
                       onChange={() => setModeForm(p => ({ ...p, modeType: value }))}
                       className={styles.hiddenRadio} required />
-                    <span className={styles.typeOptionIcon}>{MODE_TYPE_ICON[value]}</span>
+                    <span className={styles.typeOptionIcon}><Icon name={MODE_TYPE_ICON[value] || "video"} size={20} /></span>
                     <span className={styles.typeOptionLabel}>{label}</span>
                   </label>
                 ))}
@@ -621,7 +618,7 @@ export default function MyServicesPage() {
         <div className={styles.modal}>
           <div className={styles.modalHeader}>
             <h2 className={styles.formPanelTitle}>Edit Delivery Mode</h2>
-            <button className={styles.closeBtn} onClick={closeEditMode}>✕</button>
+            <button className={styles.closeBtn} onClick={closeEditMode}><Icon name="x" size={18} /></button>
           </div>
           <form onSubmit={handleEditModeSubmit} className={styles.form}>
             <div className={styles.field}>
@@ -633,7 +630,7 @@ export default function MyServicesPage() {
                       checked={editModeForm.modeType === value}
                       onChange={() => setEditModeForm(p => ({ ...p, modeType: value }))}
                       className={styles.hiddenRadio} required />
-                    <span className={styles.typeOptionIcon}>{MODE_TYPE_ICON[value]}</span>
+                    <span className={styles.typeOptionIcon}><Icon name={MODE_TYPE_ICON[value] || "video"} size={20} /></span>
                     <span className={styles.typeOptionLabel}>{label}</span>
                   </label>
                 ))}
@@ -683,7 +680,7 @@ export default function MyServicesPage() {
         <div className={styles.modal}>
           <div className={styles.modalHeader}>
             <h2 className={styles.formPanelTitle}>Delete Delivery Mode</h2>
-            <button className={styles.closeBtn} onClick={() => setDeleteModeConfirm(null)}>✕</button>
+            <button className={styles.closeBtn} onClick={() => setDeleteModeConfirm(null)}><Icon name="x" size={18} /></button>
           </div>
           <div className={styles.form}>
             <p className={styles.deleteWarning}>Are you sure you want to delete this delivery mode? This cannot be undone.</p>
@@ -691,7 +688,7 @@ export default function MyServicesPage() {
             <div className={styles.formActions}>
               <button className={styles.cancelBtn} onClick={() => setDeleteModeConfirm(null)}>Cancel</button>
               <button className={styles.deleteBtnConfirm} onClick={handleDeleteMode} disabled={deleteModeLoading}>
-                {deleteModeLoading ? <span className={styles.btnSpinner}/> : "🗑 Delete"}
+                {deleteModeLoading ? <span className={styles.btnSpinner}/> : "Delete"}
               </button>
             </div>
           </div>

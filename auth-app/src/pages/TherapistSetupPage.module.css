@@ -1,3 +1,105 @@
+/* ─── Therapist setup (profile creation) ───────────────────────────────────
+   Shown to a brand-new therapist before the workspace shell exists, so this
+   page carries its own chrome. Layout classes live here rather than being
+   borrowed from another page's module. */
+.page {
+  min-height: 100vh;
+  padding: 34px 24px 60px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.brandRow {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  max-width: 720px;
+  margin-bottom: 26px;
+}
+.brandMark {
+  width: 38px; height: 38px;
+  border-radius: 11px;
+  background: var(--brand);
+  color: var(--on-primary);
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 8px 22px rgba(34,211,238,0.26);
+  flex-shrink: 0;
+}
+.brandName { font-weight: 800; font-size: 1.02rem; letter-spacing: -0.02em; }
+.roleChip { margin-left: auto; }
+
+.main { width: 100%; display: flex; justify-content: center; }
+.formWrap { width: 100%; max-width: 720px; padding: 30px 32px 32px; }
+
+.formHeader { margin-bottom: 24px; }
+.formTitle { font-size: 1.55rem; font-weight: 800; letter-spacing: -0.03em; margin: 4px 0 6px; }
+.formSub { color: var(--text-3); font-size: 0.88rem; margin: 0; }
+
+.form { display: flex; flex-direction: column; gap: 18px; }
+.formRow { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 620px) { .formRow { grid-template-columns: 1fr; } }
+
+.field { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+.label {
+  font-size: 0.7rem; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--text-3);
+}
+.hint { font-size: 0.72rem; color: var(--text-4); }
+
+/* Gender picker — same visual language as the segmented control */
+.optionGroup { display: flex; flex-wrap: wrap; gap: 8px; }
+.optionBtn {
+  padding: 9px 15px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  color: var(--text-2);
+  font-family: var(--font-sans);
+  font-size: 0.83rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: 0.15s;
+}
+.optionBtn:hover { border-color: var(--line-2); color: var(--text-1); }
+.optionBtnActive {
+  background: var(--brand);
+  border-color: transparent;
+  color: var(--on-primary);
+}
+
+.errorBox {
+  display: flex; align-items: center; gap: 10px;
+  background: rgba(248,113,113,0.1);
+  border: 1px solid rgba(248,113,113,0.3);
+  border-radius: 12px;
+  padding: 12px 14px;
+  color: var(--danger-soft);
+  font-size: 0.84rem;
+}
+.errorIcon {
+  width: 20px; height: 20px; border-radius: 50%;
+  background: rgba(248,113,113,0.2);
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 800; flex-shrink: 0;
+}
+
+.formActions {
+  display: flex; justify-content: flex-end; gap: 10px;
+  margin-top: 6px; padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+
+.btnSpinner {
+  width: 15px; height: 15px; border-radius: 50%;
+  border: 2px solid rgba(0,0,0,0.25);
+  border-top-color: var(--on-primary);
+  animation: tc-spin 0.7s linear infinite;
+  display: inline-block;
+}
+@keyframes tc-spin { to { transform: rotate(360deg); } }
+
 /* ─── Custom calendar popover ─── */
 .calWrap { position: relative; }
 
@@ -6,11 +108,11 @@
   top: calc(100% + 8px);
   left: 0;
   z-index: 200;
-  background: var(--bg-elev);
-  border: 1px solid var(--wash-3);
+  background: var(--elev);
+  border: 1px solid var(--line-2);
   border-radius: 14px;
   padding: 16px;
-  box-shadow: 0 16px 48px rgba(0,0,0,0.6);
+  box-shadow: var(--shadow);
   width: 280px;
 }
 
@@ -23,8 +125,8 @@
 }
 
 .calNav {
-  background: var(--wash-1);
-  border: 1px solid var(--wash-3);
+  background: var(--surface-2);
+  border: 1px solid var(--line-2);
   border-radius: 8px;
   color: var(--text-2);
   cursor: pointer;
@@ -46,10 +148,10 @@
 
 .calSelect {
   background: var(--wash-2);
-  border: 1px solid var(--wash-3);
+  border: 1px solid var(--line-2);
   border-radius: 8px;
   color: var(--text-1);
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-sans);
   font-size: 0.82rem;
   padding: 5px 8px;
   cursor: pointer;
@@ -57,7 +159,7 @@
   appearance: none;
 }
 .calSelect:focus { border-color: #10b981; }
-.calSelect option { background: var(--bg-elev); color: var(--text-1); }
+.calSelect option { background: var(--elev); color: var(--text-1); }
 
 .calGrid {
   display: grid;
@@ -84,7 +186,7 @@
   transition: background 0.12s, color 0.12s;
   background: none;
   border: none;
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-sans);
   width: 100%;
 }
 .calDay:hover:not(:disabled) { background: rgba(16,185,129,0.15); color: var(--ok-mid); }

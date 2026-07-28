@@ -52,7 +52,7 @@
 }
 
 .client {
-  font-family: 'Syne', sans-serif;
+  font-family: var(--font-sans);
   font-weight: 700;
   font-size: 0.95rem;
   color: var(--text-1);
@@ -67,7 +67,7 @@
 .big { display: flex; flex-direction: column; gap: 3px; }
 
 .bigValue {
-  font-family: 'Syne', sans-serif;
+  font-family: var(--font-sans);
   font-size: 2.1rem;
   font-weight: 800;
   letter-spacing: -0.03em;
@@ -79,7 +79,7 @@
 .small { display: flex; flex-direction: column; gap: 3px; text-align: right; }
 
 .smallValue {
-  font-family: 'Syne', sans-serif;
+  font-family: var(--font-sans);
   font-size: 1rem;
   font-weight: 700;
   color: var(--text-2);
@@ -107,7 +107,7 @@
   border: 1px solid var(--accent-line);
   border-radius: 8px;
   color: var(--accent-text);
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-sans);
   font-size: 0.76rem;
   font-weight: 600;
   padding: 5px 12px;

@@ -23,15 +23,16 @@ import com.org.appointmentService.Entity.AppointmentPayment;
 import com.org.appointmentService.Entity.TherapistAppointments;
 import com.org.appointmentService.Entity.TherapistAvailability;
 import com.org.appointmentService.Entity.TherapistAvailabilityOverride;
+import com.org.appointmentService.Entity.TherapistServiceProjection;
 import com.org.appointmentService.Entity.TherapyDeliveryMode;
 import com.org.appointmentService.Exception.AppointmentNotFoundException;
 import com.org.appointmentService.Exception.InvalidAppointmentStatusTransitionException;
-import com.org.appointmentService.Exception.SlotAlreadyBookedException;
 import com.org.appointmentService.Exception.SlotNotAvailableException;
 import com.org.appointmentService.Repository.AppointmentPaymentRepository;
 import com.org.appointmentService.Repository.TherapistAppointmentsRepository;
 import com.org.appointmentService.Repository.TherapistAvailabilityOverrideRepository;
 import com.org.appointmentService.Repository.TherapistAvailabilityRepository;
+import com.org.appointmentService.Repository.TherapistServiceProjectionRepository;
 import com.org.appointmentService.Repository.TherapyDeliveryModeRepository;
 import com.org.events.TherapistAppointment.AppointmentEvent;
 import com.org.events.TherapistAppointment.AppointmentStatus;
@@ -58,6 +59,12 @@ public class AppointmentService {
 
 	@Autowired
 	private AppointmentPaymentRepository appointmentPaymentRepository;
+
+	@Autowired
+	private TherapistServiceProjectionRepository therapistServiceProjectionRepository;
+
+	@Autowired
+	private GenericBlockReservationService genericBlockReservationService;
 
 	private static final EnumSet<AppointmentStatus> TERMINAL_STATUSES = EnumSet.of(
 			AppointmentStatus.COMPLETED,
@@ -90,17 +97,18 @@ public class AppointmentService {
 		TherapistAvailability therapistAvailability = therapistAvailabilityRepository.findBySlotIdAndTherapistId(slotId, bookAppointmentRequest.getTherapistId())
 				.orElseThrow(() -> new SlotNotAvailableException(slotId));
 
-		if (isBlockedByUnavailableOverride(bookAppointmentRequest.getTherapistId(), therapistAvailability.getStartTime(), therapistAvailability.getEndTime())) {
-			throw new SlotNotAvailableException(slotId);
-		}
-
 		TherapyDeliveryMode deliveryMode = therapyDeliveryModeRepository
-				.findByModeIdAndTherapistIdAndServiceIdAndIsActiveTrue(
+				.findByModeIdAndTherapistIdAndIsActiveTrue(
 						modeId,
-						bookAppointmentRequest.getTherapistId(),
-						therapistAvailability.getServiceId())
+						bookAppointmentRequest.getTherapistId())
 				.orElseThrow(() -> new SlotNotAvailableException(
 						"Mode " + modeId + " is not available for slot " + slotId));
+
+		TherapistServiceProjection service = resolveActiveService(
+				deliveryMode.getServiceId(),
+				bookAppointmentRequest.getTherapistId());
+		LocalDateTime appointmentEnd = therapistAvailability.getStartTime()
+				.plusMinutes(service.getDurationMinutes());
 
 		BigDecimal sessionFee = bookAppointmentRequest.getCustomPrice() != null
 				? bookAppointmentRequest.getCustomPrice()
@@ -108,22 +116,20 @@ public class AppointmentService {
 
 		requirePositiveFee(sessionFee);
 
-		// slots for other services exist at the same time by design; booking
-		// marks only one slot, so the overlap with active appointments must be
-		// checked explicitly or the therapist can be double-booked
+		if (isBlockedByUnavailableOverride(
+				bookAppointmentRequest.getTherapistId(),
+				therapistAvailability.getStartTime(),
+				appointmentEnd)) {
+			throw new SlotNotAvailableException(slotId);
+		}
+
 		if (therapistAppointmentsRepository.existsActiveAppointmentOverlap(
 				bookAppointmentRequest.getTherapistId(),
 				null,
 				therapistAvailability.getStartTime(),
-				therapistAvailability.getEndTime())) {
+				appointmentEnd)) {
 			throw new SlotNotAvailableException(
 					"Requested time overlaps an existing appointment.");
-		}
-
-		int updated = therapistAvailabilityRepository.markSlotAsBooked(slotId);
-
-		if (updated == 0) {
-			throw new SlotAlreadyBookedException();
 		}
 
 		TherapistAppointments therapistAppointment = new TherapistAppointments();
@@ -134,10 +140,16 @@ public class AppointmentService {
 		therapistAppointment.setClientName(bookAppointmentRequest.getClientName());
 		therapistAppointment.setSessionFee(sessionFee);
 		therapistAppointment.setModeId(modeId);
+		therapistAppointment.setServiceId(service.getServiceId());
 		therapistAppointment.setStartTime(therapistAvailability.getStartTime());
-		therapistAppointment.setEndTime(therapistAvailability.getEndTime());
+		therapistAppointment.setEndTime(appointmentEnd);
 
-		therapistAppointmentsRepository.save(therapistAppointment);
+		therapistAppointmentsRepository.saveAndFlush(therapistAppointment);
+		genericBlockReservationService.reserve(
+				therapistAppointment.getTherapistId(),
+				therapistAppointment.getStartTime(),
+				therapistAppointment.getEndTime(),
+				therapistAppointment.getAppointmentId());
 
 		AppointmentEvent appointmentEvent = new AppointmentEvent();
 		appointmentEvent.setEventType("AppointmentCreated");
@@ -147,6 +159,7 @@ public class AppointmentService {
 		appointmentEvent.setTherapistId(therapistAppointment.getTherapistId());
 		appointmentEvent.setClientId(therapistAppointment.getClientId());
 		appointmentEvent.setModeId(therapistAppointment.getModeId());
+		appointmentEvent.setServiceId(therapistAppointment.getServiceId());
 		appointmentEvent.setModeType(deliveryMode.getModeType().name());
 		appointmentEvent.setAddress(deliveryMode.getAddress());
 		appointmentEvent.setStartTime(therapistAppointment.getStartTime());
@@ -188,7 +201,11 @@ public class AppointmentService {
 		therapistAppointmentsRepository.save(therapistAppointment);
 
 		if (targetStatus == AppointmentStatus.CANCELLED) {
-			releaseSlotOrThrow(therapistAppointment.getSlotId(), "Cancelled appointment must release the booked slot.");
+			genericBlockReservationService.release(
+					therapistAppointment.getTherapistId(),
+					therapistAppointment.getStartTime(),
+					therapistAppointment.getEndTime(),
+					therapistAppointment.getAppointmentId());
 		}
 
 		AppointmentEvent event = baseEventFromAppointment(therapistAppointment);
@@ -222,25 +239,28 @@ public class AppointmentService {
 		TherapistAvailability newSlot = therapistAvailabilityRepository.findBySlotIdAndTherapistId(newSlotId, therapistId)
 				.orElseThrow(() -> new SlotNotAvailableException(newSlotId));
 
-		if (isBlockedByUnavailableOverride(therapistId, newSlot.getStartTime(), newSlot.getEndTime())) {
-			throw new SlotNotAvailableException(newSlotId);
-		}
-
 		String modeId = rescheduleAppointmentRequest.getModeId() != null
 				? rescheduleAppointmentRequest.getModeId()
 				: therapistAppointment.getModeId();
 
 		TherapyDeliveryMode deliveryMode = therapyDeliveryModeRepository
-				.findByModeIdAndTherapistIdAndServiceIdAndIsActiveTrue(
-						modeId,
-						therapistId,
-						newSlot.getServiceId())
+				.findByModeIdAndTherapistIdAndIsActiveTrue(modeId, therapistId)
 				.orElseThrow(() -> new SlotNotAvailableException(
 						"Mode " + modeId + " is not available for slot " + newSlotId));
+
+		TherapistServiceProjection service =
+				resolveActiveService(deliveryMode.getServiceId(), therapistId);
+		LocalDateTime newEndTime =
+				newSlot.getStartTime().plusMinutes(service.getDurationMinutes());
 
 		BigDecimal sessionFee = deliveryMode.getPrice();
 
 		requirePositiveFee(sessionFee);
+
+		if (isBlockedByUnavailableOverride(
+				therapistId, newSlot.getStartTime(), newEndTime)) {
+			throw new SlotNotAvailableException(newSlotId);
+		}
 
 		// same double-booking guard as bookAppointment; the appointment being
 		// rescheduled must not block its own move
@@ -248,26 +268,28 @@ public class AppointmentService {
 				therapistId,
 				appointmentId,
 				newSlot.getStartTime(),
-				newSlot.getEndTime())) {
+				newEndTime)) {
 			throw new SlotNotAvailableException(
 					"Requested time overlaps an existing appointment.");
-		}
-
-		int booked = therapistAvailabilityRepository.markSlotAsBooked(newSlotId);
-		if (booked == 0) {
-			throw new SlotNotAvailableException(newSlotId);
 		}
 
 		LocalDateTime oldStartTime = therapistAppointment.getStartTime();
 		LocalDateTime oldEndTime = therapistAppointment.getEndTime();
 
-		releaseSlotOrThrow(oldSlotId, "Previous slot must be released after reschedule.");
+		genericBlockReservationService.move(
+				therapistId,
+				oldStartTime,
+				oldEndTime,
+				newSlot.getStartTime(),
+				newEndTime,
+				appointmentId);
 
 		therapistAppointment.setSlotId(newSlot.getSlotId());
 		therapistAppointment.setSessionFee(sessionFee);
 		therapistAppointment.setModeId(modeId);
+		therapistAppointment.setServiceId(service.getServiceId());
 		therapistAppointment.setStartTime(newSlot.getStartTime());
-		therapistAppointment.setEndTime(newSlot.getEndTime());
+		therapistAppointment.setEndTime(newEndTime);
 		therapistAppointment.setStatus(AppointmentStatus.RESCHEDULED);
 		therapistAppointment.setStatusReason(rescheduleAppointmentRequest.getReason());
 
@@ -327,15 +349,6 @@ public class AppointmentService {
 		return new AppointmentScheduleViewDto(slots, appointments, overrides);
 	}
 
-	public List<AppointmentScheduleAppointmentDto> searchAppointments(String therapistId, String clientName, List<AppointmentStatus> statuses, LocalDate fromDate, LocalDate toDate) {
-		LocalDateTime from = fromDate.atStartOfDay();
-		LocalDateTime to = toDate.plusDays(1).atStartOfDay();
-		boolean statusesEmpty = statuses == null || statuses.isEmpty();
-		List<AppointmentStatus> effectiveStatuses = statusesEmpty ? List.of(AppointmentStatus.values()) : statuses;
-		return withPaymentInfo(therapistAppointmentsRepository.searchAppointments(therapistId, blankToNull(clientName), statusesEmpty, effectiveStatuses, from, to).stream()
-				.map(this::toAppointmentScheduleAppointmentDto)
-				.toList());
-	}
 
 	private List<AppointmentScheduleAppointmentDto> withPaymentInfo(List<AppointmentScheduleAppointmentDto> appointments) {
 
@@ -371,13 +384,11 @@ public class AppointmentService {
 		dto.setEndTime(appointment.getEndTime());
 		dto.setStatus(appointment.getStatus());
 		dto.setModeId(appointment.getModeId());
+		dto.setServiceId(appointment.getServiceId());
 		dto.setReason(appointment.getStatusReason());
 		return dto;
 	}
 
-	private String blankToNull(String value) {
-		return value == null || value.isBlank() ? null : value;
-	}
 
 	private AppointmentScheduleOverrideDto toAppointmentScheduleOverrideDto(TherapistAvailabilityOverride override) {
 		AppointmentScheduleOverrideDto dto = new AppointmentScheduleOverrideDto();
@@ -423,13 +434,6 @@ public class AppointmentService {
 		};
 	}
 
-	private void releaseSlotOrThrow(String slotId, String message) {
-		int released = therapistAvailabilityRepository.markSlotAsAvailable(slotId);
-		if (released == 0) {
-			throw new InvalidAppointmentStatusTransitionException(message);
-		}
-	}
-
 	private AppointmentEvent baseEventFromAppointment(TherapistAppointments appointment) {
 		AppointmentEvent event = new AppointmentEvent();
 		event.setAppointmentId(appointment.getAppointmentId());
@@ -438,6 +442,7 @@ public class AppointmentService {
 		event.setClientId(appointment.getClientId());
 		event.setSessionFee(appointment.getSessionFee());
 		event.setModeId(appointment.getModeId());
+		event.setServiceId(appointment.getServiceId());
 		event.setStartTime(appointment.getStartTime());
 		event.setEndTime(appointment.getEndTime());
 		event.setBookingSource("THERAPIST");
@@ -446,6 +451,22 @@ public class AppointmentService {
 			event.setAddress(mode.getAddress());
 		});
 		return event;
+	}
+
+	private TherapistServiceProjection resolveActiveService(
+			String serviceId,
+			String therapistId) {
+		TherapistServiceProjection service = therapistServiceProjectionRepository
+				.findByServiceIdAndTherapistIdAndActiveTrue(serviceId, therapistId)
+				.orElseThrow(() -> new SlotNotAvailableException(
+						"Service definition is missing or inactive for service " + serviceId));
+		// No multiple-of-30 requirement: a session reserves whole blocks rounded
+		// up, so a 50-minute service simply holds a 60-minute footprint.
+		if (service.getDurationMinutes() <= 0) {
+			throw new SlotNotAvailableException(
+					"Service " + serviceId + " has no usable duration.");
+		}
+		return service;
 	}
 
 }

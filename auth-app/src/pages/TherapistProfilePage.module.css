@@ -1,68 +1,7 @@
-@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap');
+/* Renders inside TherapistShell — no page chrome here. */
+.page { color: var(--text-1); }
 
-.page {
-  min-height: 100vh;
-  background: var(--bg-page);
-  font-family: 'DM Sans', sans-serif;
-  color: var(--text-1);
-}
-
-/* ─── Header ─── */
-.header {
-  border-bottom: 1px solid var(--wash-2);
-  padding: 0 24px;
-  background: var(--wash-1);
-  backdrop-filter: blur(12px);
-  position: sticky;
-  top: 0;
-  z-index: 10;
-}
-.headerInner {
-  max-width: 860px;
-  margin: 0 auto;
-  height: 60px;
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-.back {
-  background: none;
-  border: 1px solid var(--wash-3);
-  border-radius: 8px;
-  color: var(--text-2);
-  font-family: 'DM Sans', sans-serif;
-  font-size: 0.85rem;
-  padding: 7px 14px;
-  cursor: pointer;
-  transition: color 0.2s, border-color 0.2s;
-}
-.back:hover { color: var(--text-1); border-color: var(--wash-4); }
-.logo {
-  font-family: 'Syne', sans-serif;
-  font-weight: 800;
-  font-size: 1.1rem;
-  color: #10b981;
-  flex: 1;
-  text-align: center;
-}
-.rolePill {
-  font-size: 0.72rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  padding: 3px 10px;
-  border-radius: 20px;
-  background: rgba(16,185,129,0.12);
-  color: var(--ok-mid);
-  border: 1px solid rgba(16,185,129,0.25);
-}
-
-/* ─── Main ─── */
-.main {
-  max-width: 860px;
-  margin: 0 auto;
-  padding: 60px 24px;
-}
+.main { max-width: 1240px; padding: 30px; }
 
 /* ─── States ─── */
 .center {
@@ -83,7 +22,7 @@
 .loadingText { color: var(--text-4); font-size: 0.9rem; }
 .emptyIcon { font-size: 3rem; }
 .emptyTitle {
-  font-family: 'Syne', sans-serif;
+  font-family: var(--font-sans);
   font-size: 1.4rem; font-weight: 800;
   color: var(--text-1); margin: 0;
 }
@@ -91,11 +30,11 @@
 .createBtn {
   margin-top: 8px;
   padding: 12px 28px;
-  background: linear-gradient(135deg, #10b981, #059669);
+  background: var(--brand);
   border: none;
   border-radius: 10px;
   color: #fff;
-  font-family: 'Syne', sans-serif;
+  font-family: var(--font-sans);
   font-size: 0.95rem;
   font-weight: 700;
   cursor: pointer;
@@ -161,15 +100,15 @@
 .bigAvatar {
   width: 72px; height: 72px;
   border-radius: 18px;
-  background: linear-gradient(135deg, #10b981, #059669);
+  background: var(--brand);
   display: flex; align-items: center; justify-content: center;
-  font-family: 'Syne', sans-serif;
+  font-family: var(--font-sans);
   font-size: 1.6rem; font-weight: 800; color: #fff;
   flex-shrink: 0;
   box-shadow: 0 6px 24px rgba(16,185,129,0.35);
 }
 .profileName {
-  font-family: 'Syne', sans-serif;
+  font-family: var(--font-sans);
   font-size: 1.8rem; font-weight: 800;
   letter-spacing: -0.03em;
   margin: 0 0 6px;
@@ -205,7 +144,7 @@
 }
 .formHeader { margin-bottom: 36px; }
 .formTitle {
-  font-family: 'Syne', sans-serif;
+  font-family: var(--font-sans);
   font-size: 1.8rem; font-weight: 800;
   letter-spacing: -0.03em;
   margin: 0 0 8px;
@@ -235,7 +174,7 @@
   border-radius: 10px;
   color: var(--text-1);
   font-size: 0.95rem;
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-sans);
   outline: none;
   transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
   box-sizing: border-box;
@@ -277,7 +216,7 @@
   border: 1px solid var(--wash-3);
   border-radius: 10px;
   color: var(--text-2);
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-sans);
   font-size: 0.9rem;
   cursor: pointer;
   transition: border-color 0.2s, color 0.2s;
@@ -286,11 +225,11 @@
 
 .submitBtn {
   padding: 12px 28px;
-  background: linear-gradient(135deg, #10b981, #059669);
+  background: var(--brand);
   border: none;
   border-radius: 10px;
   color: #fff;
-  font-family: 'Syne', sans-serif;
+  font-family: var(--font-sans);
   font-size: 0.95rem;
   font-weight: 700;
   cursor: pointer;
@@ -336,7 +275,7 @@
   color: var(--text-2);
   font-size: 0.875rem;
   font-weight: 500;
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-sans);
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s, color 0.15s;
   text-align: center;
@@ -360,3 +299,9 @@
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
+
+/* payment-off destructive button (replaces the old inline styles) */
+.dangerBtn { color: var(--danger-mid); border-color: rgba(248,113,113,0.3); }
+.dangerBtn:hover { background: rgba(248,113,113,0.1); border-color: rgba(248,113,113,0.45); }
+
+.payBtn { width: fit-content; align-self: start; }

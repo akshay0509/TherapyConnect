@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { getTherapistClients, createClient } from "../api/therapistClients";
+import Icon from "../components/icons";
 import styles from "./MyClientsPage.module.css";
 
 function getInitials(name) {
@@ -11,9 +12,33 @@ function getInitials(name) {
     : (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
+// ── Enrichment display helpers (data supplied by the Phase-B backend;
+//    these degrade gracefully to "—" until then) ──
+function formatJoined(iso) {
+  if (!iso) return null;
+  try { return new Date(iso).toLocaleDateString("en-IN", { month: "short", year: "numeric" }); }
+  catch { return null; }
+}
+function formatLastSeen(iso) {
+  if (!iso) return "—";
+  const then = new Date(iso), now = new Date();
+  const days = Math.floor((now - then) / 86400000);
+  if (days <= 0) return "today";
+  if (days === 1) return "1d ago";
+  if (days < 7) return `${days}d ago`;
+  if (days < 30) return `${Math.floor(days / 7)}w ago`;
+  if (days < 365) return `${Math.floor(days / 30)}mo ago`;
+  return `${Math.floor(days / 365)}y ago`;
+}
+function statusLabel(status) {
+  const s = (status || "ACTIVE").toUpperCase();
+  return s.charAt(0) + s.slice(1).toLowerCase();
+}
+
+// Prototype avatar palette — cyan/green/violet family, in sync with the app gradient
 const AVATAR_COLORS = [
-  ["#6366f1","#4f46e5"],["#10b981","#059669"],["#f59e0b","#d97706"],
-  ["#ec4899","#db2777"],["#8b5cf6","#7c3aed"],["#06b6d4","#0891b2"],["#f97316","#ea580c"],
+  ["#22d3ee","#34d399"],["#a78bfa","#22d3ee"],["#34d399","#0891b2"],
+  ["#fbbf24","#f472b6"],["#22d3ee","#818cf8"],["#818cf8","#22d3ee"],["#34d399","#22d3ee"],
 ];
 function avatarGradient(id) {
   if (!id) return AVATAR_COLORS[0];
@@ -34,6 +59,8 @@ export default function MyClientsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("ALL"); // ALL | ACTIVE | ARCHIVED
+  const [recentFirst, setRecentFirst] = useState(false);
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
@@ -85,47 +112,56 @@ export default function MyClientsPage() {
     }
   };
 
-  const filtered = clients.filter((c) =>
+  let filtered = clients.filter((c) =>
     c.clientName?.toLowerCase().includes(search.toLowerCase()) ||
     c.clientId?.toLowerCase().includes(search.toLowerCase())
   );
+  if (statusFilter !== "ALL") {
+    filtered = filtered.filter((c) => (c.status || "ACTIVE").toUpperCase() === statusFilter);
+  }
+  if (recentFirst) {
+    filtered = [...filtered].sort((a, b) => new Date(b.lastSeen || 0) - new Date(a.lastSeen || 0));
+  }
+  const cycleStatus = () =>
+    setStatusFilter((s) => (s === "ALL" ? "ACTIVE" : s === "ACTIVE" ? "ARCHIVED" : "ALL"));
 
   return (
     <div className={styles.page}>
-      <header className={styles.header}>
-        <div className={styles.headerInner}>
-          <button className={styles.back} onClick={() => navigate("/therapist-home")}>← Back</button>
-          <span className={styles.logo}>🧠 Therapy Connect</span>
-          <span className={styles.rolePill}>Therapist</span>
-        </div>
-      </header>
-
       <main className={styles.main}>
-        <div className={styles.topRow}>
+        <div className="page-head">
           <div>
-            <h1 className={styles.heading}>My Clients</h1>
-            <p className={styles.sub}>
+            <div className="eyebrow">People</div>
+            <h1>My Clients</h1>
+            <div className="sub">
               {loading ? "Loading…" : `${clients.length} client${clients.length !== 1 ? "s" : ""}`}
-            </p>
+            </div>
           </div>
           {!loading && (
-            <button className={styles.addBtn} onClick={openDrawer}>
-              <span>+</span> Create Client
+            <button className="btn btn-primary" onClick={openDrawer}>
+              <Icon name="plus" size={16} /> Add client
             </button>
           )}
         </div>
 
-        {/* Search */}
+        {/* Search + filters */}
         {!loading && !error && clients.length > 0 && (
-          <div className={styles.searchWrap}>
-            <span className={styles.searchIcon}>⌕</span>
-            <input
-              className={styles.search}
-              type="text"
-              placeholder="Search by name or ID…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
+          <div className={styles.controls}>
+            <label className={styles.searchWrap}>
+              <span className={styles.searchIcon}><Icon name="search" size={18} /></span>
+              <input
+                className={styles.search}
+                type="text"
+                placeholder="Search by name…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </label>
+            <button className={`btn ${statusFilter !== "ALL" ? styles.filterOn : ""}`} onClick={cycleStatus}>
+              {statusFilter === "ALL" ? "All statuses" : statusFilter === "ACTIVE" ? "Active" : "Archived"}
+            </button>
+            <button className={`btn ${recentFirst ? styles.filterOn : ""}`} onClick={() => setRecentFirst((r) => !r)}>
+              Recently seen
+            </button>
           </div>
         )}
 
@@ -145,10 +181,10 @@ export default function MyClientsPage() {
         {/* Empty */}
         {!loading && !error && clients.length === 0 && (
           <div className={styles.center}>
-            <span className={styles.emptyIcon}>👥</span>
+            <span className={styles.emptyIcon}><Icon name="users" size={38} /></span>
             <h2 className={styles.emptyTitle}>No clients yet</h2>
             <p className={styles.emptyText}>Create your first client to get started.</p>
-            <button className={styles.addBtnLarge} onClick={openDrawer}>+ Create Client</button>
+            <button className="btn btn-primary" onClick={openDrawer}><Icon name="plus" size={16} /> Add client</button>
           </div>
         )}
 
@@ -159,23 +195,32 @@ export default function MyClientsPage() {
               const [from, to] = avatarGradient(c.clientId);
               return (
                 <div
-                  className={styles.card}
+                  className={`card ${styles.card}`}
                   key={c.clientId}
                   style={{ animationDelay: `${i * 0.05}s`, cursor: "pointer" }}
                   onClick={() => navigate(`/therapist/clients/${c.clientId}`)}
                 >
-                  <div className={styles.cardTop}>
-                    <div
-                      className={styles.avatar}
-                      style={{ background: `linear-gradient(135deg, ${from}, ${to})` }}
-                    >
+                  <div className={styles.cardRow}>
+                    <div className={`avatar avatar-m ${styles.avatar}`}
+                      style={{ background: `linear-gradient(135deg, ${from}, ${to})` }}>
                       {getInitials(c.clientName)}
                     </div>
                     <div className={styles.nameBlock}>
-                      <h3 className={styles.clientName}>{c.clientName || "—"}</h3>
-                      <span className={styles.clientId}>ID: {c.clientId}</span>
+                      <b className={styles.clientName}>{c.clientName || "—"}</b>
+                      <div className={styles.clientId}>
+                        {c.clientId}{formatJoined(c.createdAt) ? ` · joined ${formatJoined(c.createdAt)}` : ""}
+                      </div>
                     </div>
-                    {c.dsf && <span className={styles.dsfBadge}>DSF</span>}
+                    <div className={styles.badges}>
+                      {c.dsf && <span className="chip chip-info">DSF</span>}
+                      <span className={`chip ${(c.status || "ACTIVE") === "ARCHIVED" ? "chip-mut" : "chip-ok"}`}>
+                        {statusLabel(c.status)}
+                      </span>
+                    </div>
+                  </div>
+                  <div className={styles.cardStats}>
+                    <span><b>{c.sessionCount ?? "—"}</b> session{c.sessionCount === 1 ? "" : "s"}</span>
+                    <span>Last seen <b>{formatLastSeen(c.lastSeen)}</b></span>
                   </div>
                 </div>
               );
@@ -201,10 +246,10 @@ export default function MyClientsPage() {
       <div className={`${styles.drawer} ${drawerOpen ? styles.drawerOpen : ""}`}>
         <div className={styles.drawerHeader}>
           <div>
-            <h2 className={styles.drawerTitle}>Create Client</h2>
+            <h2 className={styles.drawerTitle}>Add client</h2>
             <p className={styles.drawerSub}>Fill in the client's details below</p>
           </div>
-          <button className={styles.closeBtn} onClick={closeDrawer} aria-label="Close">✕</button>
+          <button className={styles.closeBtn} onClick={closeDrawer} aria-label="Close"><Icon name="x" size={18} /></button>
         </div>
 
         <form onSubmit={handleSubmit} className={styles.form}>

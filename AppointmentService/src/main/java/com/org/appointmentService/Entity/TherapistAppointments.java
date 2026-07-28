@@ -38,6 +38,9 @@ public class TherapistAppointments {
 	
 	@Column(nullable = true)
 	private String modeId;
+
+	@Column(nullable = false)
+	private String serviceId;
 	
 	@Column(nullable = true)
 	private BigDecimal sessionFee;

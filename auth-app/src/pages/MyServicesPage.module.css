@@ -1,9 +1,5 @@
-@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap');
-
+/* Renders inside TherapistShell — no page chrome here. */
 .page {
-  min-height: 100vh;
-  background: var(--bg-page);
-  font-family: 'DM Sans', sans-serif;
   color: var(--text-1);
 }
 
@@ -30,7 +26,7 @@
   border: 1px solid var(--wash-3);
   border-radius: 8px;
   color: var(--text-2);
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-sans);
   font-size: 0.85rem;
   padding: 7px 14px;
   cursor: pointer;
@@ -38,7 +34,7 @@
 }
 .back:hover { color: var(--text-1); border-color: var(--wash-4); }
 .logo {
-  font-family: 'Syne', sans-serif;
+  font-family: var(--font-sans);
   font-weight: 800;
   font-size: 1.1rem;
   color: #10b981;
@@ -59,9 +55,8 @@
 
 /* ─── Main ─── */
 .main {
-  max-width: 1100px;
-  margin: 0 auto;
-  padding: 56px 24px;
+  max-width: 1240px;
+  padding: 30px;
 }
 
 /* ─── Top row ─── */
@@ -78,7 +73,7 @@
   overflow: hidden;
 }
 .heading {
-  font-family: 'Syne', sans-serif;
+  font-family: var(--font-sans);
   font-size: clamp(1.8rem, 3vw, 2.4rem);
   font-weight: 800;
   letter-spacing: -0.03em;
@@ -94,11 +89,11 @@
   align-items: center;
   gap: 8px;
   padding: 11px 20px;
-  background: linear-gradient(135deg, #10b981, #059669);
+  background: var(--brand);
   border: none;
   border-radius: 10px;
-  color: #fff;
-  font-family: 'Syne', sans-serif;
+  color: var(--on-primary);
+  font-family: var(--font-sans);
   font-size: 0.88rem;
   font-weight: 700;
   cursor: pointer;
@@ -128,17 +123,17 @@
 .loadingText { color: var(--text-4); font-size: 0.9rem; }
 .emptyIcon { font-size: 2.8rem; }
 .emptyTitle {
-  font-family: 'Syne', sans-serif;
+  font-family: var(--font-sans);
   font-size: 1.4rem; font-weight: 800; color: var(--text-1); margin: 0;
 }
 .emptyText { color: var(--text-3); font-size: 0.9rem; margin: 0; }
 .addBtnLarge {
   margin-top: 4px;
   padding: 12px 28px;
-  background: linear-gradient(135deg, #10b981, #059669);
+  background: var(--brand);
   border: none; border-radius: 10px;
-  color: #fff;
-  font-family: 'Syne', sans-serif;
+  color: var(--on-primary);
+  font-family: var(--font-sans);
   font-size: 0.95rem; font-weight: 700;
   cursor: pointer;
   transition: opacity 0.2s, transform 0.15s;
@@ -168,40 +163,30 @@
 /* ─── Grid ─── */
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
 }
+@media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
 
-/* ─── Card ─── */
+/* ─── Card ─── (surface from the global .card; layout only here) */
 .card {
-  background: var(--wash-1);
-  border: 1px solid var(--wash-2);
-  border-radius: 16px;
-  padding: 24px;
-  transition: border-color 0.25s, transform 0.25s, box-shadow 0.25s;
+  padding: 22px;
+  transition: border-color 0.2s, transform 0.2s;
   animation: fadeUp 0.5s ease both;
 }
-.card:hover {
-  border-color: rgba(16,185,129,0.3);
-  transform: translateY(-3px);
-  box-shadow: 0 12px 40px rgba(0,0,0,0.3);
+.card:hover { border-color: rgba(34,211,238,0.3); transform: translateY(-2px); }
+.cardInactive { opacity: 0.6; }
+
+.cardTop { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.cardTopLeft { display: flex; gap: 14px; align-items: flex-start; }
+.serviceIcon {
+  width: 44px; height: 44px; border-radius: 12px;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
 }
-.cardTop {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 18px;
-}
-.serviceIcon { font-size: 1.6rem; }
-.serviceInfo {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.serviceType {
-  font-family: 'Syne', sans-serif;
-  font-size: 0.95rem; font-weight: 700; color: var(--text-1);
-}
+.serviceType { display: block; font-size: 1.05rem; font-weight: 700; color: var(--text-1); }
+.serviceDuration { color: var(--text-4); font-size: 0.82rem; margin-top: 2px; }
+
+.modeChips { display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
 .badge {
   display: inline-block;
   font-size: 0.68rem; font-weight: 600;
@@ -242,8 +227,8 @@
 .statDivider { width: 1px; background: var(--wash-2); align-self: stretch; }
 .statLabel { font-size: 0.7rem; color: var(--text-4); text-transform: uppercase; letter-spacing: 0.07em; }
 .statValue {
-  font-family: 'Syne', sans-serif;
-  font-size: 1.15rem; font-weight: 800; color: var(--indigo-mid);
+  font-family: var(--font-sans);
+  font-size: 1.15rem; font-weight: 800; color: var(--primary);
 }
 .statUnit { font-size: 0.75rem; color: var(--text-3); font-weight: 400; }
 
@@ -251,20 +236,22 @@
 
 /* ─── Card actions ─── */
 .cardActions {
-  display: flex; gap: 8px;
-  margin-top: 12px; padding-top: 12px;
-  border-top: 1px solid var(--wash-2);
+  display: flex; gap: 8px; flex-wrap: wrap;
+  margin-top: 18px; padding-top: 16px;
+  border-top: 1px solid var(--line);
 }
+.dangerBtn { color: var(--danger-mid); border-color: rgba(248,113,113,0.28); }
+.dangerBtn:hover { background: rgba(248,113,113,0.1); border-color: rgba(248,113,113,0.4); }
 .cardEditBtn {
   flex: 1; padding: 8px;
-  background: rgba(99,102,241,0.08);
-  border: 1px solid rgba(99,102,241,0.2);
-  border-radius: 8px; color: var(--indigo-mid);
+  background: rgba(34,211,238,0.08);
+  border: 1px solid rgba(34,211,238,0.2);
+  border-radius: 8px; color: var(--primary);
   font-size: 0.82rem; font-weight: 600;
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-sans);
   cursor: pointer; transition: background 0.15s;
 }
-.cardEditBtn:hover { background: rgba(99,102,241,0.16); }
+.cardEditBtn:hover { background: rgba(34,211,238,0.16); }
 
 .cardDeleteBtn {
   flex: 1; padding: 8px;
@@ -272,7 +259,7 @@
   border: 1px solid rgba(239,68,68,0.2);
   border-radius: 8px; color: var(--danger-mid);
   font-size: 0.82rem; font-weight: 600;
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-sans);
   cursor: pointer; transition: background 0.15s;
 }
 .cardDeleteBtn:hover { background: rgba(239,68,68,0.14); }
@@ -283,7 +270,7 @@
   border: 1px solid rgba(16,185,129,0.18);
   border-radius: 8px; color: var(--ok-mid);
   font-size: 0.82rem; font-weight: 600;
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-sans);
   cursor: pointer; transition: background 0.15s, border-color 0.15s;
   white-space: nowrap;
 }
@@ -323,7 +310,7 @@
   border-radius: 6px;
   padding: 4px 10px;
   cursor: pointer;
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-sans);
   transition: background 0.15s, border-color 0.15s;
 }
 .addModeBtn:hover { background: rgba(16,185,129,0.14); border-color: rgba(16,185,129,0.35); }
@@ -404,8 +391,8 @@
 
 .modeItemPrice {
   font-size: 0.78rem;
-  color: var(--indigo-mid);
-  font-family: 'Syne', sans-serif;
+  color: var(--primary);
+  font-family: var(--font-sans);
   font-weight: 700;
 }
 
@@ -429,14 +416,14 @@
 .modeEditBtn {
   width: 28px; height: 28px;
   display: flex; align-items: center; justify-content: center;
-  background: rgba(99,102,241,0.08);
-  border: 1px solid rgba(99,102,241,0.2);
+  background: rgba(34,211,238,0.08);
+  border: 1px solid rgba(34,211,238,0.2);
   border-radius: 7px;
   cursor: pointer;
   font-size: 0.85rem;
   transition: background 0.15s;
 }
-.modeEditBtn:hover { background: rgba(99,102,241,0.16); }
+.modeEditBtn:hover { background: rgba(34,211,238,0.16); }
 
 .modeDeleteBtn {
   width: 28px; height: 28px;
@@ -484,7 +471,7 @@
   margin-bottom: 28px;
 }
 .formPanelTitle {
-  font-family: 'Syne', sans-serif;
+  font-family: var(--font-sans);
   font-size: 1.3rem; font-weight: 800;
   letter-spacing: -0.02em; margin: 0;
 }
@@ -565,7 +552,7 @@
   border-radius: 10px;
   color: var(--text-1);
   font-size: 0.95rem;
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-sans);
   outline: none;
   transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
   box-sizing: border-box;
@@ -626,7 +613,7 @@
   border: 1px solid var(--wash-3);
   border-radius: 10px;
   color: var(--text-2);
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-sans);
   font-size: 0.9rem;
   cursor: pointer;
   transition: border-color 0.2s, color 0.2s;
@@ -634,10 +621,10 @@
 .cancelBtn:hover { border-color: var(--wash-4); color: var(--text-1); }
 .submitBtn {
   padding: 12px 28px;
-  background: linear-gradient(135deg, #10b981, #059669);
+  background: var(--brand);
   border: none; border-radius: 10px;
-  color: #fff;
-  font-family: 'Syne', sans-serif;
+  color: var(--on-primary);
+  font-family: var(--font-sans);
   font-size: 0.95rem; font-weight: 700;
   cursor: pointer;
   min-width: 148px;
@@ -650,7 +637,7 @@
 .btnSpinner {
   width: 18px; height: 18px;
   border: 2px solid var(--wash-4);
-  border-top-color: #fff;
+  border-top-color: var(--on-primary);
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
 }
@@ -686,7 +673,7 @@
   background: rgba(239,68,68,0.15);
   border: 1px solid rgba(239,68,68,0.35);
   border-radius: 9px; color: var(--danger-mid);
-  font-family: 'Syne', sans-serif;
+  font-family: var(--font-sans);
   font-size: 0.875rem; font-weight: 700;
   cursor: pointer;
   display: flex; align-items: center; justify-content: center;

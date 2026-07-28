@@ -3,6 +3,11 @@ import { useNavigate } from "react-router-dom";
 import { getEarningsSummary, getEarningsSessions, exportEarningsCsv } from "../api/earnings";
 import { useModeMap } from "../context/DeliveryModesContext";
 import api from "../api/client";
+import {
+  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
+} from "recharts";
+import Icon from "../components/icons";
+import { useChartTheme } from "../components/chartTheme";
 import styles from "./EarningsPage.module.css";
 
 function toISODate(date) {
@@ -17,6 +22,14 @@ function startOfMonth() {
 
 function today() {
   return toISODate(new Date());
+}
+
+function formatRangeLabel(from, to) {
+  if (!from || !to) return "";
+  const f = new Date(from), t = new Date(to);
+  const opts = { day: "numeric", month: "short" };
+  const sameYear = f.getFullYear() === t.getFullYear();
+  return `${f.toLocaleDateString("en-IN", opts)} – ${t.toLocaleDateString("en-IN", { ...opts, year: "numeric" })}${sameYear ? "" : ""}`;
 }
 
 function formatCurrency(value) {
@@ -39,6 +52,7 @@ function formatServiceType(serviceType) {
 
 export default function EarningsPage() {
   const navigate = useNavigate();
+  const { AXIS_TICK, GRID_STROKE, TOOLTIP, BAR_CURSOR } = useChartTheme();
   const modeMap = useModeMap();
 
   // Summary (auto-loads on mount)
@@ -86,6 +100,9 @@ export default function EarningsPage() {
       }
     }
     loadInitial();
+    // Load the default range up-front so the revenue chart and table have data
+    // on arrival (the prototype shows populated figures immediately).
+    handleLoadSessions();
   }, []);
 
   const handleLoadSessions = async () => {
@@ -136,12 +153,44 @@ export default function EarningsPage() {
     return 0;
   });
 
-  const sortIcon = (field) => {
-    if (sortField !== field) return " ↕";
-    return sortDir === "asc" ? " ↑" : " ↓";
-  };
+  const sortIcon = (field) => (
+    <Icon
+      name="chevron"
+      size={13}
+      className={styles.sortIcon}
+      style={{
+        opacity: sortField === field ? 1 : 0.35,
+        transform: sortField === field && sortDir === "asc" ? "rotate(-90deg)" : "rotate(90deg)",
+      }}
+    />
+  );
 
   const allModes = Object.values(modeMap);
+
+  // Average earning per paid session this month (derived from the summary)
+  const avgPerSession = summary && summary.monthPaidCount > 0
+    ? Number(summary.monthEarnings) / summary.monthPaidCount
+    : 0;
+
+  // Daily revenue totals for the chart, built from the loaded session rows
+  const dailyTotals = (() => {
+    if (!sessions.length) return [];
+    const byDay = {};
+    sessions.forEach((s) => {
+      if (!s.startTime) return;
+      const key = String(s.startTime).slice(0, 10); // YYYY-MM-DD
+      byDay[key] = (byDay[key] || 0) + Number(s.earningAmount ?? 0);
+    });
+    return Object.entries(byDay)
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([day, total]) => ({
+        day,
+        total,
+        // "24 Jul" — readable axis label
+        label: new Date(day).toLocaleDateString("en-IN", { day: "numeric", month: "short" }),
+      }));
+  })();
+  const rangeTotal = dailyTotals.reduce((sum, d) => sum + d.total, 0);
 
   const summaryPeriods = summary ? [
     {
@@ -166,21 +215,21 @@ export default function EarningsPage() {
 
   return (
     <div className={styles.page}>
-      <header className={styles.header}>
-        <div className={styles.headerInner}>
-          <button className={styles.back} onClick={() => navigate("/therapist-home")}>← Back</button>
-          <span className={styles.logo}>Therapy Connect</span>
-          <span className={styles.rolePill}>Therapist</span>
-        </div>
-      </header>
-
       <main className={styles.main}>
-        <div className={styles.topRow}>
-          <h1 className={styles.heading}>Earnings Report</h1>
-          <p className={styles.sub}>Track your session earnings by week, month, and all time</p>
+        <div className="page-head">
+          <div>
+            <div className="eyebrow">Finance</div>
+            <h1>Earnings</h1>
+            <div className="sub">{formatRangeLabel(fromDate, toDate)}</div>
+          </div>
+          <div className="head-actions">
+            <button className="btn" onClick={handleExport} disabled={exporting}>
+              <Icon name="download" size={18} /> {exporting ? "Exporting…" : "Export CSV"}
+            </button>
+          </div>
         </div>
 
-        {/* ── Summary cards ── */}
+        {/* ── Summary KPIs ── */}
         <section className={styles.summarySection}>
           {summaryLoading && (
             <div className={styles.summaryLoading}>
@@ -193,21 +242,61 @@ export default function EarningsPage() {
             </div>
           )}
           {!summaryLoading && !summaryError && summary && (
-            <div className={styles.summaryGrid}>
-              {summaryPeriods.map(period => (
-                <div key={period.label} className={styles.periodCard}>
-                  <div className={styles.periodLabel}>{period.label}</div>
-                  <div className={styles.periodEarnings}>{formatCurrency(period.earnings)}</div>
-                  <div className={styles.periodMeta}>
-                    <span className={styles.periodPaid}>{period.paidCount} paid</span>
-                    <span className={styles.periodDivider}>·</span>
-                    <span className={styles.periodDsf}>{period.dsfCount} DSF</span>
+            <div className={styles.kpis}>
+              {summaryPeriods.map((period, i) => (
+                <div key={period.label} className="card kpi">
+                  <div className="kpi-top">
+                    <span className={`kpi-ic ${["ic-g", "ic-c", "ic-v"][i] || "ic-c"}`}>
+                      <Icon name={["dollar", "check", "bar"][i] || "dollar"} size={20} />
+                    </span>
+                    <span className="kpi-trend flat">{period.paidCount} paid · {period.dsfCount} DSF</span>
                   </div>
+                  <div className="kpi-val">{formatCurrency(period.earnings)}</div>
+                  <div className="kpi-lbl">{period.label}</div>
                 </div>
               ))}
+              <div className="card kpi">
+                <div className="kpi-top">
+                  <span className="kpi-ic ic-a"><Icon name="trend" size={20} /></span>
+                  <span className="kpi-trend flat">avg</span>
+                </div>
+                <div className="kpi-val">{formatCurrency(avgPerSession)}</div>
+                <div className="kpi-lbl">Per session (month)</div>
+              </div>
             </div>
           )}
         </section>
+
+        {/* ── Revenue trend ── */}
+        {sessionsLoaded && dailyTotals.length > 0 && (
+          <div className="card" style={{ padding: "20px 24px 24px", marginBottom: 22 }}>
+            <div className="panel-h" style={{ padding: "0 0 10px" }}>
+              <div>
+                <h2>Revenue trend</h2>
+                <p>Daily collections · {formatRangeLabel(fromDate, toDate)}</p>
+              </div>
+              <span className="chip chip-ok">{formatCurrency(rangeTotal)} total</span>
+            </div>
+            <div style={{ width: "100%", height: 220 }}>
+              <ResponsiveContainer>
+                <BarChart data={dailyTotals} margin={{ top: 4, right: 8, left: 4, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} vertical={false} />
+                  <XAxis dataKey="label" tick={AXIS_TICK} tickLine={false} axisLine={false} />
+                  <YAxis
+                    tick={AXIS_TICK} tickLine={false} axisLine={false} width={62}
+                    tickFormatter={(v) => `₹${Number(v).toLocaleString("en-IN")}`}
+                  />
+                  <Tooltip
+                    {...TOOLTIP}
+                    cursor={BAR_CURSOR}
+                    formatter={(v) => [formatCurrency(v), "Earnings"]}
+                  />
+                  <Bar dataKey="total" name="Earnings" fill="#22d3ee" radius={[6, 6, 0, 0]} maxBarSize={54} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        )}
 
         {/* ── Session detail section ── */}
         <section className={styles.sessionSection}>
@@ -225,7 +314,7 @@ export default function EarningsPage() {
                   onChange={e => { setFromDate(e.target.value); setSessionsLoaded(false); }}
                 />
               </div>
-              <span className={styles.dateSep}>→</span>
+              <span className={styles.dateSep}>to</span>
               <div className={styles.dateField}>
                 <label className={styles.dateLabel}>To</label>
                 <input
@@ -270,7 +359,7 @@ export default function EarningsPage() {
                 </select>
               </div>
 
-              <button className={styles.loadBtn} onClick={handleLoadSessions} disabled={sessionsLoading}>
+              <button className="btn btn-primary" onClick={handleLoadSessions} disabled={sessionsLoading}>
                 {sessionsLoading ? <span className={styles.btnSpinner} /> : "Load Sessions"}
               </button>
             </div>
@@ -305,17 +394,17 @@ export default function EarningsPage() {
                   <p className={styles.emptyText}>No completed sessions match the selected filters.</p>
                 </div>
               ) : (
-                <div className={styles.tableWrapper}>
-                  <table className={styles.table}>
+                <div className="table-wrap">
+                  <table className="data-table">
                     <thead>
                       <tr>
-                        <th className={styles.th} onClick={() => handleSort("startTime")}>Date / Time{sortIcon("startTime")}</th>
-                        <th className={styles.th} onClick={() => handleSort("clientName")}>Client{sortIcon("clientName")}</th>
-                        <th className={styles.th}>Service</th>
-                        <th className={styles.th}>Mode</th>
-                        <th className={styles.th} onClick={() => handleSort("sessionFee")}>Fee{sortIcon("sessionFee")}</th>
-                        <th className={styles.th}>DSF</th>
-                        <th className={styles.th} onClick={() => handleSort("earningAmount")}>Earning{sortIcon("earningAmount")}</th>
+                        <th className={styles.thSort} onClick={() => handleSort("startTime")}>Date / Time{sortIcon("startTime")}</th>
+                        <th className={styles.thSort} onClick={() => handleSort("clientName")}>Client{sortIcon("clientName")}</th>
+                        <th>Service</th>
+                        <th>Mode</th>
+                        <th className={styles.thSort} onClick={() => handleSort("sessionFee")}>Fee{sortIcon("sessionFee")}</th>
+                        <th>DSF</th>
+                        <th className={styles.thSort} onClick={() => handleSort("earningAmount")}>Earning{sortIcon("earningAmount")}</th>
                       </tr>
                     </thead>
                     <tbody>

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { resetPassword } from "../api/user";
+import Icon from "../components/icons";
 import styles from "./LoginPage.module.css";
 
 export default function ResetPasswordPage() {
@@ -35,7 +36,7 @@ export default function ResetPasswordPage() {
     <div className={styles.page}>
       <div className={styles.card}>
         <div className={styles.brand}>
-          <div className={styles.logo}>⬡</div>
+          <span className={styles.brandMark}><Icon name="heart" size={22} strokeWidth={2.1} /></span>
           <h1 className={styles.title}>Set new password</h1>
           <p className={styles.subtitle}>Enter and confirm your new password below</p>
         </div>
@@ -95,7 +96,7 @@ export default function ResetPasswordPage() {
         {success && (
           <div className={styles.form}>
             <div className={styles.success} role="status">
-              <span className={styles.successIcon}>✓</span>
+              <span className={styles.successIcon}><Icon name="check" size={15} /></span>
               Password reset successfully!
             </div>
             <button className={styles.button} onClick={() => navigate("/login")}>

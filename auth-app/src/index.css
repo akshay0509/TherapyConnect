@@ -2,24 +2,29 @@
    Dark is the default theme; [data-theme="light"] overrides.
    All page CSS modules reference these variables — never hardcode
    grays/surfaces/status-text colors in components again.
-   Brand accents (#10b981, #6366f1, reds/ambers) and #fff-on-colored
-   stay literal: they read correctly on both themes. */
+
+   2026 redesign: navy base + calm cyan primary + health green.
+   Token NAMES are unchanged so existing modules re-skin automatically;
+   only the VALUES moved. Brand tokens (--brand*, --primary) are new,
+   used by the redesigned shell/components. */
+@import url('https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&display=swap');
+
 :root {
   color-scheme: dark;
 
-  --bg-page: #080d0f;              /* app background */
-  --bg-elev: #121a24;              /* modals, dropdowns, elevated panels */
-  --bg-veil: rgba(8,13,15,0.85);   /* translucent sticky headers (blur) */
+  --bg-page: #080d16;              /* app background (navy) */
+  --bg-elev: #101a2c;              /* modals, dropdowns, elevated panels */
+  --bg-veil: rgba(8,13,22,0.72);   /* translucent sticky headers (blur) */
 
-  --wash-1: rgba(255,255,255,0.03);  /* faint surface (cards) */
-  --wash-2: rgba(255,255,255,0.06);  /* inputs, soft borders */
-  --wash-3: rgba(255,255,255,0.10);  /* borders, hover surfaces */
-  --wash-4: rgba(255,255,255,0.25);  /* strong borders / hover accents */
+  --wash-1: rgba(150,180,220,0.04);  /* faint surface (cards) */
+  --wash-2: rgba(150,180,220,0.08);  /* inputs, soft borders */
+  --wash-3: rgba(150,180,220,0.12);  /* borders, hover surfaces */
+  --wash-4: rgba(150,180,220,0.22);  /* strong borders / hover accents */
 
-  --text-1: #eef2f7;               /* primary text */
-  --text-2: #a9b7c6;               /* secondary text */
-  --text-3: #64748b;               /* muted text */
-  --text-4: #475569;               /* faint text */
+  --text-1: #eaf1fb;               /* primary text */
+  --text-2: #9fb0c8;               /* secondary text */
+  --text-3: #8497b1;               /* muted text */
+  --text-4: #6b7d97;               /* faint text */
 
   /* status text that needs different strength per theme */
   --ok-mid: #34d399;     --ok-soft: #6ee7b7;
@@ -27,30 +32,54 @@
   --warn-mid: #fbbf24;   --warn-soft: #fcd34d;
   --indigo-mid: #a5b4fc; --indigo-soft: #c7d2fe;
   --info-mid: #38bdf8;
+
+  /* ── brand (new) ── */
+  --brand-1: #22d3ee;    --brand-2: #34d399;
+  --brand: linear-gradient(135deg, #22d3ee, #34d399);
+  --primary: #22d3ee;    --primary-soft: #7fe7f6;   --on-primary: #04121a;
+  --sidebar-w: 248px;
+  --font-sans: 'Figtree', -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+
+  /* ── prototype design-system surfaces (used by the shared theme.css) ── */
+  --surface: #101a2c;    --surface-2: #152238;   --elev: #17263f;
+  --bg-2: #0b1120;
+  --line: rgba(150,180,220,0.10);   --line-2: rgba(150,180,220,0.18);
+  --shadow: 0 20px 50px rgba(0,0,0,0.45);
+  --sidebar-bg: linear-gradient(180deg, rgba(16,26,44,0.6), rgba(11,17,32,0.3));
 }
 
 :root[data-theme="light"] {
   color-scheme: light;
 
-  --bg-page: #f3f5f8;
+  --bg-page: #eef2f7;
   --bg-elev: #ffffff;
-  --bg-veil: rgba(243,245,248,0.88);
+  --bg-veil: rgba(238,242,247,0.88);
 
-  --wash-1: rgba(15,23,42,0.045);
-  --wash-2: rgba(15,23,42,0.075);
-  --wash-3: rgba(15,23,42,0.12);
-  --wash-4: rgba(15,23,42,0.22);
+  --wash-1: rgba(15,40,80,0.045);
+  --wash-2: rgba(15,40,80,0.075);
+  --wash-3: rgba(15,40,80,0.12);
+  --wash-4: rgba(15,40,80,0.22);
 
-  --text-1: #0f172a;
-  --text-2: #3f4c5e;
-  --text-3: #5b6878;
-  --text-4: #94a3b8;
+  --text-1: #0d1b2e;
+  --text-2: #3a4a60;
+  --text-3: #566577;
+  --text-4: #8493a6;
 
   --ok-mid: #059669;     --ok-soft: #047857;
   --danger-mid: #dc2626; --danger-soft: #b91c1c;
   --warn-mid: #b45309;   --warn-soft: #92400e;
   --indigo-mid: #4f46e5; --indigo-soft: #4338ca;
   --info-mid: #0284c7;
+
+  --brand-1: #0891b2;    --brand-2: #059669;
+  --brand: linear-gradient(135deg, #0891b2, #059669);
+  --primary: #0891b2;    --primary-soft: #0e7490;   --on-primary: #ffffff;
+
+  --surface: #ffffff;    --surface-2: #f4f7fb;   --elev: #ffffff;
+  --bg-2: #f7fafd;
+  --line: rgba(15,40,80,0.10);   --line-2: rgba(15,40,80,0.16);
+  --shadow: 0 14px 34px rgba(15,40,80,0.10);
+  --sidebar-bg: linear-gradient(180deg, rgba(255,255,255,0.9), rgba(244,247,251,0.6));
 }
 
 *, *::before, *::after {
@@ -66,6 +95,14 @@ html, body, #root {
 body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background: var(--bg-page);
+  /* ambient cyan/green glow behind everything (matches the prototype) */
+  background:
+    radial-gradient(1200px 600px at 80% -8%, rgba(34,211,238,0.10), transparent 60%),
+    radial-gradient(1000px 560px at 0% 108%, rgba(52,211,153,0.08), transparent 55%),
+    var(--bg-page);
+  background-attachment: fixed;
   color: var(--text-1);
+  font-family: var(--font-sans);
 }
+
+a { color: inherit; text-decoration: none; }

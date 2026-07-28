@@ -9,11 +9,16 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.Data;
 
 @Entity
 @Data
-@Table(name = "THERAPIST_AVAILABILITY")
+@Table(name = "THERAPIST_AVAILABILITY", uniqueConstraints = {
+		@UniqueConstraint(
+				name = "uk_therapist_availability_block",
+				columnNames = {"therapistId", "startTime", "endTime"})
+})
 public class TherapistAvailability {
 
 	@Id

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { createUserRequest, forgotPassword, forgotUsername } from "../api/user";
+import Icon from "../components/icons";
 import styles from "./LoginPage.module.css";
 
 // mirror of the backend rule in UserService.validateUsername
@@ -102,10 +103,35 @@ export default function LoginPage() {
 
   return (
     <div className={styles.page}>
+      {/* ── Brand side (hidden on small screens) ── */}
+      <aside className={styles.brandSide}>
+        <div className={styles.brandTop}>
+          <span className={styles.brandMark}><Icon name="heart" size={22} strokeWidth={2.1} /></span>
+          <b>TherapyConnect</b>
+        </div>
+
+        <div>
+          <h2 className={styles.brandHeading}>
+            Your practice, <span className={styles.brandAccent}>beautifully organised</span>.
+          </h2>
+          <p className={styles.brandCopy}>
+            Scheduling, client records, payments and session notes — one calm
+            workspace built for therapists.
+          </p>
+        </div>
+
+        <ul className={styles.trustList}>
+          <li><Icon name="shield" size={18} /> Encrypted session notes</li>
+          <li><Icon name="check" size={18} /> Private by design</li>
+          <li><Icon name="video" size={18} /> Google Meet built in</li>
+        </ul>
+      </aside>
+
+      {/* ── Form side ── */}
+      <div className={styles.formSide}>
       <div className={styles.card}>
-        {/* Brand */}
+        {/* Heading (the logo lives on the brand side — no need to repeat it) */}
         <div className={styles.brand}>
-          <div className={styles.logo}>⬡</div>
           <h1 className={styles.title}>
             {isLogin ? "Welcome back" : isForgot ? "Account recovery" : "Create account"}
           </h1>
@@ -198,6 +224,7 @@ export default function LoginPage() {
             <button type="button" className={styles.forgotLink} onClick={() => switchMode("forgot")}>
               Forgot password or username?
             </button>
+            <p className={styles.footNote}>Protected by rate-limiting &amp; audit logging.</p>
           </form>
         )}
 
@@ -244,7 +271,7 @@ export default function LoginPage() {
                     className={`${styles.roleOption} ${form.role === r ? styles.roleOptionActive : ""}`}
                     onClick={() => setForm(prev => ({ ...prev, role: r }))}
                   >
-                    {r === "CLIENT" ? "👤 Client" : "🧑‍⚕️ Therapist"}
+                    <><Icon name={r === "CLIENT" ? "users" : "heart"} size={16} /> {r === "CLIENT" ? "Client" : "Therapist"}</>
                   </button>
                 ))}
               </div>
@@ -283,7 +310,7 @@ export default function LoginPage() {
 
             {createSuccess && (
               <div className={styles.success} role="status">
-                <span className={styles.successIcon}>✓</span>
+                <span className={styles.successIcon}><Icon name="check" size={16} /></span>
                 User created! You can now{" "}
                 <button
                   type="button"
@@ -339,17 +366,18 @@ export default function LoginPage() {
               </>
             ) : (
               <div className={styles.success} role="status">
-                <span className={styles.successIcon}>✓</span>
+                <span className={styles.successIcon}><Icon name="check" size={16} /></span>
                 {forgotSuccess === "password"
                   ? "If an account with that email exists, a reset link has been sent. Check your inbox."
                   : "If an account with that email exists, your username has been sent. Check your inbox."}
               </div>
             )}
             <button type="button" className={styles.forgotLink} onClick={() => switchMode("login")}>
-              ← Back to sign in
+              <Icon name="back" size={14} /> Back to sign in
             </button>
           </form>
         )}
+      </div>
       </div>
 
       <div className={styles.bg} aria-hidden="true">

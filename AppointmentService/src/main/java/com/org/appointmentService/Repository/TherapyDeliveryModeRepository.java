@@ -12,4 +12,7 @@ public interface TherapyDeliveryModeRepository extends JpaRepository<TherapyDeli
 
     Optional<TherapyDeliveryMode> findByModeIdAndTherapistIdAndServiceIdAndIsActiveTrue(
             String modeId, String therapistId, String serviceId);
+
+    Optional<TherapyDeliveryMode> findByModeIdAndTherapistIdAndIsActiveTrue(
+            String modeId, String therapistId);
 }

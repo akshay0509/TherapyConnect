@@ -26,6 +26,7 @@ import com.org.events.TherapistAppointment.AppointmentStatus;
 import com.org.events.TherapistAvailability.AvailabilityOverrideEvent;
 import com.org.events.TherapistAvailability.CalendarBlockEvent;
 import com.org.events.TherapistAvailability.DeliveryModeEvent;
+import com.org.events.TherapistAvailability.TherapistServiceDefinitionEvent;
 import com.org.therapistService.Assembler.TherapistAssembler;
 import com.org.therapistService.Dto.BulkAvailabilityOverridesRequest;
 import com.org.therapistService.Dto.ClientNotesDto;
@@ -195,9 +196,8 @@ public class TherapistService {
 	public void createTherapistServices(TherapistServicesDto therapistServicesDto) {
 		validateServiceDuration(therapistServicesDto);
 		TherapistServices therapistServices = therapistAssembler.assembleDtoToEntity(therapistServicesDto);
-		therapistServicesRepository.save(therapistServices);
-
-		regenerateFutureSlots(therapistServicesDto.getTherapistId());
+		TherapistServices saved = therapistServicesRepository.save(therapistServices);
+		publishServiceDefinition(saved, "TherapistServiceDefinitionUpserted");
 	}
 
 	@Transactional
@@ -212,17 +212,21 @@ public class TherapistService {
 		service.setDuration(therapistServicesDto.getDuration());
 		service.setActive(Boolean.TRUE.equals(therapistServicesDto.getIsActive()));
 
-		TherapistServicesDto result = therapistAssembler.assembleEntityToDto(therapistServicesRepository.save(service));
-
-		regenerateFutureSlots(therapistId);
+		TherapistServices saved = therapistServicesRepository.save(service);
+		TherapistServicesDto result = therapistAssembler.assembleEntityToDto(saved);
+		publishServiceDefinition(saved, "TherapistServiceDefinitionUpserted");
 
 		return result;
 	}
 
-	// zero/negative duration would generate zero-length garbage slots
+	// Any positive duration is bookable: a session occupies whole 30-minute
+	// blocks, rounded up, so a 50-minute service takes a 60-minute footprint and
+	// the next session still starts on the clock. The upper bound only guards
+	// against a typo consuming a whole day.
 	private void validateServiceDuration(TherapistServicesDto dto) {
-		if (dto.getDuration() <= 0) {
-			throw new IllegalArgumentException("Service duration must be a positive number of minutes.");
+		if (dto.getDuration() <= 0 || dto.getDuration() > 480) {
+			throw new IllegalArgumentException(
+					"Service duration must be between 1 and 480 minutes.");
 		}
 	}
 
@@ -238,9 +242,39 @@ public class TherapistService {
 	public void deleteTherapistService(String therapistId, String serviceId) {
 		TherapistServices service = therapistServicesRepository.findByServiceIdAndTherapistId(serviceId, therapistId)
 				.orElseThrow(() -> new IllegalArgumentException("Therapist service not found."));
+		publishServiceDefinition(service, "TherapistServiceDefinitionDeleted");
 		therapistServicesRepository.delete(service);
+	}
 
-		regenerateFutureSlots(therapistId);
+	/**
+	 * Explicit replay hook for deployment/backfill. The runner is property-gated;
+	 * calling this method is idempotent in AppointmentService because projections
+	 * are upserted by serviceId.
+	 */
+	@Transactional
+	public void publishAllServiceDefinitions() {
+		therapistServicesRepository.findAll().forEach(service ->
+				publishServiceDefinition(service, "TherapistServiceDefinitionUpserted"));
+	}
+
+	private void publishServiceDefinition(TherapistServices service, String eventType) {
+		TherapistServiceDefinitionEvent event = new TherapistServiceDefinitionEvent();
+		event.setEventType(eventType);
+		event.setServiceId(service.getServiceId());
+		event.setTherapistId(service.getTherapistId());
+		event.setDurationMinutes(service.getDuration());
+		event.setIsActive(service.isActive());
+
+		try {
+			outboxService.saveOutboxEvent(
+					"THERAPIST_AVAILABILITY",
+					service.getTherapistId(),
+					eventType,
+					event);
+		}
+		catch (JsonProcessingException e) {
+			throw new IllegalStateException("Publishing therapist service definition failed.", e);
+		}
 	}
 
 	public List<TherapistServicesDto> getAllTherapistServices(){
@@ -475,10 +509,10 @@ public class TherapistService {
 	}
 
 	/**
-	 * Rule and service changes take effect immediately: the standard 7-day
+	 * Availability-rule changes take effect immediately: the standard 7-day
 	 * window is regenerated right away (days with active appointments are
 	 * skipped by the generator, same as manual generation). Slots carry the
-	 * service's duration and price, so service edits need this as much as
+	 * generic therapist-owned blocks, so service edits do not call this method.
 	 * rule edits do — the nightly job only extends the horizon and never
 	 * re-chops existing days. Runs in the same transaction as the change —
 	 * if regeneration fails, the edit rolls back with it, so the schedule

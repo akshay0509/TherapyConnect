@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { adminLogin } from "../api/admin";
+import Icon from "../components/icons";
 import styles from "./AdminLoginPage.module.css";
 
 export default function AdminLoginPage() {
@@ -34,16 +35,17 @@ export default function AdminLoginPage() {
       </div>
       <div className={styles.card}>
         <div className={styles.logoArea}>
-          <div className={styles.lockIcon}>🔐</div>
-          <h1 className={styles.title}>Admin Login</h1>
-          <p className={styles.subtitle}>TherapyConnect System Administration</p>
+          <div className={styles.lockIcon}><Icon name="shield" size={26} strokeWidth={2} /></div>
+          <div className={styles.eyebrow}>Restricted</div>
+          <h1 className={styles.title}>Admin console</h1>
+          <p className={styles.subtitle}>TherapyConnect system administration</p>
         </div>
 
         <form onSubmit={handleSubmit}>
           <div className={styles.formGroup}>
             <label className={styles.label}>Username</label>
             <input
-              className={styles.input}
+              className="input"
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
@@ -55,7 +57,7 @@ export default function AdminLoginPage() {
           <div className={styles.formGroup}>
             <label className={styles.label}>Password</label>
             <input
-              className={styles.input}
+              className="input"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -65,7 +67,7 @@ export default function AdminLoginPage() {
           </div>
 
           <button className={styles.button} type="submit" disabled={loading}>
-            {loading ? "Signing in…" : "Sign In"}
+            {loading ? "Signing in…" : "Sign in"}
           </button>
         </form>
 

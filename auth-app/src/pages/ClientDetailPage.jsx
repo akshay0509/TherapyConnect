@@ -1,11 +1,30 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   getClientById, getSessionDetails, createSessionNotes, updateSessionNotes,
   updateClient, updateClientStatus, getClientNotes, upsertClientNote,
 } from "../api/therapistClients";
 import { useModeMap } from "../context/DeliveryModesContext";
+import Icon from "../components/icons";
 import styles from "./ClientDetailPage.module.css";
+
+// "COMPLETED" → "Completed" (the prototype uses sentence case, not raw enums)
+function titleCase(s) {
+  if (!s) return "—";
+  return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+}
+function durationMins(start, end) {
+  if (!start || !end) return null;
+  const m = Math.round((new Date(end) - new Date(start)) / 60000);
+  return m > 0 ? m : null;
+}
+function ageFromDob(dob) {
+  if (!dob) return null;
+  const d = new Date(dob), now = new Date();
+  let a = now.getFullYear() - d.getFullYear();
+  if (now.getMonth() < d.getMonth() || (now.getMonth() === d.getMonth() && now.getDate() < d.getDate())) a--;
+  return a >= 0 && a < 130 ? a : null;
+}
 
 function getInitials(firstName, lastName) {
   return `${firstName?.[0] ?? ""}${lastName?.[0] ?? ""}`.toUpperCase() || "?";
@@ -29,16 +48,15 @@ function formatDateTime(dt) {
     d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true });
 }
 
+// Prototype avatar palette — cyan/green/violet family, in sync with the app gradient
 const AVATAR_COLORS = [
-  ["#6366f1","#4f46e5"],["#10b981","#059669"],["#f59e0b","#d97706"],
-  ["#ec4899","#db2777"],["#8b5cf6","#7c3aed"],["#06b6d4","#0891b2"],["#f97316","#ea580c"],
+  ["#22d3ee","#34d399"],["#a78bfa","#22d3ee"],["#34d399","#0891b2"],
+  ["#fbbf24","#f472b6"],["#22d3ee","#818cf8"],["#818cf8","#22d3ee"],["#34d399","#22d3ee"],
 ];
 function avatarGradient(id) {
   if (!id) return AVATAR_COLORS[0];
   return AVATAR_COLORS[id.charCodeAt(id.length - 1) % AVATAR_COLORS.length];
 }
-
-const MODE_TYPE_ICON = { ONLINE: "💻", OFFLINE_AT_HALUSURU: "📍", OFFLINE_AT_SESHADRIPURAM: "📍" };
 
 function DetailField({ label, value }) {
   return (
@@ -69,7 +87,7 @@ export default function ClientDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState(null);
 
-  const [activeTab, setActiveTab] = useState("info");
+  const [activeTab, setActiveTab] = useState("overview");
 
   // ── Edit client ──────────────────────────────────────────
   const [editOpen, setEditOpen]       = useState(false);
@@ -221,7 +239,23 @@ export default function ClientDetailPage() {
       .then(setClient)
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
+    // Load sessions up-front too so the at-a-glance stats can render on the
+    // overview (the Sessions tab reuses the same cache via its loaded guard).
+    loadSessions();
   }, [clientId]);
+
+  // At-a-glance metrics, computed from session history.
+  // Attendance = completed ÷ (completed + cancelled + abandoned).
+  const glance = useMemo(() => {
+    if (!sessions.length) return null;
+    const done = sessions.filter(s => s.status === "COMPLETED").length;
+    const missed = sessions.filter(s => ["CANCELLED", "ABANDONED"].includes(s.status)).length;
+    const attendance = (done + missed) > 0 ? Math.round((done / (done + missed)) * 100) : null;
+    const counts = {};
+    sessions.forEach(s => { if (s.modeId) counts[s.modeId] = (counts[s.modeId] || 0) + 1; });
+    const topMode = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0];
+    return { total: sessions.length, attendance, primaryMode: modeMap[topMode]?.displayName ?? "—" };
+  }, [sessions, modeMap]);
 
   useEffect(() => {
     const handler = (e) => {
@@ -240,15 +274,11 @@ export default function ClientDetailPage() {
 
   return (
     <div className={styles.page}>
-      <header className={styles.header}>
-        <div className={styles.headerInner}>
-          <button className={styles.back} onClick={() => navigate("/therapist/clients")}>← My Clients</button>
-          <span className={styles.logo}>🧠 Therapy Connect</span>
-          <span className={styles.rolePill}>Therapist</span>
-        </div>
-      </header>
-
       <main className={styles.main}>
+        <button className={styles.backLink} onClick={() => navigate("/therapist/clients")}>
+          <Icon name="back" size={16} /> Back to clients
+        </button>
+
         {loading && (
           <div className={styles.center}><div className={styles.spinner} /><p className={styles.loadingText}>Loading client details…</p></div>
         )}
@@ -260,28 +290,35 @@ export default function ClientDetailPage() {
           <div className={styles.content}>
 
             {/* Hero */}
-            <div className={styles.hero}>
-              <div className={styles.avatar} style={{ background: `linear-gradient(135deg, ${from}, ${to})` }}>
+            <div className={`card ${styles.hero}`}>
+              <div className={`avatar avatar-l ${styles.avatar}`} style={{ background: `linear-gradient(135deg, ${from}, ${to})` }}>
                 {getInitials(client.firstName, client.lastName)}
               </div>
               <div className={styles.heroText}>
                 <h1 className={styles.name}>{fullName || "—"}</h1>
-                <p className={styles.clientIdText}>Client ID: {clientId}</p>
-                {client.pronouns && <span className={styles.pronounsBadge}>{client.pronouns}</span>}
+                <p className={styles.heroMeta}>
+                  <span className={styles.clientIdText}>{clientId}</span>
+                  {ageFromDob(client.dob) != null && <> · {ageFromDob(client.dob)}</>}
+                  {client.pronouns && <> · {client.pronouns}</>}
+                  {client.gender && <> · {client.gender}</>}
+                </p>
+                <div className={styles.heroContact}>
+                  {client.email && <span><Icon name="mail" size={15} /> {client.email}</span>}
+                  {client.phoneNumber && <span><Icon name="phone" size={15} /> {client.phoneNumber}</span>}
+                </div>
               </div>
 
               <div className={styles.heroActions}>
-                <div className={styles.statusWrapper}>
-                  <button
-                    className={`${styles.statusBadge} ${client.status === "ACTIVE" ? styles.statusActive : styles.statusTerminated}`}
-                    onClick={() => handleStatusChange(client.status === "ACTIVE" ? "TERMINATED" : "ACTIVE")}
-                    disabled={statusLoading || statusConfirm}
-                    title="Click to change status"
-                  >
-                    {statusLoading ? <span className={styles.btnSpinnerSm}/> : (client.status === "ACTIVE" ? "● Active" : "● Terminated")}
-                  </button>
-                </div>
-                <button className={styles.editBtn} onClick={openEdit}>✏️ Edit</button>
+                <button
+                  className={`chip ${client.status === "ACTIVE" ? "chip-ok" : "chip-bad"} ${styles.statusToggle}`}
+                  onClick={() => handleStatusChange(client.status === "ACTIVE" ? "TERMINATED" : "ACTIVE")}
+                  disabled={statusLoading || statusConfirm}
+                  title="Click to change status"
+                >
+                  {statusLoading ? "…" : (client.status === "ACTIVE" ? "● Active" : "● Terminated")}
+                </button>
+                <button className="btn" onClick={openEdit}><Icon name="edit" size={16} /> Edit</button>
+                <button className="btn btn-primary" onClick={() => navigate("/therapist/appointments")}><Icon name="plus" size={16} /> Book session</button>
               </div>
             </div>
 
@@ -297,22 +334,89 @@ export default function ClientDetailPage() {
             )}
 
             {/* Tabs */}
-            <div className={styles.tabs}>
-              {["info","sessions","notes"].map(tab => (
-                <button
-                  key={tab}
-                  className={`${styles.tab} ${activeTab === tab ? styles.tabActive : ""}`}
-                  onClick={() => handleTabChange(tab)}
-                >
-                  {tab === "info" ? "Personal Info" : tab === "sessions" ? "Sessions" : "Notes"}
+            <div className="tabbar">
+              {[
+                ["overview", "Overview"],
+                ["details", "Personal details"],
+                ["sessions", "Sessions"],
+                ["notes", "Notes"],
+              ].map(([tab, label]) => (
+                <button key={tab} className={activeTab === tab ? "on" : ""} onClick={() => handleTabChange(tab)}>
+                  {label}
                 </button>
               ))}
             </div>
 
-            {/* ── Info tab ── */}
-            {activeTab === "info" && (
-              <div className={styles.card}>
-                <h2 className={styles.sectionTitle}>Personal Information</h2>
+            {/* ── Overview tab ── */}
+            {activeTab === "overview" && (() => {
+              const recent = sessions.slice().sort((a, b) => new Date(b.startTime) - new Date(a.startTime));
+              const latestNote = recent.find(s => s.sessionNotes);
+              return (
+                <>
+                  <div className="grid-2" style={{ marginBottom: 22 }}>
+                    <div className="card">
+                      <div className="panel-h"><div>
+                        <h2>Session history</h2>
+                        <p>{sessions.length} session{sessions.length !== 1 ? "s" : ""}{glance ? ` · ${recent.filter(s => s.status === "COMPLETED").length} completed` : ""}</p>
+                      </div></div>
+                      {sessionsLoading && <div className={styles.center}><div className={styles.spinner} /></div>}
+                      {!sessionsLoading && sessions.length === 0 && (
+                        <div className={styles.center} style={{ padding: "40px 0" }}><p className={styles.drawerEmptyText}>No sessions yet.</p></div>
+                      )}
+                      {recent.slice(0, 6).map(s => {
+                        const mode = modeMap[s.modeId];
+                        const isOnline = mode?.modeType === "ONLINE";
+                        const mins = durationMins(s.startTime, s.endTime);
+                        const chip = s.status === "COMPLETED" ? "chip-ok" : ["CANCELLED", "ABANDONED"].includes(s.status) ? "chip-bad" : "chip-warn";
+                        return (
+                          <div key={s.appointmentId} className="sess">
+                            <div className="time"><b>{formatDate2(s.startTime).replace(/ \d{4}$/, "")}</b><span>{formatTime(s.startTime)}</span></div>
+                            <div className="info">
+                              <b>Therapy session</b>
+                              <div className="s">
+                                <Icon name={isOnline ? "video" : "pin"} size={13} />
+                                {isOnline ? "Online" : (mode?.displayName ?? "Clinic")}{mins ? ` · ${mins} min` : ""}
+                              </div>
+                            </div>
+                            <span className={`chip ${chip}`}>{titleCase(s.status)}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div className="col">
+                      <div className="card" style={{ padding: 20 }}>
+                        <h2 style={{ margin: "0 0 12px", fontSize: "1rem" }}>Latest note</h2>
+                        {latestNote ? (
+                          <>
+                            <p style={{ color: "var(--text-2)", fontSize: ".88rem", lineHeight: 1.6, margin: 0 }}>{latestNote.sessionNotes}</p>
+                            <div style={{ color: "var(--text-4)", fontSize: ".76rem", marginTop: 12 }}>{formatDate2(latestNote.startTime)} · encrypted</div>
+                          </>
+                        ) : (
+                          <p style={{ color: "var(--text-4)", fontSize: ".85rem", margin: 0 }}>
+                            No session notes yet. Add one from the Sessions tab.
+                          </p>
+                        )}
+                      </div>
+                      <div className="card" style={{ padding: 20 }}>
+                        <h2 style={{ margin: "0 0 12px", fontSize: "1rem" }}>At a glance</h2>
+                        <div className="rows">
+                          <div><span className="k">Total sessions</span><span className="v">{glance ? glance.total : "—"}</span></div>
+                          {/* Total paid — awaiting the payments API (AppointmentService); shows "—" until wired */}
+                          <div><span className="k">Total paid</span><span className="v">{client.totalPaid != null ? `₹${Number(client.totalPaid).toLocaleString("en-IN")}` : "—"}</span></div>
+                          <div><span className="k">Attendance</span><span className="v" style={{ color: "var(--ok-mid)" }}>{glance?.attendance != null ? `${glance.attendance}%` : "—"}</span></div>
+                          <div><span className="k">Primary mode</span>{glance && glance.primaryMode !== "—" ? <span className="chip chip-online">{glance.primaryMode}</span> : <span className="v">—</span>}</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              );
+            })()}
+
+            {/* ── Personal details tab ── */}
+            {activeTab === "details" && (
+              <div className="card" style={{ padding: "22px 24px" }}>
+                <h2 className={styles.sectionTitle}>Personal details</h2>
                 <div className={styles.grid}>
                   <DetailField label="First Name"      value={client.firstName} />
                   <DetailField label="Last Name"       value={client.lastName} />
@@ -334,14 +438,14 @@ export default function ClientDetailPage() {
                 {sessionsLoading && <div className={styles.center}><div className={styles.spinner}/><p className={styles.loadingText}>Loading sessions…</p></div>}
                 {sessionsError && <div className={styles.errorBox}><span className={styles.errorIcon}>!</span>{sessionsError}</div>}
                 {!sessionsLoading && !sessionsError && sessions.length === 0 && (
-                  <div className={styles.center}><span className={styles.drawerEmptyIcon}>🗓️</span><p className={styles.drawerEmptyText}>No sessions found for this client.</p></div>
+                  <div className={styles.center}><span className={styles.drawerEmptyIcon}><Icon name="calendar" size={30} /></span><p className={styles.drawerEmptyText}>No sessions found for this client.</p></div>
                 )}
                 {!sessionsLoading && !sessionsError && sessions.length > 0 && (
                   <div className={styles.sessionList}>
                     {sessions.slice().sort((a,b) => new Date(b.startTime) - new Date(a.startTime)).map(s => {
                       const ns = notesState[s.appointmentId] || {};
                       const mode = modeMap[s.modeId];
-                      const modeIcon = MODE_TYPE_ICON[mode?.modeType] ?? "💬";
+                      const isOnline = mode?.modeType === "ONLINE";
                       const modeLabel = mode?.displayName ?? s.modeId ?? "—";
                       return (
                         <div key={s.appointmentId} className={styles.sessionCard}>
@@ -351,8 +455,8 @@ export default function ClientDetailPage() {
                               <span className={styles.sessionTime}>{formatTime(s.startTime)} – {formatTime(s.endTime)}</span>
                             </div>
                             <div className={styles.sessionMeta}>
-                              <span className={styles.sessionType}>{modeIcon} {modeLabel}</span>
-                              <span className={`${styles.sessionStatus} ${s.status === "CONFIRMED" ? styles.statusConfirmed : styles.statusOther}`}>{s.status}</span>
+                              <span className={styles.sessionType}><Icon name={isOnline ? "video" : "pin"} size={14} /> {modeLabel}</span>
+                              <span className={`chip ${s.status === "COMPLETED" ? "chip-ok" : ["CANCELLED","ABANDONED"].includes(s.status) ? "chip-bad" : "chip-warn"}`}>{titleCase(s.status)}</span>
                             </div>
                           </div>
                           <div className={styles.sessionDivider}/>
@@ -361,10 +465,10 @@ export default function ClientDetailPage() {
                               <>
                                 <p className={styles.notesLabel}>Session Notes</p>
                                 <p className={styles.notesText}>{s.sessionNotes}</p>
-                                <button className={styles.notesModifyBtn} onClick={() => startEdit(s.appointmentId, s.sessionNotes)}>✏️ Modify</button>
+                                <button className={styles.notesModifyBtn} onClick={() => startEdit(s.appointmentId, s.sessionNotes)}><Icon name="edit" size={14} /> Modify</button>
                               </>
                             ) : (
-                              <button className={styles.notesAddBtn} onClick={() => startEdit(s.appointmentId, "")}>+ Add Notes</button>
+                              <button className={styles.notesAddBtn} onClick={() => startEdit(s.appointmentId, "")}><Icon name="plus" size={14} /> Add Notes</button>
                             )}
                           </div>
                         </div>
@@ -437,7 +541,7 @@ export default function ClientDetailPage() {
           <div className={styles.notesModal}>
             <div className={styles.notesModalHeader}>
               <h3 className={styles.notesModalTitle}>{notesPopup.hasExisting ? "Modify Notes" : "Add Notes"}</h3>
-              <button className={styles.closeBtn} onClick={() => cancelEdit(apptId)}>✕</button>
+              <button className={styles.closeBtn} onClick={() => cancelEdit(apptId)}><Icon name="x" size={18} /></button>
             </div>
             <div className={styles.notesModalBody}>
               <textarea className={styles.notesTextarea} value={ns.draft} onChange={e => updateDraft(apptId, e.target.value)} placeholder="Write session notes here…" autoFocus/>
@@ -458,7 +562,7 @@ export default function ClientDetailPage() {
         <div className={styles.notesModal} style={{ maxWidth: 560 }}>
           <div className={styles.notesModalHeader}>
             <h3 className={styles.notesModalTitle}>Edit Client</h3>
-            <button className={styles.closeBtn} onClick={() => setEditOpen(false)}>✕</button>
+            <button className={styles.closeBtn} onClick={() => setEditOpen(false)}><Icon name="x" size={18} /></button>
           </div>
           <div className={styles.notesModalBody} style={{ maxHeight: "60vh", overflowY: "auto" }}>
             <div className={styles.editGrid}>

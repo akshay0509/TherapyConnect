@@ -12,7 +12,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -30,12 +29,10 @@ import org.mockito.quality.Strictness;
 import com.org.therapistService.Entity.TherapistAvailability;
 import com.org.therapistService.Entity.TherapistAvailabilityOverrides;
 import com.org.therapistService.Entity.TherapistAvailabilityRules;
-import com.org.therapistService.Entity.TherapistServices;
 import com.org.therapistService.Repository.AppointmentProjectionRepository;
 import com.org.therapistService.Repository.TherapistAvailabilityOverridesRepository;
 import com.org.therapistService.Repository.TherapistAvailabilityRepository;
 import com.org.therapistService.Repository.TherapistAvailabilityRulesRepository;
-import com.org.therapistService.Repository.TherapistServicesRepository;
 
 /**
  * Unit tests for the per-day generation redesign:
@@ -60,9 +57,6 @@ class AvailabilitySlotServiceTest {
 	private TherapistAvailabilityRepository therapistAvailabilityRepository;
 
 	@Mock
-	private TherapistServicesRepository therapistServicesRepository;
-
-	@Mock
 	private OutboxService outboxService;
 
 	@Mock
@@ -74,15 +68,6 @@ class AvailabilitySlotServiceTest {
 	private static final String THERAPIST_ID = "THR12345";
 	// fixed Monday so dayOfWeek-based rules are deterministic
 	private static final LocalDate MONDAY = LocalDate.of(2026, 7, 13);
-
-	private TherapistServices service60min() {
-		TherapistServices service = new TherapistServices();
-		service.setServiceId("SRV1");
-		service.setTherapistId(THERAPIST_ID);
-		service.setDuration(60);
-		service.setActive(true);
-		return service;
-	}
 
 	private TherapistAvailabilityRules mondayRule(LocalTime start, LocalTime end) {
 		TherapistAvailabilityRules rule = new TherapistAvailabilityRules();
@@ -100,8 +85,6 @@ class AvailabilitySlotServiceTest {
 		slot.setTherapistId(THERAPIST_ID);
 		slot.setStartTime(start);
 		slot.setEndTime(end);
-		slot.setServiceId("SRV1");
-		slot.setSessionFee(new BigDecimal("1500"));
 		return slot;
 	}
 
@@ -126,8 +109,6 @@ class AvailabilitySlotServiceTest {
 	void manualGenerationRegeneratesFreeDayAndChopsSlotsCorrectly() throws Exception {
 		stubNoActiveAppointments();
 		stubEmptyOverrides();
-		when(therapistServicesRepository.findByTherapistIdAndIsActiveTrue(THERAPIST_ID))
-				.thenReturn(List.of(service60min()));
 		when(therapistAvailabilityRulesRepository.findByTherapistIdAndIsActiveTrue(THERAPIST_ID))
 				.thenReturn(List.of(mondayRule(LocalTime.of(9, 0), LocalTime.of(11, 0))));
 		when(therapistAvailabilityRepository.saveAll(anyList()))
@@ -147,16 +128,18 @@ class AvailabilitySlotServiceTest {
 		verify(therapistAvailabilityRepository).saveAll(captor.capture());
 		List<TherapistAvailability> saved = captor.getValue();
 
-		assertThat(saved).hasSize(3);
+		assertThat(saved).hasSize(4);
 		assertThat(saved).extracting(TherapistAvailability::getStartTime).containsExactly(
-				MONDAY.atTime(9, 0), MONDAY.atTime(9, 30), MONDAY.atTime(10, 0));
+				MONDAY.atTime(9, 0), MONDAY.atTime(9, 30),
+				MONDAY.atTime(10, 0), MONDAY.atTime(10, 30));
 		assertThat(saved).extracting(TherapistAvailability::getEndTime).containsExactly(
-				MONDAY.atTime(10, 0), MONDAY.atTime(10, 30), MONDAY.atTime(11, 0));
+				MONDAY.atTime(9, 30), MONDAY.atTime(10, 0),
+				MONDAY.atTime(10, 30), MONDAY.atTime(11, 0));
 		assertThat(saved).allSatisfy(slot -> {
 			// slots deliberately carry no fee: pricing lives on delivery
 			// modes and is resolved at booking time
 			assertThat(slot.getSessionFee()).isNull();
-			assertThat(slot.getServiceId()).isEqualTo("SRV1");
+			assertThat(slot.getServiceId()).isNull();
 		});
 
 		verify(outboxService).saveOutboxEvent(
@@ -185,8 +168,6 @@ class AvailabilitySlotServiceTest {
 		// (empty) event so the projection clears any removed slots
 		stubNoActiveAppointments();
 		stubEmptyOverrides();
-		when(therapistServicesRepository.findByTherapistIdAndIsActiveTrue(THERAPIST_ID))
-				.thenReturn(List.of(service60min()));
 		when(therapistAvailabilityRulesRepository.findByTherapistIdAndIsActiveTrue(THERAPIST_ID))
 				.thenReturn(List.of(mondayRule(LocalTime.of(9, 0), LocalTime.of(10, 0))));
 		when(therapistAvailabilityRepository.saveAll(anyList()))
@@ -231,8 +212,6 @@ class AvailabilitySlotServiceTest {
 	void nightlyGenerationFillsEmptyDayAndPublishes() throws Exception {
 		stubNoActiveAppointments();
 		stubEmptyOverrides();
-		when(therapistServicesRepository.findByTherapistIdAndIsActiveTrue(THERAPIST_ID))
-				.thenReturn(List.of(service60min()));
 		when(therapistAvailabilityRulesRepository.findByTherapistIdAndIsActiveTrue(THERAPIST_ID))
 				.thenReturn(List.of(mondayRule(LocalTime.of(9, 0), LocalTime.of(10, 0))));
 		when(therapistAvailabilityRepository.saveAll(anyList()))
@@ -255,7 +234,7 @@ class AvailabilitySlotServiceTest {
 		// no active services → no slots can be generated for the day
 		stubNoActiveAppointments();
 		stubEmptyOverrides();
-		when(therapistServicesRepository.findByTherapistIdAndIsActiveTrue(THERAPIST_ID))
+		when(therapistAvailabilityRulesRepository.findByTherapistIdAndIsActiveTrue(THERAPIST_ID))
 				.thenReturn(List.of());
 		when(therapistAvailabilityRepository.findByTherapistIdAndStartTimeGreaterThanEqualAndStartTimeLessThan(
 				anyString(), any(), any())).thenReturn(List.of());

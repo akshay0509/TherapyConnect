@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { getTherapistProfile, createTherapistProfile, updatePaymentSettings } from "../api/therapistProfile";
+import Icon from "../components/icons";
 import styles from "./TherapistProfilePage.module.css";
 
 function getInitials(firstName, lastName) {
@@ -97,17 +98,15 @@ export default function TherapistProfilePage() {
 
   return (
     <div className={styles.page}>
-      <header className={styles.header}>
-        <div className={styles.headerInner}>
-          <button className={styles.back} onClick={() => navigate("/therapist-home")}>
-            ← Back
-          </button>
-          <span className={styles.logo}>🧠 Therapy Connect</span>
-          <span className={styles.rolePill}>Therapist</span>
-        </div>
-      </header>
-
       <main className={styles.main}>
+        <div className="page-head">
+          <div>
+            <div className="eyebrow">Account</div>
+            <h1>My Profile</h1>
+            <div className="sub">Your therapist profile and booking preferences</div>
+          </div>
+        </div>
+
 
         {/* ── Loading ── */}
         {loading && (
@@ -129,20 +128,20 @@ export default function TherapistProfilePage() {
           <div className={styles.profileWrap}>
             {formSuccess && (
               <div className={styles.successBox}>
-                <span className={styles.successIcon}>✓</span>
+                <span className={styles.successIcon}><Icon name="check" size={16} /></span>
                 Profile created successfully!
               </div>
             )}
 
-            <div className={styles.profileCard}>
+            <div className={`card ${styles.profileCard}`}>
               <div className={styles.profileTop}>
-                <div className={styles.bigAvatar}>
+                <div className={`avatar avatar-l ${styles.bigAvatar}`}>
                   {getInitials(profile.firstName, profile.lastName)}
                 </div>
                 <div>
-                  <h1 className={styles.profileName}>
+                  <h2 className={styles.profileName}>
                     {profile.firstName} {profile.lastName}
-                  </h1>
+                  </h2>
                   <p className={styles.profileMeta}>
                     {profile.yearsOfExperience} yrs experience &nbsp;·&nbsp; {profile.gender ?? "—"}
                   </p>
@@ -190,15 +189,7 @@ export default function TherapistProfilePage() {
                     type="button"
                     onClick={handlePaymentToggle}
                     disabled={paymentSaving}
-                    style={{
-                      padding: "8px 18px",
-                      borderRadius: "8px",
-                      border: "none",
-                      cursor: paymentSaving ? "wait" : "pointer",
-                      fontWeight: 600,
-                      color: "#fff",
-                      background: profile.paymentEnabled ? "#dc2626" : "#16a34a",
-                    }}
+                    className={`${styles.payBtn} ` + (profile.paymentEnabled ? `btn ${styles.dangerBtn}` : "btn btn-primary")}
                   >
                     {paymentSaving
                       ? "Saving…"
@@ -219,7 +210,7 @@ export default function TherapistProfilePage() {
         {/* ── No profile: prompt ── */}
         {!loading && !error && !hasProfile && !showForm && (
           <div className={styles.center}>
-            <div className={styles.emptyIcon}>🧑‍⚕️</div>
+            <div className={styles.emptyIcon}><Icon name="heart" size={38} /></div>
             <h2 className={styles.emptyTitle}>No profile found</h2>
             <p className={styles.emptyText}>Set up your therapist profile to get started.</p>
             <button className={styles.createBtn} onClick={() => setShowForm(true)}>

@@ -1,45 +1,18 @@
-@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap');
-
-.page {
-  min-height: 100vh;
-  background: var(--bg-page);
-  font-family: 'DM Sans', sans-serif;
-  color: var(--text-1);
-}
-
-/* ─── Header ─── */
-.header {
-  border-bottom: 1px solid var(--wash-2);
-  padding: 0 24px;
-  background: var(--wash-1);
-  backdrop-filter: blur(12px);
-  position: sticky; top: 0; z-index: 20;
-}
-.headerInner {
-  max-width: 1000px; margin: 0 auto;
-  height: 60px; display: flex; align-items: center; gap: 16px;
-}
-.back {
-  background: none; border: 1px solid var(--wash-3);
-  border-radius: 8px; color: var(--text-2);
-  font-family: 'DM Sans', sans-serif; font-size: 0.85rem;
-  padding: 7px 14px; cursor: pointer;
-  transition: color 0.2s, border-color 0.2s;
-}
-.back:hover { color: var(--text-1); border-color: var(--wash-4); }
-.logo {
-  font-family: 'Syne', sans-serif; font-weight: 800;
-  font-size: 1.1rem; color: #10b981; flex: 1; text-align: center;
-}
-.rolePill {
-  font-size: 0.72rem; font-weight: 600; text-transform: uppercase;
-  letter-spacing: 0.08em; padding: 3px 10px; border-radius: 20px;
-  background: rgba(16,185,129,0.12); color: var(--ok-mid);
-  border: 1px solid rgba(16,185,129,0.25);
-}
+/* Renders inside TherapistShell — no page chrome here. */
+.page { color: var(--text-1); }
 
 /* ─── Main ─── */
-.main { max-width: 1000px; margin: 0 auto; padding: 56px 24px; }
+.main { max-width: 1240px; padding: 30px; }
+
+/* row action buttons (prototype: 32px icon buttons) */
+.iconBtn {
+  width: 32px; height: 32px; border-radius: 9px; margin-left: 6px;
+  background: var(--surface-2); border: 1px solid var(--line); color: var(--text-2);
+  display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
+  transition: color .15s, border-color .15s, background .15s; vertical-align: middle;
+}
+.iconBtn:hover { color: var(--text-1); border-color: var(--line-2); }
+.iconBtnDanger:hover { color: var(--danger-mid); border-color: rgba(248,113,113,0.4); background: rgba(248,113,113,0.1); }
 
 /* ─── Top row ─── */
 .topRow {
@@ -48,7 +21,7 @@
   animation: fadeUp 0.5s ease both;
 }
 .heading {
-  font-family: 'Syne', sans-serif;
+  font-family: var(--font-sans);
   font-size: clamp(1.8rem, 4vw, 2.6rem);
   font-weight: 800; letter-spacing: -0.04em; margin: 0 0 6px;
 }
@@ -56,9 +29,9 @@
 .addBtn {
   display: flex; align-items: center; gap: 8px;
   padding: 11px 20px;
-  background: linear-gradient(135deg, #10b981, #059669);
-  border: none; border-radius: 10px; color: #fff;
-  font-family: 'Syne', sans-serif; font-size: 0.88rem; font-weight: 700;
+  background: var(--brand);
+  border: none; border-radius: 10px; color: var(--on-primary);
+  font-family: var(--font-sans); font-size: 0.88rem; font-weight: 700;
   cursor: pointer; transition: opacity 0.2s, transform 0.15s;
   box-shadow: 0 4px 18px rgba(16,185,129,0.3); white-space: nowrap;
 }
@@ -83,15 +56,15 @@
 .loadingText { color: var(--text-4); font-size: 0.9rem; }
 .emptyIcon { font-size: 2.8rem; }
 .emptyTitle {
-  font-family: 'Syne', sans-serif; font-size: 1.4rem;
+  font-family: var(--font-sans); font-size: 1.4rem;
   font-weight: 800; color: var(--text-1); margin: 0;
 }
 .emptyText { color: var(--text-3); font-size: 0.9rem; margin: 0; }
 .addBtnLarge {
   margin-top: 4px; padding: 12px 28px;
-  background: linear-gradient(135deg, #10b981, #059669);
-  border: none; border-radius: 10px; color: #fff;
-  font-family: 'Syne', sans-serif; font-size: 0.95rem; font-weight: 700;
+  background: var(--brand);
+  border: none; border-radius: 10px; color: var(--on-primary);
+  font-family: var(--font-sans); font-size: 0.95rem; font-weight: 700;
   cursor: pointer; transition: opacity 0.2s, transform 0.15s;
   box-shadow: 0 4px 20px rgba(16,185,129,0.3);
 }
@@ -138,7 +111,7 @@
   background: rgba(16,185,129,0.12); border-color: rgba(16,185,129,0.3); color: var(--ok-mid);
 }
 .dayPillNew {
-  background: rgba(99,102,241,0.12); border-color: rgba(99,102,241,0.3); color: var(--indigo-mid);
+  background: rgba(34,211,238,0.12); border-color: rgba(34,211,238,0.3); color: var(--primary);
 }
 
 /* ─── Existing rules table ─── */
@@ -172,7 +145,7 @@
 
 .dayTag {
   display: inline-block;
-  font-family: 'Syne', sans-serif; font-weight: 700;
+  font-family: var(--font-sans); font-weight: 700;
   font-size: 0.85rem; color: var(--text-1);
 }
 .timeCell { color: var(--text-2); font-family: monospace; font-size: 0.88rem; }
@@ -198,16 +171,16 @@
   margin-top: 12px; animation: fadeUp 0.4s ease both;
 }
 .newRowsTitle {
-  font-family: 'Syne', sans-serif; font-size: 0.8rem; font-weight: 700;
-  text-transform: uppercase; letter-spacing: 0.1em; color: #6366f1;
+  font-family: var(--font-sans); font-size: 0.8rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.1em; color: var(--primary);
   margin: 0 0 16px;
 }
 .newRowsList { display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px; }
 
 .newRow {
   display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap;
-  padding: 20px; background: rgba(99,102,241,0.04);
-  border: 1px solid rgba(99,102,241,0.15); border-radius: 14px;
+  padding: 20px; background: rgba(34,211,238,0.04);
+  border: 1px solid rgba(34,211,238,0.15); border-radius: 14px;
   animation: fadeUp 0.3s ease both;
 }
 .newRowField { display: flex; flex-direction: column; gap: 7px; min-width: 120px; }
@@ -222,7 +195,7 @@
   background: var(--wash-2);
   border: 1px solid var(--wash-3);
   border-radius: 8px; color: var(--text-1);
-  font-size: 0.875rem; font-family: 'DM Sans', sans-serif;
+  font-size: 0.875rem; font-family: var(--font-sans);
   outline: none; transition: border-color 0.2s, box-shadow 0.2s;
   box-sizing: border-box; width: 100%;
 }
@@ -233,8 +206,8 @@
 }
 .select option { background: var(--bg-elev); color: var(--text-1); }
 .select:focus, .timeInput:focus {
-  border-color: #6366f1;
-  box-shadow: 0 0 0 3px rgba(99,102,241,0.15);
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(34,211,238,0.15);
 }
 .timeInput::-webkit-calendar-picker-indicator { filter: invert(0.5); cursor: pointer; }
 
@@ -245,7 +218,7 @@
   cursor: pointer; transition: background 0.25s; outline: none;
   flex-shrink: 0;
 }
-.toggle:focus-visible { box-shadow: 0 0 0 3px rgba(99,102,241,0.3); }
+.toggle:focus-visible { box-shadow: 0 0 0 3px rgba(34,211,238,0.3); }
 .toggleOn { background: #10b981; }
 .toggleThumb {
   position: absolute; top: 2px; left: 2px;
@@ -271,19 +244,19 @@
 .cancelBtn {
   padding: 11px 22px; background: transparent;
   border: 1px solid var(--wash-3); border-radius: 10px;
-  color: var(--text-2); font-family: 'DM Sans', sans-serif; font-size: 0.9rem;
+  color: var(--text-2); font-family: var(--font-sans); font-size: 0.9rem;
   cursor: pointer; transition: border-color 0.2s, color 0.2s;
 }
 .cancelBtn:hover { border-color: var(--wash-4); color: var(--text-1); }
 .saveBtn {
   padding: 11px 28px;
-  background: linear-gradient(135deg, #6366f1, #4f46e5);
-  border: none; border-radius: 10px; color: #fff;
-  font-family: 'Syne', sans-serif; font-size: 0.95rem; font-weight: 700;
+  background: var(--brand);
+  border: none; border-radius: 10px; color: var(--on-primary);
+  font-family: var(--font-sans); font-size: 0.95rem; font-weight: 700;
   cursor: pointer; min-width: 140px;
   display: flex; align-items: center; justify-content: center;
   transition: opacity 0.2s, transform 0.15s;
-  box-shadow: 0 4px 20px rgba(99,102,241,0.3);
+  box-shadow: 0 4px 20px rgba(34,211,238,0.3);
 }
 .saveBtn:hover:not(:disabled) { opacity: 0.9; transform: translateY(-1px); }
 .saveBtn:disabled { opacity: 0.6; cursor: not-allowed; }
@@ -302,8 +275,8 @@
 
 /* ─── Rule action buttons ─── */
 .ruleActionsCell { display: flex; gap: 6px; align-items: center; }
-.ruleEditBtn { background: rgba(99,102,241,0.08); border: 1px solid rgba(99,102,241,0.2); border-radius: 6px; color: var(--indigo-mid); font-size: 0.8rem; padding: 4px 8px; cursor: pointer; transition: background 0.15s; }
-.ruleEditBtn:hover { background: rgba(99,102,241,0.18); }
+.ruleEditBtn { background: rgba(34,211,238,0.08); border: 1px solid rgba(34,211,238,0.2); border-radius: 6px; color: var(--primary); font-size: 0.8rem; padding: 4px 8px; cursor: pointer; transition: background 0.15s; }
+.ruleEditBtn:hover { background: rgba(34,211,238,0.18); }
 .ruleDeleteBtn { background: rgba(239,68,68,0.07); border: 1px solid rgba(239,68,68,0.2); border-radius: 6px; color: var(--danger-mid); font-size: 0.8rem; padding: 4px 8px; cursor: pointer; transition: background 0.15s; }
 .ruleDeleteBtn:hover { background: rgba(239,68,68,0.15); }
 
@@ -311,7 +284,7 @@
 .modalBackdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); z-index: 150; }
 .modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: min(500px, 92vw); background: var(--bg-elev); border: 1px solid var(--wash-3); border-radius: 16px; z-index: 200; box-shadow: 0 24px 64px rgba(0,0,0,0.6); animation: fadeUp 0.2s ease both; }
 .modalHeader { display: flex; align-items: center; justify-content: space-between; padding: 20px 24px 0; }
-.modalTitle { font-family: 'Syne', sans-serif; font-size: 1rem; font-weight: 800; color: var(--text-1); }
+.modalTitle { font-family: var(--font-sans); font-size: 1rem; font-weight: 800; color: var(--text-1); }
 .modalBody { padding: 16px 24px 24px; }
 .modalActions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
 .editGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
@@ -319,10 +292,10 @@
 .editLabel { font-size: 0.72rem; font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.06em; }
 .editActiveRow { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; }
 .deleteWarning { font-size: 0.9rem; color: var(--text-2); line-height: 1.6; margin-bottom: 12px; }
-.deleteBtnConfirm { padding: 9px 22px; background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.35); border-radius: 9px; color: var(--danger-mid); font-family: 'Syne', sans-serif; font-size: 0.875rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; min-width: 100px; }
+.deleteBtnConfirm { padding: 9px 22px; background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.35); border-radius: 9px; color: var(--danger-mid); font-family: var(--font-sans); font-size: 0.875rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; min-width: 100px; }
 .deleteBtnConfirm:hover:not(:disabled) { background: rgba(239,68,68,0.25); }
 .deleteBtnConfirm:disabled { opacity: 0.5; cursor: not-allowed; }
-.saveBtn { padding: 9px 22px; background: rgba(16,185,129,0.12); border: 1px solid rgba(16,185,129,0.3); border-radius: 9px; color: var(--ok-mid); font-family: 'Syne', sans-serif; font-size: 0.875rem; font-weight: 700; cursor: pointer; min-width: 120px; display: flex; align-items: center; justify-content: center; }
+.saveBtn { padding: 9px 22px; background: rgba(16,185,129,0.12); border: 1px solid rgba(16,185,129,0.3); border-radius: 9px; color: var(--ok-mid); font-family: var(--font-sans); font-size: 0.875rem; font-weight: 700; cursor: pointer; min-width: 120px; display: flex; align-items: center; justify-content: center; }
 .saveBtn:hover:not(:disabled) { background: rgba(16,185,129,0.2); }
 .saveBtn:disabled { opacity: 0.5; cursor: not-allowed; }
 

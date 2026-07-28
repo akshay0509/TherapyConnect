@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { getAvailabilityRules, createAvailabilityRules, deleteAvailabilityRule, updateAvailabilityRule } from "../api/availabilityRules";
+import Icon from "../components/icons";
 import styles from "./AvailabilityRulesPage.module.css";
 
 const DAY_MAP = {
@@ -179,29 +180,22 @@ export default function AvailabilityRulesPage() {
 
   return (
     <div className={styles.page}>
-      <header className={styles.header}>
-        <div className={styles.headerInner}>
-          <button className={styles.back} onClick={() => navigate("/therapist-home")}>← Back</button>
-          <span className={styles.logo}>🧠 Therapy Connect</span>
-          <span className={styles.rolePill}>Therapist</span>
-        </div>
-      </header>
-
       <main className={styles.main}>
-        <div className={styles.topRow}>
-          <div className={styles.topRowText}>
-            <h1 className={styles.heading}>Availability Rules</h1>
-            <p className={styles.sub}>
-              {loading ? "Loading…" : `${existingRules.length} of 7 days configured`}
-            </p>
+        <div className="page-head">
+          <div>
+            <div className="eyebrow">Working hours</div>
+            <h1>Availability Rules</h1>
+            <div className="sub">
+              {loading ? "Loading…" : "Your weekly template. Slots are generated from these."}
+            </div>
           </div>
           {!loading && canAddMore && (
-            <button className={styles.addBtn} onClick={addRow}>
-              <span>+</span> Add Rule
+            <button className="btn btn-primary" onClick={addRow}>
+              <Icon name="plus" size={16} /> Add rule
             </button>
           )}
           {!loading && !canAddMore && (
-            <span className={styles.fullBadge}>✓ All 7 days set</span>
+            <span className="chip chip-ok"><Icon name="check" size={14} /> All 7 days set</span>
           )}
         </div>
 
@@ -223,7 +217,7 @@ export default function AvailabilityRulesPage() {
             {/* ── Success banner ── */}
             {saveSuccess && (
               <div className={styles.successBox}>
-                <span className={styles.successIcon}>✓</span>
+                <span className={styles.successIcon}><Icon name="check" size={16} /></span>
                 Rules saved successfully!
               </div>
             )}
@@ -246,50 +240,52 @@ export default function AvailabilityRulesPage() {
 
             {/* ── Existing rules table ── */}
             {existingRules.length > 0 && (
-              <div className={styles.tableWrap}>
-                <table className={styles.table}>
-                  <thead>
-                    <tr>
-                      <th>Day</th>
-                      <th>Start</th>
-                      <th>End</th>
-                      <th>Status</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {existingRules
-                      .slice()
-                      .sort((a, b) => a.dayOfWeek - b.dayOfWeek)
-                      .map((rule) => (
-                        <tr key={rule.ruleId}>
-                          <td>
-                            <span className={styles.dayTag}>{DAY_MAP[rule.dayOfWeek]}</span>
-                          </td>
-                          <td className={styles.timeCell}>{formatTime(rule.startTime)}</td>
-                          <td className={styles.timeCell}>{formatTime(rule.endTime)}</td>
-                          <td>
-                            <span className={`${styles.badge} ${rule.isActive ? styles.badgeActive : styles.badgeInactive}`}>
-                              {rule.isActive ? "Active" : "Inactive"}
-                            </span>
-                          </td>
-                          <td className={styles.ruleActionsCell}>
-                            <button className={styles.ruleEditBtn} onClick={() => openEditRule(rule)} title="Edit">✏️</button>
-                            <button className={styles.ruleDeleteBtn} onClick={() => { setDeleteConfirm(rule.ruleId); setDeleteError(null); }} title="Delete">🗑</button>
-                          </td>
-                        </tr>
-                      ))}
-                  </tbody>
-                </table>
+              <div className="card" style={{ padding: "8px 0" }}>
+                <div className="table-wrap">
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>Day</th>
+                        <th>Hours</th>
+                        <th>Status</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {existingRules
+                        .slice()
+                        .sort((a, b) => a.dayOfWeek - b.dayOfWeek)
+                        .map((rule) => (
+                          <tr key={rule.ruleId}>
+                            <td><b>{DAY_MAP[rule.dayOfWeek]}</b></td>
+                            <td>{formatTime(rule.startTime)} – {formatTime(rule.endTime)}</td>
+                            <td>
+                              <span className={`chip ${rule.isActive ? "chip-ok" : "chip-mut"}`}>
+                                {rule.isActive ? "Active" : "Inactive"}
+                              </span>
+                            </td>
+                            <td style={{ textAlign: "right" }}>
+                              <button className={styles.iconBtn} onClick={() => openEditRule(rule)} title="Edit" aria-label="Edit rule">
+                                <Icon name="edit" size={16} />
+                              </button>
+                              <button className={`${styles.iconBtn} ${styles.iconBtnDanger}`} onClick={() => { setDeleteConfirm(rule.ruleId); setDeleteError(null); }} title="Delete" aria-label="Delete rule">
+                                <Icon name="x" size={16} />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )}
 
             {existingRules.length === 0 && newRows.length === 0 && (
               <div className={styles.center}>
-                <span className={styles.emptyIcon}>📅</span>
+                <span className={styles.emptyIcon}><Icon name="clock" size={38} /></span>
                 <h2 className={styles.emptyTitle}>No rules yet</h2>
                 <p className={styles.emptyText}>Add your weekly availability to let clients book sessions.</p>
-                <button className={styles.addBtnLarge} onClick={addRow}>+ Add First Rule</button>
+                <button className="btn btn-primary" onClick={addRow}><Icon name="plus" size={16} /> Add rule</button>
               </div>
             )}
 
@@ -362,7 +358,7 @@ export default function AvailabilityRulesPage() {
                         onClick={() => removeRow(row._id)}
                         aria-label="Remove row"
                         title="Remove"
-                      >✕</button>
+                      ><Icon name="x" size={16} /></button>
                     </div>
                   ))}
                 </div>
@@ -377,13 +373,13 @@ export default function AvailabilityRulesPage() {
                 {/* Save / Cancel */}
                 <div className={styles.saveRow}>
                   <button
-                    className={styles.cancelBtn}
+                    className="btn btn-ghost"
                     onClick={() => { setNewRows([]); setSaveError(null); }}
                   >
                     Discard
                   </button>
                   <button
-                    className={styles.saveBtn}
+                    className="btn btn-primary"
                     onClick={handleSave}
                     disabled={saving}
                   >
@@ -403,7 +399,7 @@ export default function AvailabilityRulesPage() {
           <div className={styles.modal}>
             <div className={styles.modalHeader}>
               <h2 className={styles.modalTitle}>Delete Rule</h2>
-              <button className={styles.closeBtn} onClick={() => setDeleteConfirm(null)}>✕</button>
+              <button className={styles.closeBtn} onClick={() => setDeleteConfirm(null)}><Icon name="x" size={18} /></button>
             </div>
             <div className={styles.modalBody}>
               <p className={styles.deleteWarning}>Are you sure you want to delete this availability rule? Existing slots generated from this rule will not be affected, but no new slots will be generated for this day.</p>
@@ -411,7 +407,7 @@ export default function AvailabilityRulesPage() {
               <div className={styles.modalActions}>
                 <button className={styles.cancelBtn} onClick={() => setDeleteConfirm(null)}>Cancel</button>
                 <button className={styles.deleteBtnConfirm} onClick={handleDeleteRule} disabled={deleteLoading}>
-                  {deleteLoading ? <span className={styles.btnSpinner}/> : "🗑 Delete"}
+                  {deleteLoading ? <span className={styles.btnSpinner}/> : "Delete"}
                 </button>
               </div>
             </div>
@@ -426,7 +422,7 @@ export default function AvailabilityRulesPage() {
           <div className={styles.modal}>
             <div className={styles.modalHeader}>
               <h2 className={styles.modalTitle}>Edit Rule</h2>
-              <button className={styles.closeBtn} onClick={() => setEditRule(null)}>✕</button>
+              <button className={styles.closeBtn} onClick={() => setEditRule(null)}><Icon name="x" size={18} /></button>
             </div>
             <div className={styles.modalBody}>
               <div className={styles.editGrid}>

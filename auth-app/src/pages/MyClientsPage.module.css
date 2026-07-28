@@ -1,45 +1,9 @@
-@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap');
-
-.page {
-  min-height: 100vh;
-  background: var(--bg-page);
-  font-family: 'DM Sans', sans-serif;
-  color: var(--text-1);
-}
-
-/* ─── Header ─── */
-.header {
-  border-bottom: 1px solid var(--wash-2);
-  padding: 0 24px;
-  background: var(--wash-1);
-  backdrop-filter: blur(12px);
-  position: sticky; top: 0; z-index: 20;
-}
-.headerInner {
-  max-width: 1100px; margin: 0 auto;
-  height: 60px; display: flex; align-items: center; gap: 16px;
-}
-.back {
-  background: none; border: 1px solid var(--wash-3);
-  border-radius: 8px; color: var(--text-2);
-  font-family: 'DM Sans', sans-serif; font-size: 0.85rem;
-  padding: 7px 14px; cursor: pointer;
-  transition: color 0.2s, border-color 0.2s;
-}
-.back:hover { color: var(--text-1); border-color: var(--wash-4); }
-.logo {
-  font-family: 'Syne', sans-serif; font-weight: 800;
-  font-size: 1.1rem; color: #10b981; flex: 1; text-align: center;
-}
-.rolePill {
-  font-size: 0.72rem; font-weight: 600; text-transform: uppercase;
-  letter-spacing: 0.08em; padding: 3px 10px; border-radius: 20px;
-  background: rgba(16,185,129,0.12); color: var(--ok-mid);
-  border: 1px solid rgba(16,185,129,0.25);
-}
+/* Renders inside TherapistShell (sidebar + topbar) — no page chrome here.
+   Fonts/colors come from the global tokens in index.css. */
+.page { color: var(--text-1); }
 
 /* ─── Main ─── */
-.main { max-width: 1100px; margin: 0 auto; padding: 56px 24px; }
+.main { max-width: 1240px; padding: 30px; }
 
 /* ─── Top row ─── */
 .topRow {
@@ -47,19 +11,30 @@
   justify-content: space-between; margin-bottom: 32px;
   animation: fadeUp 0.5s ease both;
 }
+.eyebrow { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--primary); margin: 0 0 8px; }
 .heading {
-  font-family: 'Syne', sans-serif;
-  font-size: clamp(1.8rem, 4vw, 2.8rem);
-  font-weight: 800; letter-spacing: -0.04em; margin: 0 0 6px;
+  font-family: var(--font-sans);
+  font-size: clamp(1.8rem, 4vw, 2.2rem);
+  font-weight: 800; letter-spacing: -0.03em; margin: 0 0 6px;
 }
-.sub { color: var(--text-3); font-size: 0.9rem; margin: 0; font-weight: 300; }
+.sub { color: var(--text-3); font-size: 0.9rem; margin: 0; }
+
+/* Search + filter row */
+.controls { display: flex; align-items: center; gap: 12px; margin-bottom: 28px; flex-wrap: wrap; animation: fadeUp 0.5s 0.05s ease both; }
+.filterChip {
+  padding: 10px 16px; border-radius: 10px; background: var(--wash-1); border: 1px solid var(--wash-3);
+  color: var(--text-2); font-family: var(--font-sans); font-size: 0.85rem; font-weight: 600; cursor: pointer; white-space: nowrap;
+  transition: border-color .15s, color .15s, background .15s;
+}
+.filterChip:hover { border-color: var(--wash-4); color: var(--text-1); }
+.filterChipActive { background: rgba(34,211,238,0.14); border-color: rgba(34,211,238,0.3); color: var(--primary-soft); }
 
 .addBtn {
   display: flex; align-items: center; gap: 8px;
   padding: 11px 20px;
-  background: linear-gradient(135deg, #10b981, #059669);
-  border: none; border-radius: 10px; color: #fff;
-  font-family: 'Syne', sans-serif; font-size: 0.88rem; font-weight: 700;
+  background: var(--brand);
+  border: none; border-radius: 10px; color: var(--on-primary);
+  font-family: var(--font-sans); font-size: 0.88rem; font-weight: 700;
   cursor: pointer; transition: opacity 0.2s, transform 0.15s;
   box-shadow: 0 4px 18px rgba(16,185,129,0.3); white-space: nowrap;
 }
@@ -67,8 +42,7 @@
 
 /* ─── Search ─── */
 .searchWrap {
-  position: relative; max-width: 400px;
-  margin-bottom: 36px; animation: fadeUp 0.5s 0.05s ease both;
+  position: relative; flex: 1; min-width: 240px; max-width: 340px; /* prototype: max-width 340px */
 }
 .searchIcon {
   position: absolute; left: 14px; top: 50%;
@@ -78,7 +52,7 @@
   width: 100%; padding: 11px 16px 11px 40px;
   background: var(--wash-2); border: 1px solid var(--wash-3);
   border-radius: 10px; color: var(--text-1);
-  font-family: 'DM Sans', sans-serif; font-size: 0.9rem;
+  font-family: var(--font-sans); font-size: 0.9rem;
   outline: none; transition: border-color 0.2s, box-shadow 0.2s; box-sizing: border-box;
 }
 .search::placeholder { color: var(--text-4); }
@@ -98,15 +72,15 @@
 .loadingText { color: var(--text-4); font-size: 0.9rem; }
 .emptyIcon { font-size: 2.8rem; }
 .emptyTitle {
-  font-family: 'Syne', sans-serif; font-size: 1.4rem;
+  font-family: var(--font-sans); font-size: 1.4rem;
   font-weight: 800; color: var(--text-1); margin: 0;
 }
 .emptyText { color: var(--text-3); font-size: 0.9rem; margin: 0; }
 .addBtnLarge {
   margin-top: 4px; padding: 12px 28px;
-  background: linear-gradient(135deg, #10b981, #059669);
-  border: none; border-radius: 10px; color: #fff;
-  font-family: 'Syne', sans-serif; font-size: 0.95rem; font-weight: 700;
+  background: var(--brand);
+  border: none; border-radius: 10px; color: var(--on-primary);
+  font-family: var(--font-sans); font-size: 0.95rem; font-weight: 700;
   cursor: pointer; transition: opacity 0.2s, transform 0.15s;
   box-shadow: 0 4px 20px rgba(16,185,129,0.3);
 }
@@ -128,49 +102,35 @@
 /* ─── Client grid ─── */
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 16px;
 }
+/* Surface (gradient/border/radius/shadow) comes from the global .card in
+   theme.css; this module only adds layout + hover behaviour. */
 .card {
-  background: var(--wash-1);
-  border: 1px solid var(--wash-2);
-  border-radius: 14px; padding: 20px;
+  padding: 20px;
   cursor: pointer;
-  cursor: pointer;
-  transition: border-color 0.25s, transform 0.25s, box-shadow 0.25s;
+  transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s;
   animation: fadeUp 0.5s ease both;
   outline: none;
 }
 .card:hover {
-  border-color: rgba(16,185,129,0.3);
-  transform: translateY(-2px);
-  box-shadow: 0 8px 30px rgba(0,0,0,0.25);
+  border-color: rgba(34,211,238,0.35);
+  transform: translateY(-3px);
 }
 .card:focus-visible {
-  border-color: #10b981;
-  box-shadow: 0 0 0 3px rgba(16,185,129,0.2);
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(34,211,238,0.2);
 }
-.cardTop { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
-.cardFooter { border-top: 1px solid var(--wash-2); padding-top: 12px; }
-.viewHint {
-  font-size: 0.78rem; color: #10b981; font-weight: 500;
-  transition: color 0.2s;
-}
-.card:hover .viewHint { color: var(--ok-mid); }
-.avatar {
-  width: 46px; height: 46px; border-radius: 12px;
-  display: flex; align-items: center; justify-content: center;
-  font-family: 'Syne', sans-serif; font-weight: 700;
-  font-size: 1rem; color: #fff; flex-shrink: 0;
-  box-shadow: 0 3px 12px rgba(0,0,0,0.3);
-}
-.nameBlock { min-width: 0; }
+/* size/shape from the global .avatar.avatar-m; this only tunes the shadow */
+.avatar { box-shadow: 0 3px 12px rgba(0,0,0,0.3); color: #04121a; }
+.cardRow { display: flex; align-items: center; gap: 14px; }
+.nameBlock { flex: 1; min-width: 0; }
 .clientName {
-  font-family: 'Syne', sans-serif; font-size: 0.95rem;
-  font-weight: 700; color: var(--text-1); margin: 0 0 4px;
+  display: block; font-size: 1rem; font-weight: 700; color: var(--text-1); margin: 0 0 3px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.clientId { font-family: monospace; font-size: 0.72rem; color: var(--text-4); }
+.clientId { font-size: 0.78rem; color: var(--text-4); }
 
 /* ─── Backdrop ─── */
 .backdrop {
@@ -198,7 +158,7 @@
   padding: 28px 28px 24px; border-bottom: 1px solid var(--wash-2);
 }
 .drawerTitle {
-  font-family: 'Syne', sans-serif; font-size: 1.2rem; font-weight: 800;
+  font-family: var(--font-sans); font-size: 1.2rem; font-weight: 800;
   letter-spacing: -0.02em; margin: 0 0 4px; color: var(--text-1);
 }
 .drawerSub { font-size: 0.82rem; color: var(--text-3); margin: 0; }
@@ -229,7 +189,7 @@
   padding: 11px 14px;
   background: var(--wash-2); border: 1px solid var(--wash-3);
   border-radius: 9px; color: var(--text-1);
-  font-size: 0.9rem; font-family: 'DM Sans', sans-serif;
+  font-size: 0.9rem; font-family: var(--font-sans);
   outline: none; transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
   box-sizing: border-box; width: 100%;
 }
@@ -254,15 +214,15 @@
 .cancelBtn {
   padding: 11px 22px; background: transparent;
   border: 1px solid var(--wash-3); border-radius: 10px;
-  color: var(--text-2); font-family: 'DM Sans', sans-serif; font-size: 0.9rem;
+  color: var(--text-2); font-family: var(--font-sans); font-size: 0.9rem;
   cursor: pointer; transition: border-color 0.2s, color 0.2s;
 }
 .cancelBtn:hover { border-color: var(--wash-4); color: var(--text-1); }
 .submitBtn {
   padding: 11px 26px;
-  background: linear-gradient(135deg, #10b981, #059669);
-  border: none; border-radius: 10px; color: #fff;
-  font-family: 'Syne', sans-serif; font-size: 0.95rem; font-weight: 700;
+  background: var(--brand);
+  border: none; border-radius: 10px; color: var(--on-primary);
+  font-family: var(--font-sans); font-size: 0.95rem; font-weight: 700;
   cursor: pointer; min-width: 130px;
   display: flex; align-items: center; justify-content: center;
   transition: opacity 0.2s, transform 0.15s;
@@ -285,7 +245,15 @@
 
 /* ─── DSF ─── */
 .dsfRow { display: flex; align-items: center; padding: 4px 0 12px; }
-.dsfLabel { display: flex; align-items: center; gap: 10px; cursor: pointer; font-family: 'DM Sans', sans-serif; font-size: 0.9rem; color: var(--text-2); user-select: none; }
+.dsfLabel { display: flex; align-items: center; gap: 10px; cursor: pointer; font-family: var(--font-sans); font-size: 0.9rem; color: var(--text-2); user-select: none; }
 .dsfLabel:hover { color: var(--text-1); }
 .dsfCheckbox { width: 16px; height: 16px; accent-color: #10b981; cursor: pointer; }
-.dsfBadge { font-size: 0.65rem; padding: 2px 8px; border-radius: 20px; font-weight: 700; white-space: nowrap; margin-left: auto; background: rgba(99,102,241,0.12); color: var(--indigo-mid); border: 1px solid rgba(99,102,241,0.25); }
+.dsfBadge { font-size: 0.65rem; padding: 2px 8px; border-radius: 20px; font-weight: 700; white-space: nowrap; background: rgba(99,102,241,0.12); color: var(--indigo-mid); border: 1px solid rgba(99,102,241,0.25); }
+
+/* enriched card (data from Phase-B backend; degrades to "—" until then) */
+.badges { display: flex; gap: 6px; align-items: center; flex-shrink: 0; }
+.cardStats { display: flex; gap: 20px; font-size: 0.82rem; color: var(--text-3); margin-top: 16px; }
+.cardStats b { color: var(--text-1); font-weight: 700; }
+
+/* active filter button (on top of the global .btn) */
+.filterOn { border-color: rgba(34,211,238,0.4) !important; color: var(--primary-soft) !important; background: rgba(34,211,238,0.12) !important; }

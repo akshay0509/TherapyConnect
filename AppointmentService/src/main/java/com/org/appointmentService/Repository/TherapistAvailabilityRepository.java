@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
@@ -12,6 +13,8 @@ import org.springframework.stereotype.Repository;
 import com.org.appointmentService.Dto.AvailabilityResponseDto;
 import com.org.appointmentService.Entity.TherapistAvailability;
 import com.org.appointmentService.Enums.AvailabilityStatus;
+
+import jakarta.persistence.LockModeType;
 
 @Repository
 public interface TherapistAvailabilityRepository extends JpaRepository<TherapistAvailability, String>{
@@ -21,6 +24,20 @@ public interface TherapistAvailabilityRepository extends JpaRepository<Therapist
 	boolean existsBySlotId(String slotId);
 
 	Optional<TherapistAvailability> findBySlotIdAndTherapistId(String slotId, String therapistId);
+
+	@Lock(LockModeType.PESSIMISTIC_WRITE)
+	@Query("""
+			SELECT s
+			FROM TherapistAvailability s
+			WHERE s.therapistId = :therapistId
+			  AND s.startTime < :rangeEnd
+			  AND s.endTime > :rangeStart
+			ORDER BY s.startTime ASC, s.endTime ASC, s.slotId ASC
+			""")
+	List<TherapistAvailability> lockOverlappingBlocks(
+			String therapistId,
+			LocalDateTime rangeStart,
+			LocalDateTime rangeEnd);
 
 	boolean existsByTherapistIdAndStatusAndStartTimeLessThanAndEndTimeGreaterThan(
             String therapistId,
@@ -45,24 +62,6 @@ public interface TherapistAvailabilityRepository extends JpaRepository<Therapist
 
     // past AVAILABLE slots only — BOOKED rows anchor the calendar-history join
     long deleteByStatusAndEndTimeBefore(AvailabilityStatus status, LocalDateTime cutoff);
-
-	@Modifying
-	@Query("""
-			    UPDATE TherapistAvailability s
-			    SET s.status = 'BOOKED'
-			    WHERE s.slotId = :slotId
-			      AND s.status = 'AVAILABLE'
-			""")
-	int markSlotAsBooked(String slotId);
-
-	@Modifying
-	@Query("""
-			    UPDATE TherapistAvailability s
-			    SET s.status = 'AVAILABLE'
-			    WHERE s.slotId = :slotId
-			      AND s.status = 'BOOKED'
-			""")
-	int markSlotAsAvailable(String slotId);
 
 	@Modifying
 	@Query("""
@@ -94,7 +93,7 @@ public interface TherapistAvailabilityRepository extends JpaRepository<Therapist
 			)
 			FROM TherapistAvailability s
 			LEFT JOIN TherapistAppointments a
-			ON s.slotId = a.slotId
+			ON s.appointmentId = a.appointmentId
 			AND a.status IN (
 			com.org.events.TherapistAppointment.AppointmentStatus.SCHEDULED,
 			com.org.events.TherapistAppointment.AppointmentStatus.CONFIRMED,
@@ -131,7 +130,7 @@ public interface TherapistAvailabilityRepository extends JpaRepository<Therapist
             )
             FROM TherapistAvailability s
             LEFT JOIN TherapistAppointments a
-            ON s.slotId = a.slotId
+            ON s.appointmentId = a.appointmentId
             AND a.status IN (
             com.org.events.TherapistAppointment.AppointmentStatus.SCHEDULED,
             com.org.events.TherapistAppointment.AppointmentStatus.CONFIRMED,

@@ -4,8 +4,11 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { createTherapistProfile } from "../api/therapistProfile";
 import { getAccount } from "../api/user";
-import styles from "./TherapistProfilePage.module.css";
-import cal from "./TherapistSetupPage.module.css";
+import Icon from "../components/icons";
+// Self-contained: this page renders before the workspace shell exists, so it
+// owns its layout instead of borrowing the profile page's module (which lost
+// its standalone header when that page moved inside the shell).
+import styles from "./TherapistSetupPage.module.css";
 
 const MONTHS = ["January","February","March","April","May","June",
                 "July","August","September","October","November","December"];
@@ -116,18 +119,18 @@ export default function TherapistSetupPage() {
 
   return (
     <div className={styles.page}>
-      <header className={styles.header}>
-        <div className={styles.headerInner}>
-          <span className={styles.logo}>🧠 Therapy Connect</span>
-          <span className={styles.rolePill}>Therapist</span>
-        </div>
-      </header>
+      <div className={styles.brandRow}>
+        <span className={styles.brandMark}><Icon name="heart" size={20} strokeWidth={2.1} /></span>
+        <span className={styles.brandName}>TherapyConnect</span>
+        <span className={`chip chip-online ${styles.roleChip}`}>Therapist</span>
+      </div>
 
       <main className={styles.main}>
-        <div className={styles.formWrap}>
+        <div className={`card ${styles.formWrap}`}>
           <div className={styles.formHeader}>
-            <h2 className={styles.formTitle}>Complete your profile</h2>
-            <p className={styles.formSub}>Before you can use the platform, we need a few details about you.</p>
+            <div className="eyebrow">Step 1 of 1</div>
+            <h1 className={styles.formTitle}>Complete your profile</h1>
+            <p className={styles.formSub}>A few details about you, then your workspace is ready.</p>
           </div>
 
           <form onSubmit={handleSubmit} className={styles.form}>
@@ -138,13 +141,13 @@ export default function TherapistSetupPage() {
                 <label className={styles.label} htmlFor="firstName">First Name *</label>
                 <input id="firstName" name="firstName" type="text" required
                   value={form.firstName} onChange={handleChange}
-                  className={styles.input} placeholder="Jane" />
+                  className="input" placeholder="Jane" />
               </div>
               <div className={styles.field}>
                 <label className={styles.label} htmlFor="lastName">Last Name *</label>
                 <input id="lastName" name="lastName" type="text" required
                   value={form.lastName} onChange={handleChange}
-                  className={styles.input} placeholder="Smith" />
+                  className="input" placeholder="Smith" />
               </div>
             </div>
 
@@ -155,11 +158,11 @@ export default function TherapistSetupPage() {
                 <input id="email" name="email" type="email"
                   value={form.email} onChange={handleChange}
                   readOnly={emailLocked}
-                  className={styles.input} placeholder="you@example.com"
-                  style={emailLocked ? { opacity: 0.65, cursor: "not-allowed" } : undefined}
+                  className="input" placeholder="you@example.com"
+                  style={emailLocked ? { opacity: 0.6, cursor: "not-allowed" } : undefined}
                   title={emailLocked ? "Uses your account email — change it later in Account Settings" : undefined} />
                 {emailLocked && (
-                  <span style={{ fontSize: "0.72rem", color: "#64748b" }}>
+                  <span className={styles.hint}>
                     Uses your account email — changeable later in Account Settings
                   </span>
                 )}
@@ -168,7 +171,7 @@ export default function TherapistSetupPage() {
                 <label className={styles.label} htmlFor="phoneNumber">Phone Number</label>
                 <input id="phoneNumber" name="phoneNumber" type="tel"
                   value={form.phoneNumber} onChange={handleChange}
-                  className={styles.input} placeholder="+91 98765 43210" />
+                  className="input" placeholder="+91 98765 43210" />
               </div>
             </div>
 
@@ -176,42 +179,42 @@ export default function TherapistSetupPage() {
             <div className={styles.formRow}>
               <div className={styles.field}>
                 <label className={styles.label}>Date of Birth</label>
-                <div className={cal.calWrap} ref={calRef}>
+                <div className={styles.calWrap} ref={calRef}>
                   <input
                     type="text"
                     readOnly
                     value={formatDob(form.dob)}
                     placeholder="Select date"
-                    className={styles.input}
+                    className="input"
                     style={{ cursor: "pointer" }}
                     onClick={() => setCalOpen(o => !o)}
                   />
                   {calOpen && (
-                    <div className={cal.calPopover}>
-                      <div className={cal.calHeader}>
-                        <button type="button" className={cal.calNav} onClick={prevMonth}>
+                    <div className={styles.calPopover}>
+                      <div className={styles.calHeader}>
+                        <button type="button" className={styles.calNav} onClick={prevMonth}>
                           <ChevronLeft size={14} />
                         </button>
-                        <div className={cal.calMonthYear}>
-                          <select className={cal.calSelect}
+                        <div className={styles.calMonthYear}>
+                          <select className={styles.calSelect}
                             value={calMonth}
                             onChange={e => setCalMonth(Number(e.target.value))}>
                             {MONTHS.map((m, i) => <option key={m} value={i}>{m}</option>)}
                           </select>
-                          <select className={cal.calSelect}
+                          <select className={styles.calSelect}
                             value={calYear}
                             onChange={e => setCalYear(Number(e.target.value))}>
                             {yearOptions.map(y => <option key={y} value={y}>{y}</option>)}
                           </select>
                         </div>
-                        <button type="button" className={cal.calNav} onClick={nextMonth}>
+                        <button type="button" className={styles.calNav} onClick={nextMonth}>
                           <ChevronRight size={14} />
                         </button>
                       </div>
 
-                      <div className={cal.calGrid}>
+                      <div className={styles.calGrid}>
                         {["Mo","Tu","We","Th","Fr","Sa","Su"].map(d => (
-                          <div key={d} className={cal.calDayName}>{d}</div>
+                          <div key={d} className={styles.calDayName}>{d}</div>
                         ))}
                         {Array.from({ length: firstDay }).map((_, i) => <div key={`e${i}`} />)}
                         {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(day => {
@@ -227,7 +230,7 @@ export default function TherapistSetupPage() {
                               type="button"
                               disabled={isFuture}
                               onClick={() => selectDate(day)}
-                              className={`${cal.calDay} ${isSelected ? cal.calDaySelected : ""}`}
+                              className={`${styles.calDay} ${isSelected ? styles.calDaySelected : ""}`}
                             >
                               {day}
                             </button>
@@ -244,7 +247,7 @@ export default function TherapistSetupPage() {
                 <input id="yearsOfExperience" name="yearsOfExperience" type="text"
                   inputMode="numeric" maxLength={2}
                   value={form.yearsOfExperience} onChange={handleChange}
-                  className={styles.input} placeholder="e.g. 5" />
+                  className="input" placeholder="e.g. 5" />
               </div>
             </div>
 
@@ -272,10 +275,10 @@ export default function TherapistSetupPage() {
             )}
 
             <div className={styles.formActions}>
-              <button type="button" className={styles.cancelBtn} onClick={() => logout()}>
+              <button type="button" className="btn" onClick={() => logout()}>
                 Sign out
               </button>
-              <button type="submit" className={styles.submitBtn} disabled={loading}>
+              <button type="submit" className="btn btn-primary" disabled={loading}>
                 {loading ? <span className={styles.btnSpinner} /> : "Complete setup"}
               </button>
             </div>

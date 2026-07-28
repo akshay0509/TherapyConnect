@@ -1,12 +1,10 @@
-@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap');
-
 .container {
   min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
   background: var(--bg-page);
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-sans);
   position: relative;
   overflow: hidden;
 }
@@ -101,7 +99,7 @@
 }
 
 .title {
-  font-family: 'Syne', sans-serif;
+  font-family: var(--font-sans);
   font-size: 1.65rem;
   font-weight: 800;
   color: var(--text-1);
@@ -139,7 +137,7 @@
   border-radius: 10px;
   color: var(--text-1);
   font-size: 0.95rem;
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-sans);
   transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
   box-sizing: border-box;
   outline: none;
@@ -158,13 +156,15 @@
   width: 100%;
   margin-top: 8px;
   padding: 14px;
-  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  /* Amber, not the cyan brand: the admin console is a separate surface
+     and must never be mistaken for the therapist workspace. */
+  background: linear-gradient(135deg, var(--warn-mid), #d97706);
   border: none;
   border-radius: 10px;
   color: var(--bg-page);
   font-size: 0.95rem;
   font-weight: 700;
-  font-family: 'Syne', sans-serif;
+  font-family: var(--font-sans);
   letter-spacing: 0.02em;
   cursor: pointer;
   transition: opacity 0.2s, transform 0.15s, box-shadow 0.2s;
@@ -195,3 +195,9 @@
   font-size: 0.875rem;
   text-align: center;
 }
+
+.eyebrow {
+  font-size: 0.68rem; font-weight: 800; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--warn-soft); margin-bottom: 6px;
+}
+

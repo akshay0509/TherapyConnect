@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-route
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { DeliveryModesProvider } from "./context/DeliveryModesContext";
 import CommandPalette from "./components/CommandPalette";
+import TherapistShell from "./components/TherapistShell";
 import LoginPage from "./pages/LoginPage";
 import HomePage from "./pages/HomePage";
 import TherapistHomePage from "./pages/TherapistHomePage";
@@ -38,6 +39,17 @@ function ProtectedRoute({ children, allowedRole }) {
   return children;
 }
 
+// Account Settings is reachable by BOTH therapists and clients. Therapists get
+// it inside the workspace shell (so the sidebar doesn't vanish mid-flow);
+// clients get the standalone page with its own header. Keeping one route means
+// no loss of access for client users.
+function AccountSettingsRoute() {
+  const { role } = useAuth();
+  return role === "THERAPIST"
+    ? <TherapistShell><AccountSettingsPage embedded /></TherapistShell>
+    : <AccountSettingsPage />;
+}
+
 // Navigates to login with sessionExpired state when the auth token expires.
 function SessionExpiredRedirect() {
   const navigate = useNavigate();
@@ -69,17 +81,14 @@ export default function App() {
             <Route path="/login" element={<LoginPage />} />
             <Route path="/reset-password" element={<ResetPasswordPage />} />
 
-            {/* Therapist onboarding — shown when therapist account has no profile yet */}
+            {/* Therapist onboarding — shown when therapist account has no profile yet (no shell) */}
             <Route path="/therapist/setup" element={
               <ProtectedRoute allowedRole="THERAPIST"><TherapistSetupPage /></ProtectedRoute>
             } />
 
-            {/* Role-based homes */}
+            {/* Client home */}
             <Route path="/client-home" element={
               <ProtectedRoute allowedRole="CLIENT"><HomePage /></ProtectedRoute>
-            } />
-            <Route path="/therapist-home" element={
-              <ProtectedRoute allowedRole="THERAPIST"><TherapistHomePage /></ProtectedRoute>
             } />
 
             {/* CLIENT-only pages */}
@@ -87,35 +96,22 @@ export default function App() {
               <ProtectedRoute allowedRole="CLIENT"><TherapistsPage /></ProtectedRoute>
             } />
 
-            {/* THERAPIST-only pages */}
-            <Route path="/therapist/profile" element={
-              <ProtectedRoute allowedRole="THERAPIST"><TherapistProfilePage /></ProtectedRoute>
-            } />
-            <Route path="/therapist/services" element={
-              <ProtectedRoute allowedRole="THERAPIST"><MyServicesPage /></ProtectedRoute>
-            } />
-            <Route path="/therapist/availability-rules" element={
-              <ProtectedRoute allowedRole="THERAPIST"><AvailabilityRulesPage /></ProtectedRoute>
-            } />
-            <Route path="/therapist/clients" element={
-              <ProtectedRoute allowedRole="THERAPIST"><MyClientsPage /></ProtectedRoute>
-            } />
-            <Route path="/therapist/clients/:clientId" element={
-              <ProtectedRoute allowedRole="THERAPIST"><ClientDetailPage /></ProtectedRoute>
-            } />
-            <Route path="/therapist/appointments" element={
-              <ProtectedRoute allowedRole="THERAPIST"><AppointmentsPage /></ProtectedRoute>
-            } />
-            <Route path="/therapist/earnings" element={
-              <ProtectedRoute allowedRole="THERAPIST"><EarningsPage /></ProtectedRoute>
-            } />
-            <Route path="/therapist/analytics" element={
-              <ProtectedRoute allowedRole="THERAPIST"><AnalyticsPage /></ProtectedRoute>
-            } />
+            {/* ── THERAPIST workspace — wrapped in the persistent sidebar shell ── */}
+            <Route element={<ProtectedRoute allowedRole="THERAPIST"><TherapistShell /></ProtectedRoute>}>
+              <Route path="/therapist-home" element={<TherapistHomePage />} />
+              <Route path="/therapist/profile" element={<TherapistProfilePage />} />
+              <Route path="/therapist/services" element={<MyServicesPage />} />
+              <Route path="/therapist/availability-rules" element={<AvailabilityRulesPage />} />
+              <Route path="/therapist/clients" element={<MyClientsPage />} />
+              <Route path="/therapist/clients/:clientId" element={<ClientDetailPage />} />
+              <Route path="/therapist/appointments" element={<AppointmentsPage />} />
+              <Route path="/therapist/earnings" element={<EarningsPage />} />
+              <Route path="/therapist/analytics" element={<AnalyticsPage />} />
+            </Route>
 
-            {/* Account settings — any authenticated user */}
+            {/* Account settings — any authenticated user; chrome adapts to role */}
             <Route path="/account-settings" element={
-              <ProtectedRoute><AccountSettingsPage /></ProtectedRoute>
+              <ProtectedRoute><AccountSettingsRoute /></ProtectedRoute>
             } />
 
             {/* Root redirects based on role */}

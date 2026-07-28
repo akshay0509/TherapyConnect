@@ -1,5 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500;600;700&display=swap');
-
 /* Rendered by AuthProvider above every page, so it carries its own font import
    rather than relying on whichever page happens to be mounted. */
 
@@ -17,7 +15,7 @@
   border: 1px solid rgba(245,158,11,0.35);
   background: linear-gradient(rgba(245,158,11,0.12), rgba(245,158,11,0.12)), var(--bg-elev);
   box-shadow: 0 10px 30px rgba(0,0,0,0.28);
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-sans);
   animation: slideIn 0.25s cubic-bezier(0.22,1,0.36,1) both;
 }
 
@@ -86,7 +84,7 @@
   border: 1px solid rgba(245,158,11,0.3);
   background: var(--bg-elev);
   box-shadow: 0 24px 64px rgba(0,0,0,0.45);
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-sans);
   color: var(--text-1);
   animation: slideIn 0.2s cubic-bezier(0.22,1,0.36,1) both;
 }
@@ -94,7 +92,7 @@
 .dialogIcon { font-size: 1.8rem; margin-bottom: 12px; }
 
 .dialogTitle {
-  font-family: 'Syne', sans-serif;
+  font-family: var(--font-sans);
   font-size: 1.1rem;
   font-weight: 800;
   margin: 0 0 8px;

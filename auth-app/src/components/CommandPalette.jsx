@@ -2,16 +2,17 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { getTherapistClients } from "../api/therapistClients";
+import Icon from "./icons";
 import styles from "./CommandPalette.module.css";
 
 const PAGES = [
-  { label: "Schedule",           hint: "Book, reschedule, block time", icon: "🗓", path: "/therapist/appointments" },
-  { label: "My Clients",         hint: "Client list and histories",    icon: "👥", path: "/therapist/clients" },
-  { label: "My Services",        hint: "Services and delivery modes",  icon: "🧩", path: "/therapist/services" },
-  { label: "Availability Rules", hint: "Weekly working hours",         icon: "⏰", path: "/therapist/availability-rules" },
-  { label: "Earnings",           hint: "Payments and revenue",         icon: "💰", path: "/therapist/earnings" },
-  { label: "Analytics",          hint: "Trends and retention",         icon: "📊", path: "/therapist/analytics" },
-  { label: "Account Settings",   hint: "Profile, security, theme",     icon: "⚙️", path: "/account-settings" },
+  { label: "Schedule",           hint: "Book, reschedule, block time", icon: "calendar", path: "/therapist/appointments" },
+  { label: "My Clients",         hint: "Client list and histories",    icon: "users", path: "/therapist/clients" },
+  { label: "My Services",        hint: "Services and delivery modes",  icon: "clipboard", path: "/therapist/services" },
+  { label: "Availability Rules", hint: "Weekly working hours",         icon: "clock", path: "/therapist/availability-rules" },
+  { label: "Earnings",           hint: "Payments and revenue",         icon: "dollar", path: "/therapist/earnings" },
+  { label: "Analytics",          hint: "Trends and retention",         icon: "bar", path: "/therapist/analytics" },
+  { label: "Account Settings",   hint: "Profile, security, theme",     icon: "settings", path: "/account-settings" },
 ];
 
 const MAX_CLIENT_RESULTS = 6;
@@ -155,7 +156,7 @@ export default function CommandPalette() {
               onClick={() => go(item)}
             >
               <span className={item.kind === "client" ? styles.avatar : styles.pageIcon}>
-                {item.kind === "client" ? getInitials(item.label) : item.icon}
+                {item.kind === "client" ? getInitials(item.label) : <Icon name={item.icon} size={16} />}
               </span>
               <span className={styles.itemText}>
                 <span className={styles.itemLabel}>{item.label}</span>

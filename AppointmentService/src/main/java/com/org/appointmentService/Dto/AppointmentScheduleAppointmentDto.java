@@ -17,6 +17,7 @@ public class AppointmentScheduleAppointmentDto {
     private LocalDateTime endTime;
     private AppointmentStatus status;
     private String modeId;
+    private String serviceId;
     private String reason;
 
     /** null when no payment applies to this appointment */

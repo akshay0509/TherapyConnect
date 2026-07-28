@@ -15,6 +15,7 @@ import {
   replayOutbox,
   updateUserStatus,
 } from "../api/admin";
+import Icon from "../components/icons";
 import styles from "./AdminPage.module.css";
 
 function todayMidnight() {
@@ -751,18 +752,17 @@ export default function AdminPage() {
     <div className={styles.page}>
       {/* Header */}
       <div className={styles.header}>
-        <span className={styles.headerIcon}>🛡</span>
-        <span className={styles.headerTitle}>TherapyConnect Admin</span>
+        <span className={styles.headerIcon}><Icon name="shield" size={20} strokeWidth={2} /></span>
+        <div className={styles.headerTitleWrap}>
+          <span className={styles.headerEyebrow}>Admin console</span>
+          <span className={styles.headerTitle}>TherapyConnect</span>
+        </div>
         <div className={styles.headerActions}>
-          <button
-            className={styles.refreshBtn}
-            onClick={refreshAll}
-            disabled={loading}
-          >
-            {loading ? "Loading…" : "↻ Refresh"}
+          <button className="btn btn-sm" onClick={refreshAll} disabled={loading}>
+            {loading ? "Loading…" : <><Icon name="refresh" size={15} /> Refresh</>}
           </button>
-          <button className={styles.logoutBtn} onClick={handleLogout}>
-            Logout
+          <button className={`btn btn-sm ${styles.logoutBtn}`} onClick={handleLogout}>
+            <Icon name="logout" size={15} /> Sign out
           </button>
         </div>
       </div>
@@ -850,16 +850,16 @@ export default function AdminPage() {
           <div className={styles.sectionTitle}>Container Management</div>
           <div className={styles.portainerPanel}>
             <div className={styles.portainerText}>
-              <h3>🐳 Portainer</h3>
+              <h3><Icon name="server" size={17} /> Portainer</h3>
               <p>Start, stop, and restart Docker containers from your browser</p>
             </div>
             <a
               href={portainerUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className={styles.portainerBtn}
+              className={`btn btn-primary ${styles.portainerBtn}`}
             >
-              Open Portainer →
+              Open Portainer <Icon name="chevron" size={15} />
             </a>
           </div>
         </div>

@@ -4,6 +4,7 @@ import { useAuth } from "../context/AuthContext";
 import { getAccount, updateAccount, changePassword } from "../api/user";
 import { updateTherapistEmail } from "../api/therapistProfile";
 import { getTheme, setTheme } from "../theme";
+import Icon from "../components/icons";
 import styles from "./AccountSettingsPage.module.css";
 
 // mirror of the backend rule in UserService.validateUsername
@@ -12,11 +13,18 @@ const USERNAME_RULES =
   "Username must be 3-30 characters using only letters, numbers, dots, dashes or underscores (no spaces).";
 const MIN_PASSWORD_LENGTH = 8;
 
+// icon values map to components/icons.jsx names
 const SECTIONS = [
-  { id: "profile", icon: "👤", label: "Profile" },
-  { id: "security", icon: "🔒", label: "Security" },
-  { id: "preferences", icon: "🎨", label: "Preferences" },
+  { id: "profile", icon: "heart", label: "Profile" },
+  { id: "security", icon: "shield", label: "Security" },
+  { id: "preferences", icon: "sun", label: "Preferences" },
 ];
+
+function getInitials(name) {
+  if (!name) return "?";
+  const p = name.trim().split(/[\s._-]+/).filter(Boolean);
+  return ((p[0]?.[0] ?? "") + (p.length > 1 ? p[p.length - 1][0] : "")).toUpperCase();
+}
 
 function formatDateTime(iso) {
   if (!iso) return "—";
@@ -55,7 +63,7 @@ function describeDevice(ua) {
   return os ? `${browser} on ${os}` : browser;
 }
 
-export default function AccountSettingsPage() {
+export default function AccountSettingsPage({ embedded = false }) {
   const navigate = useNavigate();
   const { user, role, sessionExpiresAt, staySignedIn } = useAuth();
 
@@ -74,6 +82,8 @@ export default function AccountSettingsPage() {
     setExtending(true);
     try { await staySignedIn(); } finally { setExtending(false); }
   };
+
+  const sessionRemaining = sessionExpiresAt ? sessionExpiresAt - nowMs : 0;
 
   // theme preference — applied instantly, persisted per browser
   const [theme, setThemeState] = useState(getTheme());
@@ -209,67 +219,85 @@ export default function AccountSettingsPage() {
 
   // ── sections ──
   const renderProfile = () => (
-    <>
-      <h2 className={styles.sectionTitle}>Profile</h2>
-      <p className={styles.sectionSub}>
-        {editing
-          ? "Modify your details below. Your current password is required to confirm the changes."
-          : "Your account details. Use Edit to change your username or email."}
-      </p>
+    <div className={`card ${styles.block}`}>
+      <div className={styles.blockHead}>
+        <div>
+          <h2 className={styles.blockTitle}>Profile</h2>
+          <p className={styles.blockSub}>
+            {editing
+              ? "Your current password is required to confirm these changes."
+              : "Your account details."}
+          </p>
+        </div>
+        {!editing && (
+          <button type="button" className="btn btn-sm" onClick={startEdit} disabled={!account}>
+            <Icon name="edit" size={15} /> Edit
+          </button>
+        )}
+      </div>
 
       {!editing ? (
-        <div className={styles.viewList}>
-          <div className={styles.viewRow}>
-            <span className={styles.label}>Username</span>
-            <span className={styles.viewValue}>{account?.username ?? user?.username ?? "—"}</span>
-          </div>
-          <div className={styles.viewRow}>
-            <span className={styles.label}>Email</span>
-            <span className={styles.viewValue}>
-              {account ? (account.email || "—") : accountError ? "unavailable" : "Loading…"}
-            </span>
-            {role === "THERAPIST" && (
-              <span className={styles.hint}>Also used for your calendar invites</span>
-            )}
-          </div>
-          <div className={styles.viewRow}>
-            <span className={styles.label}>Role</span>
-            <span className={styles.viewValue}>{account?.userRole ?? role ?? "—"}</span>
-          </div>
-          <div className={styles.viewRow}>
-            <span className={styles.label}>Member since</span>
-            <span className={styles.viewValue}>{formatDate(account?.createdAt)}</span>
+        <div>
+          <div className={styles.infoGrid}>
+            <div className={styles.infoItem}>
+              <span className={styles.infoIcon}><Icon name="users" size={16} /></span>
+              <div>
+                <span className={styles.label}>Username</span>
+                <span className={styles.infoValue}>{account?.username ?? user?.username ?? "—"}</span>
+              </div>
+            </div>
+            <div className={styles.infoItem}>
+              <span className={styles.infoIcon}><Icon name="mail" size={16} /></span>
+              <div>
+                <span className={styles.label}>Email</span>
+                <span className={styles.infoValue}>
+                  {account ? (account.email || "—") : accountError ? "unavailable" : "Loading…"}
+                </span>
+                {role === "THERAPIST" && (
+                  <span className={styles.hint}>Also used for your calendar invites</span>
+                )}
+              </div>
+            </div>
+            <div className={styles.infoItem}>
+              <span className={styles.infoIcon}><Icon name="shield" size={16} /></span>
+              <div>
+                <span className={styles.label}>Role</span>
+                <span className={styles.infoValue}>{account?.userRole ?? role ?? "—"}</span>
+              </div>
+            </div>
+            <div className={styles.infoItem}>
+              <span className={styles.infoIcon}><Icon name="calendar" size={16} /></span>
+              <div>
+                <span className={styles.label}>Member since</span>
+                <span className={styles.infoValue}>{formatDate(account?.createdAt)}</span>
+              </div>
+            </div>
           </div>
 
           {accountError && (
             <div className={styles.errorBox}><span className={styles.errorIcon}>!</span>{accountError}</div>
           )}
           {success && (
-            <div className={styles.successBox}><span className={styles.successIcon}>✓</span> {success}</div>
+            <div className={styles.successBox}><span className={styles.successIcon}><Icon name="check" size={15} /></span> {success}</div>
           )}
-
-          <div className={styles.actions}>
-            <button type="button" className={styles.submitBtn} onClick={startEdit} disabled={!account}>
-              ✎ Edit details
-            </button>
-          </div>
         </div>
       ) : (
         <form onSubmit={handleSubmit} className={styles.form}>
-          <div className={styles.field}>
-            <label className={styles.label}>Username</label>
-            <input name="username" type="text" autoComplete="off"
-              value={form.username} onChange={handleChange} className={styles.input} />
-            <span className={styles.hint}>3–30 characters — letters, numbers, dots, dashes or underscores</span>
-          </div>
-
-          <div className={styles.field}>
-            <label className={styles.label}>Email</label>
-            <input name="email" type="email" autoComplete="off"
-              value={form.email} onChange={handleChange} className={styles.input} />
-            {role === "THERAPIST" && (
-              <span className={styles.hint}>Also used for your calendar invites — both update together</span>
-            )}
+          <div className={styles.formGrid}>
+            <div className={styles.field}>
+              <label className={styles.label}>Username</label>
+              <input name="username" type="text" autoComplete="off"
+                value={form.username} onChange={handleChange} className={styles.input} />
+              <span className={styles.hint}>3–30 characters — letters, numbers, dots, dashes or underscores</span>
+            </div>
+            <div className={styles.field}>
+              <label className={styles.label}>Email</label>
+              <input name="email" type="email" autoComplete="off"
+                value={form.email} onChange={handleChange} className={styles.input} />
+              {role === "THERAPIST" && (
+                <span className={styles.hint}>Also used for your calendar invites — both update together</span>
+              )}
+            </div>
           </div>
 
           <div className={styles.divider}/>
@@ -302,56 +330,71 @@ export default function AccountSettingsPage() {
           </div>
         </form>
       )}
-    </>
+    </div>
   );
 
   const renderSecurity = () => (
     <>
-      <h2 className={styles.sectionTitle}>Security</h2>
-      <p className={styles.sectionSub}>Your current session, sign-in activity and password.</p>
 
-      <div className={styles.subCard}>
-        <h3 className={styles.subCardTitle}>This session</h3>
-        <div className={styles.sessionRow}>
-          <div className={styles.metaItem}>
-            <span className={styles.label}>Signs you out in</span>
-            <span className={styles.sessionClock}>
-              {sessionExpiresAt ? formatCountdown(sessionExpiresAt - nowMs) : "—"}
-            </span>
+      <div className={`card ${styles.block}`}>
+        <div className={styles.blockHead}>
+          <div>
+            <h2 className={styles.blockTitle}>This session</h2>
+            <p className={styles.blockSub}>Extending renews it without signing you out.</p>
           </div>
-          <button type="button" className={styles.extendBtn} onClick={handleExtend} disabled={extending}>
-            {extending ? "Extending…" : "Extend session"}
+          <span className={`chip ${sessionRemaining > 120000 ? "chip-ok" : "chip-warn"}`}>
+            {sessionRemaining > 120000 ? "Active" : "Expiring soon"}
+          </span>
+        </div>
+        <div className={styles.sessionRow}>
+          <div>
+            <span className={styles.sessionClock}>
+              {sessionExpiresAt ? formatCountdown(sessionRemaining) : "—"}
+            </span>
+            <span className={styles.label}>until sign-out</span>
+          </div>
+          <button type="button" className="btn btn-primary" onClick={handleExtend} disabled={extending}>
+            <Icon name="clock" size={16} /> {extending ? "Extending…" : "Extend session"}
           </button>
         </div>
-        <span className={styles.hint}>
-          Extending renews it without signing you out. A reminder appears automatically as the
-          time runs low.
-        </span>
       </div>
 
-      <div className={styles.subCard}>
-        <h3 className={styles.subCardTitle}>Last sign-in</h3>
-        <div className={styles.metaGrid}>
-          <div className={styles.metaItem}>
-            <span className={styles.label}>When</span>
-            <span className={styles.viewValue}>{formatDateTime(account?.lastLoginTime)}</span>
-          </div>
-          <div className={styles.metaItem}>
-            <span className={styles.label}>IP address</span>
-            <span className={styles.viewValue}>{account?.lastLoginIp || "—"}</span>
-          </div>
-          <div className={styles.metaItem}>
-            <span className={styles.label}>Device</span>
-            <span className={styles.viewValue} title={account?.lastLoginUserAgent || ""}>
-              {describeDevice(account?.lastLoginUserAgent)}
-            </span>
+      <div className={`card ${styles.block}`}>
+        <div className={styles.blockHead}>
+          <div>
+            <h2 className={styles.blockTitle}>Last sign-in</h2>
+            <p className={styles.blockSub}>If this doesn't look like you, change your password below.</p>
           </div>
         </div>
-        <span className={styles.hint}>If this doesn't look like you, change your password below.</span>
+        <div className={styles.infoGrid3}>
+          <div className={styles.infoItem}>
+            <span className={styles.infoIcon}><Icon name="clock" size={16} /></span>
+            <div>
+              <span className={styles.label}>When</span>
+              <span className={styles.infoValue}>{formatDateTime(account?.lastLoginTime)}</span>
+            </div>
+          </div>
+          <div className={styles.infoItem}>
+            <span className={styles.infoIcon}><Icon name="server" size={16} /></span>
+            <div>
+              <span className={styles.label}>IP address</span>
+              <span className={styles.infoValue}>{account?.lastLoginIp || "—"}</span>
+            </div>
+          </div>
+          <div className={styles.infoItem}>
+            <span className={styles.infoIcon}><Icon name="grid" size={16} /></span>
+            <div>
+              <span className={styles.label}>Device</span>
+              <span className={styles.infoValue} title={account?.lastLoginUserAgent || ""}>
+                {describeDevice(account?.lastLoginUserAgent)}
+              </span>
+            </div>
+          </div>
+        </div>
       </div>
 
-      <div className={styles.subCard}>
-        <h3 className={styles.subCardTitle}>Change password</h3>
+      <div className={`card ${styles.block}`}>
+        <h2 className={styles.blockTitle}>Change password</h2>
         <form onSubmit={handlePwSubmit} className={styles.form}>
           <div className={styles.field}>
             <label className={styles.label}>Current password <span className={styles.required}>*</span></label>
@@ -365,29 +408,31 @@ export default function AccountSettingsPage() {
               </button>
             </div>
           </div>
-          <div className={styles.field}>
-            <label className={styles.label}>New password <span className={styles.required}>*</span></label>
-            <input name="newPassword" type={showPw ? "text" : "password"}
-              autoComplete="new-password" required
-              value={pwForm.newPassword} onChange={handlePwChange}
-              className={styles.input} placeholder="At least 8 characters" />
-          </div>
-          <div className={styles.field}>
-            <label className={styles.label}>Confirm new password <span className={styles.required}>*</span></label>
-            <input name="confirmPassword" type={showPw ? "text" : "password"}
-              autoComplete="new-password" required
-              value={pwForm.confirmPassword} onChange={handlePwChange}
-              className={styles.input} placeholder="Repeat the new password" />
-            {pwForm.confirmPassword && pwForm.newPassword !== pwForm.confirmPassword && (
-              <span className={styles.mismatch}>Passwords do not match</span>
-            )}
+          <div className={styles.formGrid}>
+            <div className={styles.field}>
+              <label className={styles.label}>New password <span className={styles.required}>*</span></label>
+              <input name="newPassword" type={showPw ? "text" : "password"}
+                autoComplete="new-password" required
+                value={pwForm.newPassword} onChange={handlePwChange}
+                className={styles.input} placeholder="At least 8 characters" />
+            </div>
+            <div className={styles.field}>
+              <label className={styles.label}>Confirm new password <span className={styles.required}>*</span></label>
+              <input name="confirmPassword" type={showPw ? "text" : "password"}
+                autoComplete="new-password" required
+                value={pwForm.confirmPassword} onChange={handlePwChange}
+                className={styles.input} placeholder="Repeat the new password" />
+              {pwForm.confirmPassword && pwForm.newPassword !== pwForm.confirmPassword && (
+                <span className={styles.mismatch}>Passwords do not match</span>
+              )}
+            </div>
           </div>
 
           {pwError && (
             <div className={styles.errorBox}><span className={styles.errorIcon}>!</span>{pwError}</div>
           )}
           {pwSuccess && (
-            <div className={styles.successBox}><span className={styles.successIcon}>✓</span> Password changed successfully.</div>
+            <div className={styles.successBox}><span className={styles.successIcon}><Icon name="check" size={15} /></span> Password changed successfully.</div>
           )}
 
           <div className={styles.actions}>
@@ -401,42 +446,59 @@ export default function AccountSettingsPage() {
   );
 
   const renderPreferences = () => (
-    <>
-      <h2 className={styles.sectionTitle}>Preferences</h2>
-      <p className={styles.sectionSub}>Display options.</p>
-
-      <div className={styles.subCard}>
-        <h3 className={styles.subCardTitle}>Theme</h3>
-        <div className={styles.themeRow}>
-          <button type="button"
-            className={`${styles.themeOption} ${theme === "dark" ? styles.themeOptionActive : ""}`}
-            onClick={() => chooseTheme("dark")}>
-            🌙 Dark
-          </button>
-          <button type="button"
-            className={`${styles.themeOption} ${theme === "light" ? styles.themeOptionActive : ""}`}
-            onClick={() => chooseTheme("light")}>
-            ☀️ Light
-          </button>
-        </div>
-        <span className={styles.hint}>Applies immediately and is remembered on this browser.</span>
+    <div className={`card ${styles.block} ${styles.blockSplit}`}>
+      <div>
+        <h2 className={styles.blockTitle}>Theme</h2>
+        <p className={styles.blockSub}>Dark is easier on the eyes between sessions.</p>
       </div>
-    </>
+      <div className="seg">
+        <button type="button" className={theme === "dark" ? "on" : ""} onClick={() => chooseTheme("dark")}>
+          <Icon name="moon" size={15} /> Dark
+        </button>
+        <button type="button" className={theme === "light" ? "on" : ""} onClick={() => chooseTheme("light")}>
+          <Icon name="sun" size={15} /> Light
+        </button>
+      </div>
+    </div>
   );
 
   return (
     <div className={styles.page}>
-      <header className={styles.header}>
-        <div className={styles.headerInner}>
-          <button className={styles.back} onClick={() => navigate(-1)}>← Back</button>
-          <span className={styles.logo}>🧠 Therapy Connect</span>
-          <span className={styles.rolePill}>{role || user?.role || "User"}</span>
-        </div>
-      </header>
+      {/* Standalone chrome only when NOT inside the therapist shell (clients) */}
+      {!embedded && (
+        <header className={styles.header}>
+          <div className={styles.headerInner}>
+            <button className={styles.back} onClick={() => navigate(-1)}><Icon name="back" size={15} /> Back</button>
+            <span className={styles.logo}><span className={styles.logoMark}><Icon name="heart" size={18} strokeWidth={2.1} /></span> TherapyConnect</span>
+            <span className={styles.rolePill}>{role || user?.role || "User"}</span>
+          </div>
+        </header>
+      )}
 
       <main className={styles.main}>
-        <div className={styles.hero}>
-          <h1 className={styles.heading}>Account Settings</h1>
+        <div className="page-head">
+          <div>
+            <div className="eyebrow">Account</div>
+            <h1>Settings</h1>
+            <div className="sub">Profile, security and display preferences</div>
+          </div>
+        </div>
+
+        {/* Identity anchor — who you're signed in as */}
+        <div className={`card ${styles.identity}`}>
+          <span className="avatar avatar-l">{getInitials(account?.username || user?.username)}</span>
+          <div className={styles.identityText}>
+            <h2 className={styles.identityName}>{account?.username ?? user?.username ?? "—"}</h2>
+            <p className={styles.identityMeta}>
+              {account?.email || (accountError ? "email unavailable" : "…")}
+            </p>
+          </div>
+          <div className={styles.identityBadges}>
+            <span className="chip chip-online">{account?.userRole ?? role ?? "User"}</span>
+            {account?.createdAt && (
+              <span className={styles.identitySince}>Member since {formatDate(account.createdAt)}</span>
+            )}
+          </div>
         </div>
 
         <div className={styles.settingsGrid}>
@@ -448,12 +510,12 @@ export default function AccountSettingsPage() {
                 className={`${styles.navItem} ${activeSection === s.id ? styles.navItemActive : ""}`}
                 onClick={() => switchSection(s.id)}
               >
-                <span className={styles.navIcon}>{s.icon}</span> {s.label}
+                <span className={styles.navIcon}><Icon name={s.icon} size={18} /></span> {s.label}
               </button>
             ))}
           </nav>
 
-          <div className={styles.card}>
+          <div className={styles.sectionCol}>
             {activeSection === "profile" && renderProfile()}
             {activeSection === "security" && renderSecurity()}
             {activeSection === "preferences" && renderPreferences()}

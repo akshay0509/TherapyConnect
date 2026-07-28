@@ -1,57 +1,23 @@
-@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap');
+/* Renders inside TherapistShell — no page chrome here. */
+.page { color: var(--text-1); }
 
-/* ─── Base ─── */
-.page {
-  min-height: 100vh;
-  background: var(--bg-page);
-  font-family: 'DM Sans', sans-serif;
-  color: var(--text-1);
-}
+/* KPI grid (prototype: 4 across) */
+.kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 22px; }
+@media (max-width: 1080px) { .kpis { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 640px) { .kpis { grid-template-columns: 1fr; } }
 
-/* ─── Header ─── */
-.header {
-  border-bottom: 1px solid var(--wash-2);
-  padding: 0 24px;
-  background: var(--wash-1);
-  backdrop-filter: blur(12px);
-  position: sticky; top: 0; z-index: 20;
-}
-.headerInner {
-  max-width: 1100px; margin: 0 auto;
-  height: 60px; display: flex; align-items: center; gap: 16px;
-}
-.back {
-  background: none; border: 1px solid var(--wash-3);
-  border-radius: 8px; color: var(--text-2);
-  font-family: 'DM Sans', sans-serif; font-size: 0.85rem;
-  padding: 7px 14px; cursor: pointer;
-  transition: color 0.2s, border-color 0.2s;
-}
-.back:hover { color: var(--text-1); border-color: var(--wash-4); }
-.logo {
-  font-family: 'Syne', sans-serif; font-weight: 800;
-  font-size: 1.1rem; color: #10b981; flex: 1; text-align: center;
-}
-.rolePill {
-  font-size: 0.72rem; font-weight: 600; text-transform: uppercase;
-  letter-spacing: 0.08em; padding: 3px 10px; border-radius: 20px;
-  background: rgba(16,185,129,0.12); color: var(--ok-mid);
-  border: 1px solid rgba(16,185,129,0.25);
-}
+/* sortable header cell */
+.thSort { cursor: pointer; user-select: none; white-space: nowrap; }
 
 /* ─── Main ─── */
-.main {
-  max-width: 1100px; margin: 0 auto;
-  padding: 48px 24px 80px;
-  display: flex; flex-direction: column; gap: 40px;
-}
+.main { max-width: 1240px; padding: 30px; }
 
 /* ─── Top row ─── */
 .topRow {
   animation: fadeUp 0.5s ease both;
 }
 .heading {
-  font-family: 'Syne', sans-serif;
+  font-family: var(--font-sans);
   font-size: clamp(1.6rem, 3vw, 2.4rem);
   font-weight: 800; letter-spacing: -0.04em; margin: 0 0 6px;
 }
@@ -93,7 +59,7 @@
 }
 
 .periodEarnings {
-  font-family: 'Syne', sans-serif;
+  font-family: var(--font-sans);
   font-size: clamp(1.4rem, 2.5vw, 1.9rem);
   font-weight: 800; letter-spacing: -0.03em; color: var(--warn-mid);
 }
@@ -113,7 +79,7 @@
 }
 
 .sectionTitle {
-  font-family: 'Syne', sans-serif;
+  font-family: var(--font-sans);
   font-size: 1.1rem; font-weight: 800; color: var(--text-1); margin: 0;
 }
 
@@ -145,7 +111,7 @@
   background: var(--wash-2);
   border: 1px solid var(--wash-3);
   border-radius: 8px; font-size: 0.85rem;
-  color: var(--text-1); font-family: 'DM Sans', sans-serif;
+  color: var(--text-1); font-family: var(--font-sans);
   outline: none; transition: border-color 0.2s, box-shadow 0.2s;
 }
 .dateInput:focus {
@@ -163,7 +129,7 @@
   background: var(--wash-2);
   border: 1px solid var(--wash-3);
   border-radius: 8px; font-size: 0.85rem;
-  color: var(--text-1); font-family: 'DM Sans', sans-serif;
+  color: var(--text-1); font-family: var(--font-sans);
   min-width: 160px; cursor: pointer; outline: none;
   appearance: none;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2364748b' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
@@ -178,9 +144,9 @@
 
 .loadBtn {
   height: 38px; padding: 0 20px;
-  background: linear-gradient(135deg, #10b981, #059669);
+  background: var(--brand);
   color: #fff; border: none; border-radius: 8px;
-  font-family: 'Syne', sans-serif; font-size: 0.85rem; font-weight: 700;
+  font-family: var(--font-sans); font-size: 0.85rem; font-weight: 700;
   cursor: pointer; align-self: flex-end; white-space: nowrap;
   box-shadow: 0 3px 12px rgba(16,185,129,0.25);
   display: flex; align-items: center; justify-content: center; gap: 8px;
@@ -222,7 +188,7 @@
   background: transparent;
   border: 1px solid var(--wash-3);
   border-radius: 8px; font-size: 0.78rem; font-weight: 600;
-  color: var(--text-2); font-family: 'DM Sans', sans-serif;
+  color: var(--text-2); font-family: var(--font-sans);
   cursor: pointer; white-space: nowrap;
   transition: border-color 0.2s, color 0.2s;
   display: flex; align-items: center; gap: 6px;
@@ -276,8 +242,8 @@
 
 .clientAvatar {
   width: 28px; height: 28px; border-radius: 7px;
-  background: linear-gradient(135deg, #6366f1, #4f46e5);
-  color: #fff; font-size: 0.7rem; font-weight: 700;
+  background: var(--brand);
+  color: var(--on-primary); font-size: 0.7rem; font-weight: 700;
   display: flex; align-items: center; justify-content: center;
   flex-shrink: 0;
 }
@@ -286,8 +252,8 @@
 
 .serviceChip {
   display: inline-block;
-  background: rgba(99,102,241,0.12); color: var(--indigo-mid);
-  border: 1px solid rgba(99,102,241,0.25);
+  background: rgba(34,211,238,0.12); color: var(--primary);
+  border: 1px solid rgba(34,211,238,0.25);
   font-size: 0.7rem; font-weight: 600; padding: 2px 9px;
   border-radius: 20px; white-space: nowrap;
 }
@@ -302,7 +268,7 @@
 
 .feeCell {
   font-variant-numeric: tabular-nums;
-  color: var(--text-2); font-family: 'DM Sans', sans-serif;
+  color: var(--text-2); font-family: var(--font-sans);
 }
 
 .dsfBadge {
@@ -317,7 +283,7 @@
 
 .earningCell {
   font-variant-numeric: tabular-nums;
-  font-family: 'Syne', sans-serif; font-weight: 700;
+  font-family: var(--font-sans); font-weight: 700;
 }
 .earningCellPositive { color: var(--ok-mid); }
 .earningCellZero { color: var(--text-4); }
@@ -353,3 +319,5 @@
   to   { opacity: 1; transform: translateY(0); }
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+.sortIcon { display: inline-block; vertical-align: middle; margin-left: 4px; }
