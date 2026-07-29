@@ -68,19 +68,47 @@
   border: 1px solid rgba(16,185,129,0.2);
   border-left: 3px solid rgba(16,185,129,0.5);
   border-radius: 4px; cursor: pointer; z-index: 5;
-  display: flex; align-items: flex-start; padding: 3px 6px;
-  transition: background 0.15s, border-color 0.15s;
+  padding: 0;
+  transition: border-color 0.15s;
   overflow: hidden;
 }
-.availableBlock:hover { background: rgba(16,185,129,0.14); border-color: rgba(16,185,129,0.5); }
+/* The card itself no longer lights up — the individual 30-minute segment does,
+   so the therapist sees exactly which slot a click will book. */
+.availableBlock:hover { border-color: rgba(16,185,129,0.45); }
+
+/* One bookable 30-minute block inside a merged run */
+.availSegment {
+  position: absolute; left: 0; right: 0;
+  display: flex; align-items: center; gap: 8px;
+  padding: 0 8px;
+  background: none; border: none;
+  border-top: 1px dashed rgba(16,185,129,0.16);
+  color: var(--ok-mid); font-family: var(--font-sans); text-align: left;
+  cursor: pointer; transition: background 0.15s;
+}
+.availSegment:first-child { border-top: none; }
+.availSegment:hover { background: rgba(16,185,129,0.16); }
+.availSegment:focus-visible { outline: 2px solid var(--ok-mid); outline-offset: -2px; }
+/* The start time stays quiet until the row is pointed at, so a long free
+   afternoon does not read as a wall of timestamps. */
+.availSegmentTime { font-size: 0.66rem; font-weight: 700; opacity: 0.45; transition: opacity 0.15s; }
+.availSegment:hover .availSegmentTime { opacity: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .availSegment, .availSegmentTime { transition: none; }
+}
 .availableBlockLabel { font-size: 0.62rem; color: var(--ok-mid); white-space: nowrap; pointer-events: none; display: inline-flex; align-items: center; gap: 6px; }
 .availableBlockDimmed { opacity: 0.15 !important; pointer-events: none; }
 /* Booked appointment blocks — prominent */
 .bookedBlock {
-  /* theme.css .tl-block sets margin: 6px 0 6px 8px for the prototype's flex
-     rows. These blocks are positioned from their start time, so that margin
-     pushes them 6px below (and 8px right of) the time they represent. */
+  /* theme.css .tl-block is written for the prototype's flex rows, which size to
+     their content: margin 6px 0 6px 8px and padding 10px 14px. These blocks are
+     absolutely positioned with a height computed from the appointment duration,
+     so both must go — the margin pushed every block 6px below the time it
+     represents, and the 20px of vertical padding made a 50-minute block (62px)
+     need ~80px, clipping the client name and mode. Inner padding lives on
+     .bookedBlockContent instead. */
   margin: 0;
+  padding: 0;
 
   position: absolute; left: 3px; right: 3px;
   border: 1px solid; border-left-width: 4px;
@@ -91,8 +119,7 @@
 }
 .bookedBlock:hover { filter: brightness(1.1); transform: translateX(1px); }
 .bookedBlockContent { flex: 1; padding: 4px 6px; display: flex; flex-direction: column; gap: 2px; overflow: hidden; }
-.bookedBlockTime { font-size: 0.7rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.bookedBlockClient { font-size: 0.68rem; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bookedBlockClient { font-size: 0.74rem; font-weight: 700; color: var(--text-1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .reschedBadge { position: absolute; right: 4px; top: 4px; width: 20px; height: 20px; border-radius: 4px; background: rgba(0,0,0,0.3); border: none; color: var(--text-2); font-size: 0.8rem; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.15s, color 0.15s; }
 .reschedBadge:hover { background: rgba(245,158,11,0.3); color: var(--warn-mid); }
 /* ─── Right panel ─── */

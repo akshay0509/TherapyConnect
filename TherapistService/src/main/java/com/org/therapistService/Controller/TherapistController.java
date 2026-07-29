@@ -75,6 +75,21 @@ public class TherapistController {
 		return ResponseEntity.ok(updated);
 	}
 
+	/**
+	 * Edit an existing profile. The therapist id always comes from the JWT —
+	 * never the body — so a therapist can only ever edit their own record.
+	 *
+	 * Email is not accepted here on purpose: it mirrors the account login email
+	 * and is owned by Account Settings via /update-email, which updates both
+	 * records together. Anything sent in the body's email field is ignored.
+	 */
+	@PutMapping("/update-therapist")
+	public ResponseEntity<TherapistDto> updateTherapistProfile(@RequestBody TherapistDto therapistDto)
+			throws JsonProcessingException {
+		String therapistId = SecurityUtils.getTherapistId();
+		return ResponseEntity.ok(therapistService.updateTherapistProfile(therapistId, therapistDto));
+	}
+
 	// called by Account Settings alongside the UserService email update so the
 	// invite/contact email mirrors the account email
 	@PutMapping("/update-email")

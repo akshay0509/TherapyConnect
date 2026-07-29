@@ -24,6 +24,9 @@ public class SecurityConfig {
 				.requestMatchers("/user/forgot-username").permitAll()
 				.requestMatchers("/user/forgot-password").permitAll()
 				.requestMatchers("/user/reset-password").permitAll()
+				// The ClientService validates timestamped HMAC signatures. This path
+				// must be reachable without a user JWT so Apps Script can deliver.
+				.requestMatchers("/integrations/google-forms/*/submissions").permitAll()
 				.requestMatchers("/admin/**").hasAuthority("ADMIN")
 				.anyRequest().authenticated()
 			)

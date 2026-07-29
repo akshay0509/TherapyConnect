@@ -59,6 +59,7 @@ public class ClientService {
 		clientEvent.setPhoneNumber(client.getPhoneNumber());
 		clientEvent.setFirstName(client.getFirstName());
 		clientEvent.setLastName(client.getLastName());
+		clientEvent.setFullName(client.getFullName());
 		clientEvent.setOccurredAt(LocalDateTime.now());
 		clientEvent.setStatus(client.getStatus());
 		clientEvent.setDsf(client.isDsf());
@@ -77,12 +78,24 @@ public class ClientService {
 
 		client.setFirstName(clientDto.getFirstName());
 		client.setLastName(clientDto.getLastName());
+		client.setFullName(clientDto.getFullName() == null || clientDto.getFullName().isBlank()
+				? ((clientDto.getFirstName() == null ? "" : clientDto.getFirstName()) + " "
+						+ (clientDto.getLastName() == null ? "" : clientDto.getLastName())).trim()
+				: clientDto.getFullName().trim());
 		client.setDob(clientDto.getDob());
 		client.setPhoneNumber(clientDto.getPhoneNumber());
 		client.setEmergencyPhoneNumber(clientDto.getEmergencyPhoneNumber());
 		client.setEmail(clientDto.getEmail());
 		client.setPronouns(clientDto.getPronouns());
 		client.setGender(clientDto.getGender());
+		client.setQualification(clientDto.getQualification());
+		client.setCurrentOccupation(clientDto.getCurrentOccupation());
+		client.setPreferredDays(clientDto.getPreferredDays());
+		client.setPreferredTimings(clientDto.getPreferredTimings());
+		client.setPreferredModes(clientDto.getPreferredModes());
+		client.setEmergencyContactName(clientDto.getEmergencyContactName());
+		client.setEmergencyContactAge(clientDto.getEmergencyContactAge());
+		client.setEmergencyContactRelationship(clientDto.getEmergencyContactRelationship());
 
 		Client saved = clientRepository.save(client);
 		publishClientEvent("ClientUpdated", saved);
@@ -117,6 +130,7 @@ public class ClientService {
 		clientEvent.setPhoneNumber(client.getPhoneNumber());
 		clientEvent.setFirstName(client.getFirstName());
 		clientEvent.setLastName(client.getLastName());
+		clientEvent.setFullName(client.getFullName());
 		clientEvent.setOccurredAt(LocalDateTime.now());
 		clientEvent.setStatus(client.getStatus());
 		clientEvent.setDsf(client.isDsf());

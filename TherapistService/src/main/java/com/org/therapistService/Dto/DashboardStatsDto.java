@@ -1,4 +1,4 @@
-﻿package com.org.therapistService.Dto;
+package com.org.therapistService.Dto;
 
 import java.math.BigDecimal;
 
@@ -16,4 +16,7 @@ public class DashboardStatsDto {
 	private BigDecimal weekEarnings;
 	private BigDecimal monthEarnings;
 	private BigDecimal lifetimeEarnings;
+
+	/** Completed sessions across the practice that still have no notes. */
+	private long pendingNotes;
 }

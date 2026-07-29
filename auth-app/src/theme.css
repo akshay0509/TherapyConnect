@@ -169,7 +169,17 @@
 /* ── Reveal (stagger) ── */
 .reveal { opacity: 0; transform: translateY(14px); animation: tc-rise .5s cubic-bezier(.22,1,.36,1) forwards; }
 @keyframes tc-rise { to { opacity: 1; transform: none; } }
-@media (prefers-reduced-motion: reduce) { .reveal { animation: none; opacity: 1; transform: none; } }
+/* Stagger delays from the prototype — cards rise in sequence rather than all
+   at once. These were part of the prototype but missed in the original port. */
+.d1 { animation-delay: .03s; }
+.d2 { animation-delay: .09s; }
+.d3 { animation-delay: .15s; }
+.d4 { animation-delay: .21s; }
+.d5 { animation-delay: .27s; }
+@media (prefers-reduced-motion: reduce) {
+  .reveal { animation: none; opacity: 1; transform: none; }
+  .d1, .d2, .d3, .d4, .d5 { animation-delay: 0s; }
+}
 
 /* ── Icon button (prototype .iconbtn) ── */
 .iconbtn { width: 40px; height: 40px; border-radius: 11px; background: var(--surface); border: 1px solid var(--line); color: var(--text-2); display: flex; align-items: center; justify-content: center; cursor: pointer; transition: .16s; position: relative; }

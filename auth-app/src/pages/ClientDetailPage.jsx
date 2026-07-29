@@ -4,9 +4,13 @@ import {
   getClientById, getSessionDetails, createSessionNotes, updateSessionNotes,
   updateClient, updateClientStatus, getClientNotes, upsertClientNote,
 } from "../api/therapistClients";
-import { useModeMap } from "../context/DeliveryModesContext";
+import { useModeMap, useAllModes } from "../context/DeliveryModesContext";
+import ChipSelect, { splitList } from "../components/ChipSelect";
 import Icon from "../components/icons";
 import styles from "./ClientDetailPage.module.css";
+
+const DAY_OPTIONS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const TIMING_OPTIONS = ["Morning", "Afternoon", "Evening"];
 
 // "COMPLETED" → "Completed" (the prototype uses sentence case, not raw enums)
 function titleCase(s) {
@@ -67,21 +71,72 @@ function DetailField({ label, value }) {
   );
 }
 
-const EDIT_FIELDS = [
-  { name: "firstName",            label: "First Name",      type: "text" },
-  { name: "lastName",             label: "Last Name",       type: "text" },
-  { name: "dob",                  label: "Date of Birth",   type: "date" },
-  { name: "gender",               label: "Gender",          type: "text" },
-  { name: "pronouns",             label: "Pronouns",        type: "text" },
-  { name: "email",                label: "Email",           type: "email" },
-  { name: "phoneNumber",          label: "Phone Number",    type: "tel" },
-  { name: "emergencyPhoneNumber", label: "Emergency Phone", type: "tel" },
+/** Preferences are stored comma-joined, so they read better as chips than as
+ *  one run-on string. */
+function PreferenceRow({ label, value }) {
+  const items = splitList(value);
+  return (
+    <div className={styles.prefRow}>
+      <span className={styles.fieldLabel}>{label}</span>
+      {items.length === 0 ? (
+        <span className={styles.fieldValue}>—</span>
+      ) : (
+        <span className={styles.prefChips}>
+          {items.map(item => <span key={item} className="chip chip-mut">{item}</span>)}
+        </span>
+      )}
+    </div>
+  );
+}
+
+/* Every field updateClient() writes must appear here. It assigns each one
+   unconditionally, so a key missing from the payload is written as null —
+   an edit that omitted them would silently wipe whatever the intake form
+   collected. */
+const EDIT_GROUPS = [
+  {
+    label: "Identity",
+    fields: [
+      { name: "firstName", label: "First name", type: "text" },
+      { name: "lastName",  label: "Last name",  type: "text" },
+      { name: "dob",       label: "Date of birth", type: "date" },
+      { name: "gender",    label: "Gender",     type: "text" },
+      { name: "pronouns",  label: "Pronouns",   type: "text" },
+    ],
+  },
+  {
+    label: "Contact",
+    fields: [
+      { name: "email",       label: "Email",        type: "email" },
+      { name: "phoneNumber", label: "Phone number", type: "tel" },
+    ],
+  },
+  {
+    label: "Background",
+    fields: [
+      { name: "qualification",     label: "Qualification", type: "text" },
+      { name: "currentOccupation", label: "Occupation",    type: "text" },
+    ],
+  },
+  {
+    label: "Emergency contact",
+    fields: [
+      { name: "emergencyPhoneNumber",         label: "Emergency phone", type: "tel" },
+      { name: "emergencyContactName",         label: "Name",            type: "text" },
+      { name: "emergencyContactRelationship", label: "Relationship",    type: "text" },
+      { name: "emergencyContactAge",          label: "Age",             type: "number" },
+    ],
+  },
 ];
+
+const EDIT_FIELD_NAMES = EDIT_GROUPS.flatMap(g => g.fields.map(f => f.name));
 
 export default function ClientDetailPage() {
   const { clientId } = useParams();
   const navigate = useNavigate();
   const modeMap = useModeMap();
+  const allModes = useAllModes();
+  const modeOptions = (allModes ?? []).map(m => m.displayName).filter(Boolean);
 
   const [client, setClient]   = useState(null);
   const [loading, setLoading] = useState(true);
@@ -97,16 +152,13 @@ export default function ClientDetailPage() {
 
   const openEdit = () => {
     if (!client) return;
-    setEditForm({
-      firstName:             client.firstName || "",
-      lastName:              client.lastName || "",
-      dob:                   client.dob ? new Date(client.dob).toISOString().split("T")[0] : "",
-      gender:                client.gender || "",
-      pronouns:              client.pronouns || "",
-      email:                 client.email || "",
-      phoneNumber:           client.phoneNumber || "",
-      emergencyPhoneNumber:  client.emergencyPhoneNumber || "",
-    });
+    const next = {};
+    EDIT_FIELD_NAMES.forEach(name => { next[name] = client[name] ?? ""; });
+    next.dob = client.dob ? new Date(client.dob).toISOString().split("T")[0] : "";
+    next.preferredDays = client.preferredDays ?? "";
+    next.preferredTimings = client.preferredTimings ?? "";
+    next.preferredModes = client.preferredModes ?? "";
+    setEditForm(next);
     setEditError(null);
     setEditOpen(true);
   };
@@ -114,7 +166,13 @@ export default function ClientDetailPage() {
   const handleEditSave = async () => {
     setEditLoading(true); setEditError(null);
     try {
-      const payload = { ...editForm, dob: editForm.dob ? new Date(editForm.dob).toISOString() : null };
+      const payload = {
+        ...editForm,
+        dob: editForm.dob ? new Date(editForm.dob).toISOString() : null,
+        // ClientDto types this as Integer — "" will not deserialize.
+        emergencyContactAge: editForm.emergencyContactAge === "" || editForm.emergencyContactAge == null
+          ? null : Number(editForm.emergencyContactAge),
+      };
       const updated = await updateClient(clientId, payload);
       setClient(prev => ({ ...prev, ...updated }));
       setEditOpen(false);
@@ -254,8 +312,24 @@ export default function ClientDetailPage() {
     const counts = {};
     sessions.forEach(s => { if (s.modeId) counts[s.modeId] = (counts[s.modeId] || 0) + 1; });
     const topMode = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0];
-    return { total: sessions.length, attendance, primaryMode: modeMap[topMode]?.displayName ?? "—" };
-  }, [sessions, modeMap]);
+    // Total paid mirrors the Earnings page definition: completed session fees,
+    // and zero for DSF clients (pro bono, excluded from earnings). #38 will
+    // extend both this and the earnings query to include ABANDONED no-shows.
+    const totalPaid = client?.dsf
+      ? 0
+      : sessions
+          .filter(s => s.status === "COMPLETED")
+          .reduce((sum, s) => sum + (Number(s.sessionFee) || 0), 0);
+    return { total: sessions.length, attendance, primaryMode: modeMap[topMode]?.displayName ?? "—", totalPaid };
+  }, [sessions, modeMap, client]);
+
+  // Same rule the backend aggregate uses (COMPLETED with no notes), derived from
+  // the sessions this page already loads — SessionDetailsDto carries sessionNotes,
+  // so no extra request is needed just to count them.
+  const pendingNotes = useMemo(
+    () => sessions.filter(s => s.status === "COMPLETED" && !s.sessionNotes?.trim()).length,
+    [sessions]
+  );
 
   useEffect(() => {
     const handler = (e) => {
@@ -401,8 +475,9 @@ export default function ClientDetailPage() {
                         <h2 style={{ margin: "0 0 12px", fontSize: "1rem" }}>At a glance</h2>
                         <div className="rows">
                           <div><span className="k">Total sessions</span><span className="v">{glance ? glance.total : "—"}</span></div>
-                          {/* Total paid — awaiting the payments API (AppointmentService); shows "—" until wired */}
-                          <div><span className="k">Total paid</span><span className="v">{client.totalPaid != null ? `₹${Number(client.totalPaid).toLocaleString("en-IN")}` : "—"}</span></div>
+                          {/* Total paid — summed from the captured fee on each completed
+                              session (SessionDetailsDto.sessionFee). DSF clients read "Pro bono". */}
+                          <div><span className="k">Total paid</span><span className="v">{client.dsf ? "Pro bono" : glance ? `₹${glance.totalPaid.toLocaleString("en-IN")}` : "—"}</span></div>
                           <div><span className="k">Attendance</span><span className="v" style={{ color: "var(--ok-mid)" }}>{glance?.attendance != null ? `${glance.attendance}%` : "—"}</span></div>
                           <div><span className="k">Primary mode</span>{glance && glance.primaryMode !== "—" ? <span className="chip chip-online">{glance.primaryMode}</span> : <span className="v">—</span>}</div>
                         </div>
@@ -416,17 +491,54 @@ export default function ClientDetailPage() {
             {/* ── Personal details tab ── */}
             {activeTab === "details" && (
               <div className="card" style={{ padding: "22px 24px" }}>
-                <h2 className={styles.sectionTitle}>Personal details</h2>
+                <div className={styles.detailsHead}>
+                  <h2 className={styles.sectionTitle} style={{ margin: 0 }}>Personal details</h2>
+                  <div className={styles.detailsTags}>
+                    {client.dsf && <span className="chip chip-info">DSF &mdash; pro bono</span>}
+                    <span className={`chip ${client.source === "GOOGLE_FORM" ? "chip-online" : "chip-mut"}`}>
+                      {client.source === "GOOGLE_FORM" ? "From intake form" : "Added manually"}
+                    </span>
+                  </div>
+                </div>
+
+                <div className={styles.detailGroup}>Identity</div>
                 <div className={styles.grid}>
-                  <DetailField label="First Name"      value={client.firstName} />
-                  <DetailField label="Last Name"       value={client.lastName} />
-                  <DetailField label="Date of Birth"   value={formatDate(client.dob)} />
-                  <DetailField label="Gender"          value={client.gender} />
-                  <DetailField label="Pronouns"        value={client.pronouns} />
-                  <DetailField label="Email"           value={client.email} />
-                  <DetailField label="Phone Number"    value={client.phoneNumber} />
-                  <DetailField label="Emergency Phone" value={client.emergencyPhoneNumber} />
-                  <DetailField label="DSF"             value={client.dsf ? "Yes" : "No"} />
+                  <DetailField label="First name"    value={client.firstName} />
+                  <DetailField label="Last name"     value={client.lastName} />
+                  <DetailField label="Date of birth" value={formatDate(client.dob)} />
+                  {/* Derived, not read from the record: updateClient() rewrites
+                      dob without recalculating the stored age, and the DTO does
+                      not send it at all. */}
+                  <DetailField label="Age"           value={ageFromDob(client.dob)} />
+                  <DetailField label="Gender"        value={client.gender} />
+                  <DetailField label="Pronouns"      value={client.pronouns} />
+                </div>
+
+                <div className={styles.detailGroup}>Contact</div>
+                <div className={styles.grid}>
+                  <DetailField label="Email"        value={client.email} />
+                  <DetailField label="Phone number" value={client.phoneNumber} />
+                </div>
+
+                <div className={styles.detailGroup}>Background</div>
+                <div className={styles.grid}>
+                  <DetailField label="Qualification" value={client.qualification} />
+                  <DetailField label="Occupation"    value={client.currentOccupation} />
+                </div>
+
+                <div className={styles.detailGroup}>Scheduling preferences</div>
+                <div className={styles.prefRows}>
+                  <PreferenceRow label="Preferred days"    value={client.preferredDays} />
+                  <PreferenceRow label="Preferred timings" value={client.preferredTimings} />
+                  <PreferenceRow label="Preferred modes"   value={client.preferredModes} />
+                </div>
+
+                <div className={styles.detailGroup}>Emergency contact</div>
+                <div className={styles.grid}>
+                  <DetailField label="Name"         value={client.emergencyContactName} />
+                  <DetailField label="Relationship" value={client.emergencyContactRelationship} />
+                  <DetailField label="Age"          value={client.emergencyContactAge} />
+                  <DetailField label="Phone"        value={client.emergencyPhoneNumber} />
                 </div>
               </div>
             )}
@@ -434,7 +546,14 @@ export default function ClientDetailPage() {
             {/* ── Sessions tab ── */}
             {activeTab === "sessions" && (
               <div className={styles.card}>
-                <h2 className={styles.sectionTitle}>Sessions</h2>
+                <div className={styles.sessionsHead}>
+                  <h2 className={styles.sectionTitle} style={{ margin: 0 }}>Sessions</h2>
+                  {pendingNotes > 0 && (
+                    <span className="chip chip-warn">
+                      {pendingNotes} note{pendingNotes === 1 ? "" : "s"} due
+                    </span>
+                  )}
+                </div>
                 {sessionsLoading && <div className={styles.center}><div className={styles.spinner}/><p className={styles.loadingText}>Loading sessions…</p></div>}
                 {sessionsError && <div className={styles.errorBox}><span className={styles.errorIcon}>!</span>{sessionsError}</div>}
                 {!sessionsLoading && !sessionsError && sessions.length === 0 && (
@@ -565,18 +684,48 @@ export default function ClientDetailPage() {
             <button className={styles.closeBtn} onClick={() => setEditOpen(false)}><Icon name="x" size={18} /></button>
           </div>
           <div className={styles.notesModalBody} style={{ maxHeight: "60vh", overflowY: "auto" }}>
-            <div className={styles.editGrid}>
-              {EDIT_FIELDS.map(f => (
-                <div key={f.name} className={styles.editField}>
-                  <label className={styles.editLabel}>{f.label}</label>
-                  <input
-                    className={styles.editInput}
-                    type={f.type}
-                    value={editForm[f.name] || ""}
-                    onChange={e => setEditForm(prev => ({ ...prev, [f.name]: e.target.value }))}
-                  />
+            {EDIT_GROUPS.map(group => (
+              <div key={group.label}>
+                <div className={styles.editGroupLabel}>{group.label}</div>
+                <div className={styles.editGrid}>
+                  {group.fields.map(f => (
+                    <div key={f.name} className={styles.editField}>
+                      <label className={styles.editLabel} htmlFor={`edit-${f.name}`}>{f.label}</label>
+                      <input
+                        id={`edit-${f.name}`}
+                        className={styles.editInput}
+                        type={f.type}
+                        value={editForm[f.name] ?? ""}
+                        onChange={e => setEditForm(prev => ({ ...prev, [f.name]: e.target.value }))}
+                      />
+                    </div>
+                  ))}
                 </div>
-              ))}
+              </div>
+            ))}
+
+            <div className={styles.editGroupLabel}>Scheduling preferences</div>
+            <div className={styles.editChips}>
+              <div className={styles.editField}>
+                <label className={styles.editLabel}>Preferred days</label>
+                <ChipSelect label="Preferred days" options={DAY_OPTIONS}
+                  value={editForm.preferredDays}
+                  onChange={v => setEditForm(prev => ({ ...prev, preferredDays: v }))} />
+              </div>
+              <div className={styles.editField}>
+                <label className={styles.editLabel}>Preferred timings</label>
+                <ChipSelect label="Preferred timings" options={TIMING_OPTIONS}
+                  value={editForm.preferredTimings}
+                  onChange={v => setEditForm(prev => ({ ...prev, preferredTimings: v }))} />
+              </div>
+              {modeOptions.length > 0 && (
+                <div className={styles.editField}>
+                  <label className={styles.editLabel}>Preferred modes</label>
+                  <ChipSelect label="Preferred modes" options={modeOptions}
+                    value={editForm.preferredModes}
+                    onChange={v => setEditForm(prev => ({ ...prev, preferredModes: v }))} />
+                </div>
+              )}
             </div>
             {editError && <div className={styles.errorBox} style={{ marginTop: 12 }}><span className={styles.errorIcon}>!</span>{editError}</div>}
           </div>

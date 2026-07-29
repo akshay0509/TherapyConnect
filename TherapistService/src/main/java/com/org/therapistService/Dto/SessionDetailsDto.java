@@ -1,5 +1,6 @@
 package com.org.therapistService.Dto;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 import com.org.events.TherapistAppointment.AppointmentStatus;
@@ -18,4 +19,8 @@ public class SessionDetailsDto {
 	private AppointmentStatus status;
 	private String modeId;
 	private String sessionNotes;
+	// Captured fee for this booking. Lets the client page total "paid" the same
+	// way it already derives session count and attendance — from this list —
+	// rather than waiting on a separate payments endpoint.
+	private BigDecimal sessionFee;
 }

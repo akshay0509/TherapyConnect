@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { createTherapistProfile } from "../api/therapistProfile";
 import { getAccount } from "../api/user";
+import { TIMEZONES, detectTimezone } from "../constants/timezones";
 import Icon from "../components/icons";
 // Self-contained: this page renders before the workspace shell exists, so it
 // owns its layout instead of borrowing the profile page's module (which lost
@@ -38,6 +39,7 @@ export default function TherapistSetupPage() {
     firstName: "", lastName: "", email: "", phoneNumber: "",
     dob: null,
     gender: "", yearsOfExperience: "",
+    timezone: detectTimezone(),
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -249,6 +251,19 @@ export default function TherapistSetupPage() {
                   value={form.yearsOfExperience} onChange={handleChange}
                   className="input" placeholder="e.g. 5" />
               </div>
+            </div>
+
+            {/* Required at creation: a null timezone makes NotificationService
+                build every calendar invite in a fallback zone. */}
+            <div className={styles.field}>
+              <label className={styles.label} htmlFor="timezone">Timezone</label>
+              <select id="timezone" name="timezone" required
+                value={form.timezone} onChange={handleChange} className="input">
+                {TIMEZONES.map(tz => (
+                  <option key={tz.value} value={tz.value}>{tz.label}</option>
+                ))}
+              </select>
+              <span className={styles.hint}>Used for your schedule and calendar invites.</span>
             </div>
 
             {/* Gender — toggle buttons, fully CSS-controlled */}

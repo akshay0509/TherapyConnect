@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useTherapistProfile } from "../context/TherapistProfileContext";
+import { useTherapistProfile } from "../context/therapistProfileStore";
 import { useNavigate } from "react-router-dom";
 import { getAvailability, getDashboardStats } from "../api/appointments";
 import { useModeMap } from "../context/DeliveryModesContext";
@@ -150,7 +150,7 @@ export default function TherapistHomePage() {
         className={styles.homeTimer}
       />
 
-      <div className={`${styles.kpis} ${styles.reveal}`}>
+      <div className={`${styles.kpis} ${stats?.pendingNotes > 0 ? styles.kpis4 : ""} ${styles.reveal}`}>
         <div className="card kpi">
           <div className="kpi-top"><span className="kpi-ic ic-c"><Icon name="calendar" size={20} /></span></div>
           <div className="kpi-val">{kpiValue(stats?.sessionsToday)}</div>
@@ -166,6 +166,15 @@ export default function TherapistHomePage() {
           <div className="kpi-val">{kpiValue(stats?.completedThisWeek)}</div>
           <div className="kpi-lbl">Completed this week</div>
         </div>
+        {/* Only shown when there is something to act on — a permanent zero
+            would be noise on every visit. */}
+        {stats?.pendingNotes > 0 && (
+          <button className={`card kpi ${styles.kpiBtn}`} onClick={() => navigate("/therapist/clients")}>
+            <div className="kpi-top"><span className="kpi-ic ic-v"><Icon name="clipboard" size={20} /></span></div>
+            <div className="kpi-val">{kpiValue(stats?.pendingNotes)}</div>
+            <div className="kpi-lbl">Notes due</div>
+          </button>
+        )}
       </div>
 
       <div className={`grid-2 ${styles.reveal}`}>

@@ -26,6 +26,16 @@
 
 /* ── KPIs ── */
 .kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 22px; }
+/* The notes-due tile only appears when there is a backlog, so the row stays
+   3-up by default. The narrower breakpoints below still override both. */
+.kpis4 { grid-template-columns: repeat(4, 1fr); }
+/* The notes tile is a button (it navigates), so undo the browser defaults that
+   would otherwise fight the .kpi card styling. */
+.kpiBtn {
+  text-align: left; font-family: var(--font-sans);
+  cursor: pointer; color: inherit; width: 100%;
+}
+.kpiBtn:hover { border-color: var(--wash-3); }
 .kpi { padding: 18px; border-radius: 16px; background: linear-gradient(180deg, var(--wash-1), transparent); border: 1px solid var(--wash-2); }
 .kpiTop { display: flex; align-items: center; justify-content: space-between; }
 .kpiIcon { width: 40px; height: 40px; border-radius: 11px; display: flex; align-items: center; justify-content: center; }

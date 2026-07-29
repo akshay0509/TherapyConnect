@@ -49,6 +49,21 @@ function timeAgo(isoString) {
   }
 }
 
+const TABS = [
+  { id: "overview", label: "Overview", icon: "grid" },
+  { id: "dlq", label: "Dead letters", icon: "alert" },
+  { id: "users", label: "Users", icon: "users" },
+  { id: "activity", label: "Activity", icon: "activity" },
+  { id: "recovery", label: "Recovery", icon: "refresh" },
+];
+
+/* Ports are fixed per service and make the health list scannable, exactly as
+   the prototype shows them. Keyed by the name the health endpoint reports. */
+const SERVICE_PORTS = {
+  gateway: ":8091", user: ":5000", therapist: ":5001",
+  appointment: ":5002", client: ":5003", notification: ":5004", analytics: ":5005",
+};
+
 function titleCase(value) {
   return String(value || "")
     .toLowerCase()
@@ -89,6 +104,8 @@ export default function AdminPage() {
   const [audit, setAudit] = useState([]);
   const [auditError, setAuditError] = useState("");
   const [auditFilter, setAuditFilter] = useState("all"); // "all" | "success" | "failure"
+  const [auditLimit, setAuditLimit] = useState(10);
+  const [tab, setTab] = useState("overview");
 
   // Kafka / DLQ
   const [kafka, setKafka] = useState(null);
@@ -305,161 +322,8 @@ export default function AdminPage() {
   }
 
   // ── Outbox status rendering ──────────────────────────────────────
-  function renderOutboxCard() {
-    if (!apptHealth) {
-      return (
-        <div className={`card ${styles.statCard} ${styles.cardNeutral}`}>
-          <div className={styles.cardLabel}>Outbox / Kafka Producer</div>
-          <div className={`${styles.statusBadge} ${styles.neutral}`}>
-            <span className={`${styles.statusDot} ${styles.dotNeutral}`} />
-            No data
-          </div>
-        </div>
-      );
-    }
-
-    const { outbox } = apptHealth;
-    const isStale = outbox?.status === "STALE";
-    const hasParked = (outbox?.parkedCount ?? 0) > 0;
-    const isBad = isStale || hasParked;
-    const cardClass = isBad ? styles.cardError : styles.cardOk;
-    const badgeClass = isBad ? styles.error : styles.ok;
-    const dotClass = isBad ? styles.dotError : styles.dotOk;
-
-    return (
-      <div className={`card ${styles.statCard} ${cardClass}`}>
-        <div className={styles.cardLabel}>Outbox / Kafka Producer</div>
-        <div className={`${styles.statusBadge} ${badgeClass}`}>
-          <span className={`${styles.statusDot} ${dotClass}`} />
-          {isStale ? "STALE — Events stuck" : hasParked ? "PARKED EVENTS" : "HEALTHY"}
-        </div>
-        <div className={styles.cardDetail}>
-          <strong>{outbox?.pendingCount ?? 0}</strong> event(s) pending
-          {hasParked && (
-            <>
-              <br />
-              <strong style={{ color: "#dc2626" }}>
-                {outbox.parkedCount} parked (poison) — inspect logs, then replay the range to retry
-              </strong>
-            </>
-          )}
-          {outbox?.oldestPendingAt && (
-            <>
-              <br />
-              Oldest: {formatDateTime(outbox.oldestPendingAt)}{" "}
-              <span style={{ color: "#94a3b8" }}>({timeAgo(outbox.oldestPendingAt)})</span>
-            </>
-          )}
-          {isStale && outbox?.estimatedIssueStartedAt && (
-            <>
-              <br />
-              <strong style={{ color: "#dc2626" }}>
-                Issue started: {formatDateTime(outbox.estimatedIssueStartedAt)}
-              </strong>
-            </>
-          )}
-        </div>
-      </div>
-    );
-  }
-
   // ── Analytics status rendering ───────────────────────────────────
-  function renderAnalyticsCard() {
-    if (!analyticsHealth) {
-      return (
-        <div className={`card ${styles.statCard} ${styles.cardNeutral}`}>
-          <div className={styles.cardLabel}>Analytics Consumer</div>
-          <div className={`${styles.statusBadge} ${styles.neutral}`}>
-            <span className={`${styles.statusDot} ${styles.dotNeutral}`} />
-            No data
-          </div>
-        </div>
-      );
-    }
-
-    const { status, lastProcessedDate, daysBehind } = analyticsHealth;
-    const isOk = status === "OK";
-    const isNoData = status === "NO_DATA";
-    const cardClass = isOk ? styles.cardOk : isNoData ? styles.cardNeutral : styles.cardWarn;
-    const badgeClass = isOk ? styles.ok : isNoData ? styles.neutral : styles.warn;
-    const dotClass = isOk ? styles.dotOk : isNoData ? styles.dotNeutral : styles.dotWarn;
-
-    const label =
-      isNoData ? "NO DATA YET" :
-      isOk ? "UP TO DATE" :
-      `BEHIND BY ${daysBehind} DAY${daysBehind !== 1 ? "S" : ""}`;
-
-    return (
-      <div className={`card ${styles.statCard} ${cardClass}`}>
-        <div className={styles.cardLabel}>Analytics Consumer</div>
-        <div className={`${styles.statusBadge} ${badgeClass}`}>
-          <span className={`${styles.statusDot} ${dotClass}`} />
-          {label}
-        </div>
-        <div className={styles.cardDetail}>
-          {lastProcessedDate ? (
-            <>
-              Last processed: <strong>{lastProcessedDate}</strong>
-              {!isOk && (
-                <><br />Events after this date need replay</>
-              )}
-            </>
-          ) : (
-            "No events processed yet"
-          )}
-        </div>
-      </div>
-    );
-  }
-
   // ── Kafka / DLQ card ─────────────────────────────────────────────
-  function renderKafkaCard() {
-    if (!kafka) {
-      return (
-        <div className={`card ${styles.statCard} ${styles.cardNeutral}`}>
-          <div className={styles.cardLabel}>Kafka / Dead Letters</div>
-          <div className={`${styles.statusBadge} ${styles.neutral}`}>
-            <span className={`${styles.statusDot} ${styles.dotNeutral}`} />
-            {kafkaError ? "UNREACHABLE" : "No data"}
-          </div>
-          {kafkaError && <div className={styles.cardDetail}>{kafkaError}</div>}
-        </div>
-      );
-    }
-
-    const pending = kafka.totalPending ?? 0;
-    const totalLag = (kafka.groups || []).reduce((sum, g) => sum + (g.totalLag || 0), 0);
-    const hasDead = pending > 0;
-    const hasLag = totalLag > 0;
-    const cardClass = hasDead ? styles.cardError : hasLag ? styles.cardWarn : styles.cardOk;
-    const badgeClass = hasDead ? styles.error : hasLag ? styles.warn : styles.ok;
-    const dotClass = hasDead ? styles.dotError : hasLag ? styles.dotWarn : styles.dotOk;
-    const label = hasDead
-      ? `${pending} DEAD-LETTERED`
-      : hasLag
-        ? `LAG: ${totalLag} EVENT${totalLag !== 1 ? "S" : ""}`
-        : "ALL CLEAR";
-
-    return (
-      <div className={`card ${styles.statCard} ${cardClass}`}>
-        <div className={styles.cardLabel}>Kafka / Dead Letters</div>
-        <div className={`${styles.statusBadge} ${badgeClass}`}>
-          <span className={`${styles.statusDot} ${dotClass}`} />
-          {label}
-        </div>
-        <div className={styles.cardDetail}>
-          {(kafka.dlts || []).length} DLT topic(s) · {(kafka.groups || []).length} consumer group(s)
-          {hasDead && (
-            <>
-              <br />
-              <strong style={{ color: "#dc2626" }}>Unhandled failures — see Dead Letter Queues below</strong>
-            </>
-          )}
-        </div>
-      </div>
-    );
-  }
-
   // ── DLQ tables ───────────────────────────────────────────────────
   function renderKafkaSection() {
     const dlts = kafka?.dlts || [];
@@ -528,7 +392,13 @@ export default function AdminPage() {
             )}
           </tbody>
         </table>
-        <div className={styles.groupsSubTitle}>Consumer Groups</div>
+        {/* Same panel header as everywhere else, rather than a bespoke label */}
+        <div className="panel-h">
+          <div>
+            <h2>Consumer groups</h2>
+            <p>Every group is expected to be Stable with zero lag</p>
+          </div>
+        </div>
         <table className="data-table">
           <thead>
             <tr>
@@ -696,6 +566,9 @@ export default function AdminPage() {
   const filteredAudit = audit.filter((a) =>
     auditFilter === "all" ? true : auditFilter === "success" ? a.success : !a.success
   );
+  // 100 rows at ~75px each made the audit log longer than everything else on
+  // the page combined. Show a screenful, reveal the rest on request.
+  const visibleAudit = filteredAudit.slice(0, auditLimit);
 
   function renderAuditTable() {
     return (
@@ -726,11 +599,13 @@ export default function AdminPage() {
             </tr>
           </thead>
           <tbody>
-            {filteredAudit.map((a) => (
+            {visibleAudit.map((a) => (
               <tr key={a.id}>
+                {/* Relative time leads — it is what you scan an audit log for.
+                    The absolute stamp sits under it rather than wrapping mid-phrase. */}
                 <td className={styles.cellMuted}>
-                  {formatDateTime(a.loginAt)}{" "}
-                  <span className={styles.cellFaint}>({timeAgo(a.loginAt)})</span>
+                  <span className={styles.auditAgo}>{timeAgo(a.loginAt)}</span>
+                  <span className={styles.cellFaint}>{formatDateTime(a.loginAt)}</span>
                 </td>
                 <td className={styles.cellUsername}>{a.username || "—"}</td>
                 <td>
@@ -749,6 +624,15 @@ export default function AdminPage() {
                 <td colSpan={5} className={styles.emptyNote}>No login events.</td>
               </tr>
             )}
+            {filteredAudit.length > visibleAudit.length && (
+              <tr>
+                <td colSpan={5} className={styles.showMoreCell}>
+                  <button className="btn btn-sm" onClick={() => setAuditLimit(l => l + 20)}>
+                    Show 20 more · {filteredAudit.length - visibleAudit.length} remaining
+                  </button>
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
@@ -757,71 +641,301 @@ export default function AdminPage() {
 
   const portainerUrl = "http://therapyconnect.duckdns.org:9000";
 
+  // ── Console summary ──────────────────────────────────────────────
+  const servicesUp = services.filter(s => s.status === "UP").length;
+  const totalLag = (kafka?.groups || []).reduce((sum, g) => sum + (g.totalLag || 0), 0);
+  // Field names match renderKafkaCard: kafka.totalPending / kafka.dlts.
+  const dltPending = kafka?.totalPending ?? 0;
+  const outboxPending = apptHealth?.outbox?.pendingCount ?? 0;
+  const servicesDown = services.filter(s => s.status && s.status !== "UP");
+
+  /* Only genuine problems. Anything listed here is something an operator has to
+     act on, which is why each entry jumps to the tab that fixes it. */
+  const attention = [
+    dltPending > 0 && {
+      label: `${dltPending} dead-lettered event${dltPending === 1 ? "" : "s"}`,
+      detail: "Unhandled consumer failures — review and replay",
+      tab: "dlq",
+    },
+    outboxPending > 0 && {
+      label: `${outboxPending} outbox event${outboxPending === 1 ? "" : "s"} pending`,
+      detail: "Publisher may be stalled",
+      tab: "recovery",
+    },
+    servicesDown.length > 0 && {
+      label: `${servicesDown.length} service${servicesDown.length === 1 ? "" : "s"} not up`,
+      detail: servicesDown.map(s => s.name).join(", "),
+      tab: "recovery",
+    },
+  ].filter(Boolean);
+
   return (
     <div className={styles.page}>
-      {/* Header */}
-      <div className={styles.header}>
-        <span className={styles.headerIcon}><Icon name="shield" size={20} strokeWidth={2} /></span>
-        <div className={styles.headerTitleWrap}>
-          <span className={styles.headerEyebrow}>Admin console</span>
-          <span className={styles.headerTitle}>TherapyConnect</span>
+      {/* A slim brand bar only — the page opening now lives in .page-head,
+          matching every other page rather than a console-only chrome. */}
+      {/* Sidebar — the prototype puts the admin console inside the app shell,
+          so it gets a rail like every other view. Its own nav, because this is
+          a separate auth realm and must not offer therapist routes. */}
+      <aside className={styles.sidebar}>
+        <div className={styles.brand}>
+          <span className={styles.mark}><Icon name="shield" size={19} strokeWidth={2} /></span>
+          <div>
+            <b>TherapyConnect</b>
+            <span className={styles.brandSub}>Admin console</span>
+          </div>
         </div>
-        <div className={styles.headerActions}>
-          <button className="btn btn-sm" onClick={refreshAll} disabled={loading}>
-            {loading ? "Loading…" : <><Icon name="refresh" size={15} /> Refresh</>}
-          </button>
-          <button className={`btn btn-sm ${styles.logoutBtn}`} onClick={handleLogout}>
-            <Icon name="logout" size={15} /> Sign out
+        <div className={styles.navLabel}>Operations</div>
+        <nav className={styles.nav}>
+          {TABS.map(t => (
+            <button
+              key={t.id}
+              className={`${styles.navItem} ${tab === t.id ? styles.navActive : ""}`}
+              onClick={() => setTab(t.id)}
+              aria-current={tab === t.id ? "page" : undefined}
+            >
+              <Icon name={t.icon} size={17} className={styles.navIcon} />
+              {t.label}
+              {t.id === "dlq" && dltPending > 0 && (
+                <span className={`chip chip-bad ${styles.navCount}`}>{dltPending}</span>
+              )}
+            </button>
+          ))}
+        </nav>
+        <div className={styles.sideFoot}>
+          <span className={`chip chip-warn ${styles.restrictedChip}`}>Restricted</span>
+          <button className={`${styles.navItem} ${styles.logoutBtn}`} onClick={handleLogout}>
+            <Icon name="logout" size={17} className={styles.navIcon} /> Sign out
           </button>
         </div>
-      </div>
+      </aside>
 
-      {/* Meta bar */}
-      {lastRefreshed && (
-        <div className={styles.metaBar}>Last refreshed: {lastRefreshed}</div>
-      )}
+      
 
       {/* Content */}
+      <div className={styles.main}>
       <div className={styles.content}>
         {fetchError && <div className={styles.fetchError}>{fetchError}</div>}
 
-        {/* Services */}
-        <div className={styles.section}>
-          <h2 className={styles.sectionTitle}>Services</h2>
-          {renderServicesGrid()}
-        </div>
-
-        {/* System status */}
-        <div className={styles.section}>
-          <h2 className={styles.sectionTitle}>System Status</h2>
-          <div className={styles.cardsRow}>
-            {renderOutboxCard()}
-            {renderAnalyticsCard()}
-            {renderKafkaCard()}
+        {/* The same page opening every other page in the app uses */}
+        <div className="page-head">
+          <div>
+            <div className="eyebrow">System</div>
+            <h1>Admin <span className="g">console</span></h1>
+            <div className="sub">
+              {lastRefreshed ? `Last refreshed ${lastRefreshed}` : "Service health, users and event pipeline"}
+            </div>
+          </div>
+          <div className="head-actions">
+            <span className={`chip ${attention.length ? "chip-warn" : "chip-ok"}`}>
+              <Icon name={attention.length ? "alert" : "check"} size={13} />
+              {attention.length ? "Needs attention" : "All systems operational"}
+            </span>
+            <button className="btn" onClick={refreshAll} disabled={loading}>
+              {loading ? "Loading…" : <><Icon name="refresh" size={16} /> Refresh</>}
+            </button>
           </div>
         </div>
 
-        {/* Kafka / DLQ */}
-        <div className={styles.section}>
-          <h2 className={styles.sectionTitle}>Dead Letter Queues</h2>
-          {renderKafkaSection()}
+        {/* ── At a glance ─────────────────────────────────────────────────
+            The prototype's KPI tile: icon chip, big number, label. Four
+            numbers an operator actually checks. */}
+        <div className={`${styles.kpiRow} reveal d1`}>
+          <div className="card kpi">
+            <div className="kpi-top">
+              <span className={`kpi-ic ${servicesUp === services.length && services.length ? "ic-g" : "ic-a"}`}>
+                <Icon name="server" size={20} />
+              </span>
+              <span className={`kpi-trend ${servicesUp === services.length && services.length ? "up" : "flat"}`}>
+                {services.length ? (servicesUp === services.length ? "all up" : "degraded") : "—"}
+              </span>
+            </div>
+            <div className="kpi-val">{services.length ? `${servicesUp}/${services.length}` : "—"}</div>
+            <div className="kpi-lbl">Services healthy</div>
+          </div>
+
+          <div className="card kpi">
+            <div className="kpi-top">
+              <span className={`kpi-ic ${dltPending > 0 ? "ic-a" : "ic-g"}`}>
+                <Icon name="alert" size={20} />
+              </span>
+              <span className="kpi-trend flat">{(kafka?.dlts || []).length} topic(s)</span>
+            </div>
+            <div className="kpi-val">{dltPending}</div>
+            <div className="kpi-lbl">Dead-lettered events</div>
+          </div>
+
+          <div className="card kpi">
+            <div className="kpi-top">
+              <span className={`kpi-ic ${outboxPending > 0 ? "ic-a" : "ic-g"}`}>
+                <Icon name="refresh" size={20} />
+              </span>
+              <span className="kpi-trend flat">
+                {analyticsHealth?.lastProcessedDate ? `to ${analyticsHealth.lastProcessedDate}` : "outbox"}
+              </span>
+            </div>
+            <div className="kpi-val">{outboxPending}</div>
+            <div className="kpi-lbl">Events pending publish</div>
+          </div>
+
+          <div className="card kpi">
+            <div className="kpi-top">
+              <span className="kpi-ic ic-c"><Icon name="users" size={20} /></span>
+              <span className="kpi-trend flat">{(kafka?.groups || []).length} groups</span>
+            </div>
+            <div className="kpi-val">{users.length}</div>
+            <div className="kpi-lbl">User accounts</div>
+          </div>
         </div>
 
-        {/* User management */}
-        <div className={styles.section}>
-          <h2 className={styles.sectionTitle}>Users</h2>
-          {renderUsersTable()}
-        </div>
+        {/* ── Attention band ──────────────────────────────────────────────
+            An ops console should lead with what needs doing. When everything
+            is healthy this collapses to a single quiet line, so a red band is
+            always meaningful. */}
+        {attention.length > 0 ? (
+          <div className={styles.attention}>
+            <span className={styles.attentionIcon}><Icon name="alert" size={16} /></span>
+            <div className={styles.attentionList}>
+              {attention.map(a => (
+                <button key={a.label} className={styles.attentionItem} onClick={() => setTab(a.tab)}>
+                  <strong>{a.label}</strong>
+                  <span>{a.detail}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className={styles.allClear}>
+            <Icon name="check" size={15} /> All systems nominal — no action required
+          </div>
+        )}
 
-        {/* Login audit */}
-        <div className={styles.section}>
-          <h2 className={styles.sectionTitle}>Login Activity</h2>
-          {renderAuditTable()}
-        </div>
+        {/* ── Overview: the prototype's two-column layout ───────────────── */}
+        {tab === "overview" && (
+          <div className="grid-2 reveal d3">
+            <div className="card">
+              <div className="panel-h">
+                <div>
+                  <h2>Service health</h2>
+                  <p>Live via Eureka + actuator</p>
+                </div>
+                <span className={`chip ${servicesUp === services.length && services.length ? "chip-ok" : "chip-warn"}`}>
+                  {services.length ? `${servicesUp} of ${services.length} up` : "unknown"}
+                </span>
+              </div>
+              <div className="table-wrap">
+                <table className="data-table">
+                  <tbody>
+                    {services.map(svc => {
+                      const up = svc.status === "UP";
+                      const key = String(svc.name || "").toLowerCase().replace(/[-_]?service$/, "");
+                      return (
+                        <tr key={svc.name}>
+                          <td><b className={styles.svcName}>{titleCase(String(svc.name || "").replace(/[-_]?service$/i, ""))}</b></td>
+                          <td className={styles.svcPort}>{SERVICE_PORTS[key] ?? "—"}</td>
+                          <td style={{ textAlign: "right" }}>
+                            <span className={`chip ${up ? "chip-ok" : "chip-bad"}`}>{svc.status || "UNKNOWN"}</span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {!services.length && (
+                      <tr><td className={styles.emptyNote}>Service status unavailable.</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className={styles.sideStack}>
+              <div className="card" style={{ padding: 22 }}>
+                <div className={styles.miniHead}>
+                  <h2>Event pipeline</h2>
+                  <span className={`chip ${dltPending > 0 ? "chip-bad" : "chip-ok"}`}>
+                    {dltPending > 0 ? "Attention" : "Stable"}
+                  </span>
+                </div>
+                <p className={styles.miniSub}>Dead-letter queues &amp; consumer lag</p>
+                <div className={styles.miniList}>
+                  {(kafka?.dlts || []).map(d => (
+                    <div key={d.topic} className={styles.miniRow}>
+                      <span>{d.topic}</span>
+                      <b className={(d.pending ?? 0) > 0 ? styles.numBad : styles.numOk}>{d.pending ?? 0}</b>
+                    </div>
+                  ))}
+                  <div className={styles.miniRow}>
+                    <span>Consumer lag</span>
+                    <b className={totalLag > 0 ? styles.numBad : styles.numOk}>{totalLag}</b>
+                  </div>
+                  <div className={styles.miniRow}>
+                    <span>Outbox pending</span>
+                    <b className={outboxPending > 0 ? styles.numBad : styles.numOk}>{outboxPending}</b>
+                  </div>
+                </div>
+              </div>
+
+              <div className="card" style={{ padding: 22 }}>
+                <div className={styles.miniHead}>
+                  <h2>Recent logins</h2>
+                  <button className="link" onClick={() => setTab("activity")}>
+                    View all <Icon name="chevron" size={14} />
+                  </button>
+                </div>
+                <div className={styles.miniList} style={{ marginTop: 12 }}>
+                  {audit.slice(0, 5).map(a => (
+                    <div key={a.id} className={styles.miniRow}>
+                      <span>
+                        {a.username || "—"} <span className={styles.cellFaint}>· {timeAgo(a.loginAt)}</span>
+                      </span>
+                      <span className={`chip ${a.success ? "chip-ok" : "chip-bad"}`}>
+                        {a.success ? "Success" : "Failed"}
+                      </span>
+                    </div>
+                  ))}
+                  {!audit.length && <div className={styles.emptyNote}>No login events.</div>}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {tab === "dlq" && (
+          <div className="card reveal d5">
+            <div className="panel-h">
+              <div>
+                <h2>Dead letter queues</h2>
+                <p>Events a consumer could not process — review the payload, then replay</p>
+              </div>
+            </div>
+            {renderKafkaSection()}
+          </div>
+        )}
+        {tab === "users" && (
+          <div className="card reveal d5">
+            <div className="panel-h">
+              <div>
+                <h2>User accounts</h2>
+                <p>Enable, lock or force a password reset</p>
+              </div>
+              <span className="chip chip-mut">{users.length} total</span>
+            </div>
+            {renderUsersTable()}
+          </div>
+        )}
+        {tab === "activity" && (
+          <div className="card reveal d5">
+            <div className="panel-h">
+              <div>
+                <h2>Login activity</h2>
+                <p>Most recent authentication attempts across the platform</p>
+              </div>
+            </div>
+            {renderAuditTable()}
+          </div>
+        )}
 
         {/* Recovery actions */}
+        {tab === "recovery" && (
         <div className={styles.section}>
-          <h2 className={styles.sectionTitle}>Recovery Actions</h2>
           <div className={styles.recoveryPanel}>
             <p className={styles.recoveryDesc}>
               If Kafka went down, events may be marked as published but were never consumed.
@@ -852,11 +966,8 @@ export default function AdminPage() {
               </div>
             )}
           </div>
-        </div>
 
-        {/* Portainer */}
-        <div className={styles.section}>
-          <h2 className={styles.sectionTitle}>Container Management</h2>
+          {/* Container management belongs with the other recovery levers */}
           <div className={styles.portainerPanel}>
             <div className={styles.portainerText}>
               <h3><Icon name="server" size={17} /> Portainer</h3>
@@ -872,6 +983,8 @@ export default function AdminPage() {
             </a>
           </div>
         </div>
+        )}
+      </div>
       </div>
 
       {/* Confirm replay dialog */}

@@ -305,3 +305,6 @@
 .dangerBtn:hover { background: rgba(248,113,113,0.1); border-color: rgba(248,113,113,0.45); }
 
 .payBtn { width: fit-content; align-self: start; }
+
+/* Field helper text (e.g. why email is not editable here) */
+.hint { font-size: 0.72rem; color: var(--text-4); margin-top: 6px; display: block; }

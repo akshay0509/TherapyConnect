@@ -12,6 +12,7 @@ import TherapistSetupPage from "./pages/TherapistSetupPage";
 import MyServicesPage from "./pages/MyServicesPage";
 import AvailabilityRulesPage from "./pages/AvailabilityRulesPage";
 import MyClientsPage from "./pages/MyClientsPage";
+import ClientIntakesPage from "./pages/ClientIntakesPage";
 import ClientDetailPage from "./pages/ClientDetailPage";
 import AppointmentsPage from "./pages/AppointmentsPage";
 import TherapistsPage from "./pages/TherapistsPage";
@@ -103,6 +104,7 @@ export default function App() {
               <Route path="/therapist/services" element={<MyServicesPage />} />
               <Route path="/therapist/availability-rules" element={<AvailabilityRulesPage />} />
               <Route path="/therapist/clients" element={<MyClientsPage />} />
+              <Route path="/therapist/client-intakes" element={<ClientIntakesPage />} />
               <Route path="/therapist/clients/:clientId" element={<ClientDetailPage />} />
               <Route path="/therapist/appointments" element={<AppointmentsPage />} />
               <Route path="/therapist/earnings" element={<EarningsPage />} />

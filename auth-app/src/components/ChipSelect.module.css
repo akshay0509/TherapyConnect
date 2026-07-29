@@ -1,0 +1,5 @@
+/* Chips used as controls rather than labels — theme.css supplies the look,
+   this only makes them behave like buttons. */
+.wrap { display: flex; flex-wrap: wrap; gap: 7px; }
+.chip { cursor: pointer; font-family: var(--font-sans); transition: 0.15s; }
+.chip:hover { border-color: var(--line-2); }

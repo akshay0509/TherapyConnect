@@ -17,6 +17,7 @@ public class ClientEvent {
     private String phoneNumber;
     private String firstName;
     private String lastName;
+    private String fullName;
     private ClientStatus status;
     private boolean dsf;
     

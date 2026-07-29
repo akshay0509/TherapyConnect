@@ -1,4 +1,4 @@
-﻿package com.org.notificationService.Entity;
+package com.org.notificationService.Entity;
 
 import java.time.LocalDateTime;
 

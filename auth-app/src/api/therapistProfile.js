@@ -21,6 +21,24 @@ export async function createTherapistProfile(profileData) {
   }
 }
 
+/**
+ * Edit an existing profile. Email is intentionally stripped — it mirrors the
+ * account login email and is owned by Account Settings (updateTherapistEmail),
+ * which updates both records together. Sending it here would be ignored by the
+ * backend anyway; dropping it makes that explicit at the call site.
+ */
+export async function updateTherapistProfile(profileData) {
+  try {
+    const { email, ...rest } = profileData;
+    const response = await api.put("/therapist/update-therapist", rest);
+    return response.data;
+  } catch (err) {
+    throw new Error(
+      err.response?.data?.message || err.response?.data?.error || "Failed to update profile."
+    );
+  }
+}
+
 export async function updatePaymentSettings(paymentEnabled) {
   try {
     const response = await api.put("/therapist/payment-settings", { paymentEnabled });

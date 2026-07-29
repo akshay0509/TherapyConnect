@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
@@ -11,6 +12,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,6 +32,7 @@ import com.org.events.TherapistAvailability.TherapistServiceDefinitionEvent;
 import com.org.therapistService.Assembler.TherapistAssembler;
 import com.org.therapistService.Dto.BulkAvailabilityOverridesRequest;
 import com.org.therapistService.Dto.ClientNotesDto;
+import com.org.therapistService.Dto.ClientEnrichmentDto;
 import com.org.therapistService.Dto.DashboardStatsDto;
 import com.org.therapistService.Dto.EarningsSessionDto;
 import com.org.therapistService.Dto.EarningsSummaryDto;
@@ -142,6 +145,54 @@ public class TherapistService {
 		event.setEmail(saved.getEmail());
 		event.setPaymentEnabled(saved.isPaymentEnabled());
 		outboxService.saveOutboxEvent("THERAPIST_AVAILABILITY", saved.getTherapistId(), "TherapistPaymentSettingsUpdated", event);
+
+		return therapistAssembler.assembleEntityToDto(saved);
+	}
+
+	/**
+	 * Edit an existing profile.
+	 *
+	 * Email is deliberately NOT updatable here. It mirrors the account (login)
+	 * email and is owned by Account Settings, which calls updateTherapistEmail
+	 * alongside the UserService update so the two records never diverge. A
+	 * second write path would let them drift.
+	 *
+	 * Publishes TherapistUpdated because NotificationService caches timezone in
+	 * TherapistProjection — without this, a corrected timezone would never reach
+	 * calendar invite generation and the "Invalid timezone" fallback would
+	 * persist even after the therapist fixed it.
+	 */
+	@Transactional
+	public TherapistDto updateTherapistProfile(String therapistId, TherapistDto dto) throws JsonProcessingException {
+		Therapist therapist = therapistRepository.findByTherapistId(therapistId);
+		if (therapist == null) {
+			throw new IllegalArgumentException("Therapist profile not found.");
+		}
+
+		if (dto.getTimezone() != null && !dto.getTimezone().isBlank()) {
+			try {
+				ZoneId.of(dto.getTimezone().trim());
+			} catch (Exception e) {
+				throw new IllegalArgumentException("Unknown timezone: " + dto.getTimezone());
+			}
+			therapist.setTimezone(dto.getTimezone().trim());
+		}
+		if (dto.getFirstName() != null) therapist.setFirstName(dto.getFirstName().trim());
+		if (dto.getLastName() != null)  therapist.setLastName(dto.getLastName().trim());
+		if (dto.getPhoneNumber() != null) therapist.setPhoneNumber(dto.getPhoneNumber().trim());
+		if (dto.getGender() != null) therapist.setGender(dto.getGender());
+		if (dto.getDob() != null) therapist.setDob(dto.getDob());
+		if (dto.getYearsOfExperience() > 0) therapist.setYearsOfExperience(dto.getYearsOfExperience());
+
+		Therapist saved = therapistRepository.save(therapist);
+
+		TherapistEvent event = new TherapistEvent();
+		event.setEventType("TherapistUpdated");
+		event.setTherapistId(saved.getTherapistId());
+		event.setTimezone(saved.getTimezone());
+		event.setEmail(saved.getEmail());
+		event.setPaymentEnabled(saved.isPaymentEnabled());
+		outboxService.saveOutboxEvent("THERAPIST_AVAILABILITY", saved.getTherapistId(), "TherapistUpdated", event);
 
 		return therapistAssembler.assembleEntityToDto(saved);
 	}
@@ -663,10 +714,12 @@ public class TherapistService {
 
 	public List<TherapistClientsDto> getClientsForTherapist(String therapistId){
 		List<TherapistClients> list = therapistClientsRepository.findByTherapistId(therapistId);
+		Map<String, ClientEnrichmentDto> enrichment = loadClientEnrichment(therapistId);
 		List<TherapistClientsDto> dtoList = new ArrayList<TherapistClientsDto>();
 		TherapistClientsDto dto;
 		for(TherapistClients rec : list) {
 			dto = therapistAssembler.assembleEntityToDto(rec);
+			applyEnrichment(dto, enrichment.get(rec.getClientId()));
 			dtoList.add(dto);
 		}
 		return dtoList;
@@ -674,12 +727,40 @@ public class TherapistService {
 
 	public PageResponseDto<TherapistClientsDto> getClientsForTherapist(String therapistId, int page, int size) {
 		Page<TherapistClients> result = therapistClientsRepository.findByTherapistId(therapistId, PageRequest.of(page, size));
+		Map<String, ClientEnrichmentDto> enrichment = loadClientEnrichment(therapistId);
 		return new PageResponseDto<>(
-				result.getContent().stream().map(therapistAssembler::assembleEntityToDto).toList(),
+				result.getContent().stream().map(rec -> {
+					TherapistClientsDto dto = therapistAssembler.assembleEntityToDto(rec);
+					applyEnrichment(dto, enrichment.get(rec.getClientId()));
+					return dto;
+				}).toList(),
 				result.getTotalPages(),
 				result.getTotalElements(),
 				result.getNumber(),
 				result.getSize());
+	}
+
+	/**
+	 * One query for every client's aggregates, keyed by client id. Called once
+	 * per list request — never inside the loop, which is the whole point.
+	 */
+	private Map<String, ClientEnrichmentDto> loadClientEnrichment(String therapistId) {
+		return appointmentProjectionRepository.findClientEnrichment(therapistId).stream()
+				.collect(Collectors.toMap(ClientEnrichmentDto::getClientId, e -> e));
+	}
+
+	/**
+	 * A client with no completed sessions has no aggregate row. That is a
+	 * genuine zero, not absent data, so the counts stay 0 and lastSeen stays
+	 * null for the UI to render as "—".
+	 */
+	private void applyEnrichment(TherapistClientsDto dto, ClientEnrichmentDto enrichment) {
+		if (enrichment == null) {
+			return;
+		}
+		dto.setSessionCount(enrichment.getSessionCount());
+		dto.setLastSeen(enrichment.getLastSeen());
+		dto.setPendingNotes(enrichment.getPendingNotes());
 	}
 
 	public void addClient(String therapistId, String clientId, String clientName, boolean dsf) {
@@ -756,6 +837,18 @@ public class TherapistService {
 				endOfWeek
 				);
 
+		// Reuses the clients-list aggregate rather than adding a second query
+		// shape for the same fact. One row per client with completed sessions,
+		// so the sum is over a practice-sized list, not the appointment table.
+		//
+		// DSF clients are excluded (owner, 29 Jul): their pending notes show on
+		// the client's own page but must never drive this practice-wide total or
+		// the notification bell that reads it.
+		long pendingNotes = loadClientEnrichment(therapistId).values().stream()
+				.filter(e -> !e.isDsf())
+				.mapToLong(ClientEnrichmentDto::getPendingNotes)
+				.sum();
+
 		return new DashboardStatsDto(
 				sessionsToday,
 				activeClients,
@@ -763,7 +856,8 @@ public class TherapistService {
 				calculatePaidEarnings(therapistId, startOfToday, endOfToday),
 				calculatePaidEarnings(therapistId, startOfWeek, endOfWeek),
 				calculatePaidEarnings(therapistId, startOfMonth, endOfMonth),
-				calculatePaidEarnings(therapistId, lifetimeStart, endOfToday)
+				calculatePaidEarnings(therapistId, lifetimeStart, endOfToday),
+				pendingNotes
 				);
 	}
 

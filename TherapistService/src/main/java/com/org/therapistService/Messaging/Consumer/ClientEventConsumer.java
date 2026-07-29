@@ -31,7 +31,9 @@ public class ClientEventConsumer {
 	public void listen(JsonNode payload) {
 		String eventType = payload.get("eventType").asText();
 
-		if (!"ClientUpdated".equals(eventType) && !"ClientStatusUpdated".equals(eventType)) {
+		if (!"ClientCreated".equals(eventType)
+				&& !"ClientUpdated".equals(eventType)
+				&& !"ClientStatusUpdated".equals(eventType)) {
 			return;
 		}
 
@@ -40,19 +42,27 @@ public class ClientEventConsumer {
 				.findByTherapistIdAndClientId(event.getTherapistId(), event.getClientId())
 				.orElse(null);
 
-		if (therapistClient == null) {
+		if (therapistClient == null && "ClientCreated".equals(eventType)) {
+			therapistClient = new TherapistClients();
+			therapistClient.setTherapistId(event.getTherapistId());
+			therapistClient.setClientId(event.getClientId());
+		} else if (therapistClient == null) {
 			logger.warn("Therapist client projection missing for client event. therapistId={}, clientId={}, eventType={}",
 					event.getTherapistId(), event.getClientId(), eventType);
 			return;
 		}
 
-		if ("ClientUpdated".equals(eventType)) {
-			therapistClient.setClientName((event.getFirstName() + " " + event.getLastName()).trim());
+		if ("ClientCreated".equals(eventType) || "ClientUpdated".equals(eventType)) {
+			String fallback = ((event.getFirstName() == null ? "" : event.getFirstName()) + " "
+					+ (event.getLastName() == null ? "" : event.getLastName())).trim();
+			therapistClient.setClientName(event.getFullName() == null || event.getFullName().isBlank()
+					? fallback : event.getFullName().trim());
 		}
 
 		if (event.getStatus() != null) {
 			therapistClient.setStatus(event.getStatus());
 		}
+		therapistClient.setDsf(event.isDsf());
 
 		therapistClientsRepository.save(therapistClient);
 	}

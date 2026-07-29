@@ -1,4 +1,4 @@
-﻿package com.org.notificationService.Entity;
+package com.org.notificationService.Entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;

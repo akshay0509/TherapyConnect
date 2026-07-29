@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { NavLink, useNavigate, Outlet } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { TherapistProfileProvider, useTherapistProfile } from "../context/TherapistProfileContext";
+import { TherapistProfileProvider } from "../context/TherapistProfileContext";
+import { useTherapistProfile } from "../context/therapistProfileStore";
+import { getClientIntakes } from "../api/clientIntakes";
 import Icon from "./icons";
 import styles from "./TherapistShell.module.css";
 
@@ -15,6 +17,7 @@ const NAV = {
     { to: "/therapist-home", label: "Dashboard", icon: "grid", end: true },
     { to: "/therapist/appointments", label: "Schedule", icon: "calendar" },
     { to: "/therapist/clients", label: "Clients", icon: "users" },
+      { to: "/therapist/client-intakes", label: "Intakes", icon: "clipboard" },
     { to: "/therapist/services", label: "Services", icon: "clipboard" },
     { to: "/therapist/availability-rules", label: "Availability", icon: "clock" },
   ],
@@ -57,6 +60,17 @@ function TherapistShellInner({ children }) {
   const { displayName } = useTherapistProfile();
   const name = displayName;
 
+  // Pending intakes badge the Intakes item, the same affordance the admin
+  // console uses for dead letters: the count lives where you would act on it.
+  const [pendingIntakes, setPendingIntakes] = useState(0);
+  useEffect(() => {
+    let alive = true;
+    getClientIntakes("PENDING")
+      .then(list => { if (alive) setPendingIntakes(Array.isArray(list) ? list.length : 0); })
+      .catch(() => {});   // a badge is never worth surfacing an error for
+    return () => { alive = false; };
+  }, []);
+
   const handleSignOut = () => { logout(); navigate("/login"); };
 
   // Reuse the existing global command palette (Ctrl/Cmd-K) rather than
@@ -89,6 +103,9 @@ function TherapistShellInner({ children }) {
                 <NavLink key={it.to} to={it.to} end={it.end} className={linkClass} onClick={() => setDrawer(false)}>
                   <Icon name={it.icon} size={20} className={styles.navIcon} />
                   {it.label}
+                  {it.to === "/therapist/client-intakes" && pendingIntakes > 0 && (
+                    <span className={`chip chip-warn ${styles.navCount}`}>{pendingIntakes}</span>
+                  )}
                 </NavLink>
               ))}
             </nav>

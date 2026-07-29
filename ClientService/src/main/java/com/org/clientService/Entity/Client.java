@@ -23,6 +23,7 @@ public class Client {
 	private String therapistId;
 	private String firstName;
 	private String lastName;
+	private String fullName;
 	private Date dob;
 	private int age;
 	private String phoneNumber;
@@ -30,6 +31,15 @@ public class Client {
 	private String email;
 	private String pronouns;
 	private String gender;
+	private String qualification;
+	private String currentOccupation;
+	private String preferredDays;
+	private String preferredTimings;
+	private String preferredModes;
+	private String emergencyContactName;
+	private Integer emergencyContactAge;
+	private String emergencyContactRelationship;
+	private String source = "MANUAL";
 	private LocalDateTime createdAt = LocalDateTime.now();
 	private ClientStatus status = ClientStatus.ACTIVE;
 	private boolean dsf = false;

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { getTherapistProfile, createTherapistProfile, updatePaymentSettings } from "../api/therapistProfile";
+import { getTherapistProfile, createTherapistProfile, updateTherapistProfile, updatePaymentSettings } from "../api/therapistProfile";
+import { TIMEZONES, detectTimezone } from "../constants/timezones";
 import Icon from "../components/icons";
 import styles from "./TherapistProfilePage.module.css";
 
@@ -35,6 +36,7 @@ export default function TherapistProfilePage() {
 
   // Create form state
   const [showForm, setShowForm] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [formError, setFormError] = useState(null);
   const [formLoading, setFormLoading] = useState(false);
@@ -60,6 +62,24 @@ export default function TherapistProfilePage() {
     setForm((prev) => ({ ...prev, [name]: value }));
   };
 
+  /** Prefill from the saved profile and switch the shared form into edit mode. */
+  const openEdit = () => {
+    if (!profile) return;
+    setForm({
+      firstName: profile.firstName ?? "",
+      lastName: profile.lastName ?? "",
+      email: profile.email ?? "",
+      phoneNumber: profile.phoneNumber ?? "",
+      gender: profile.gender ?? "",
+      yearsOfExperience: profile.yearsOfExperience ?? "",
+      timezone: profile.timezone ?? detectTimezone(),
+      dob: profile.dob ? new Date(profile.dob).toISOString().split("T")[0] : "",
+    });
+    setFormError(null);
+    setEditing(true);
+    setShowForm(true);
+  };
+
   const handleCreate = async (e) => {
     e.preventDefault();
     setFormLoading(true);
@@ -70,9 +90,12 @@ export default function TherapistProfilePage() {
         yearsOfExperience: parseInt(form.yearsOfExperience, 10),
         dob: form.dob ? new Date(form.dob).toISOString() : null,
       };
-      const created = await createTherapistProfile(payload);
-      setProfile(created);
+      const saved = editing
+        ? await updateTherapistProfile(payload)
+        : await createTherapistProfile(payload);
+      setProfile(saved);
       setShowForm(false);
+      setEditing(false);
       setFormSuccess(true);
     } catch (err) {
       setFormError(err.message);
@@ -105,6 +128,13 @@ export default function TherapistProfilePage() {
             <h1>My Profile</h1>
             <div className="sub">Your therapist profile and booking preferences</div>
           </div>
+          {hasProfile && !showForm && (
+            <div className="head-actions">
+              <button className="btn" onClick={openEdit}>
+                <Icon name="edit" size={16} /> Edit profile
+              </button>
+            </div>
+          )}
         </div>
 
 
@@ -248,7 +278,18 @@ export default function TherapistProfilePage() {
                   <label className={styles.label} htmlFor="email">Email</label>
                   <input id="email" name="email" type="email" required
                     value={form.email} onChange={handleChange}
-                    className={styles.input} placeholder="you@example.com" />
+                    readOnly={editing}
+                    className={styles.input} placeholder="you@example.com"
+                    style={editing ? { opacity: 0.6, cursor: "not-allowed" } : undefined}
+                    title={editing ? "Change your email in Account Settings" : undefined} />
+                  {/* One owner for the email: Account Settings updates the account
+                      and the therapist record together, so editing it here would
+                      let the two drift. */}
+                  {editing && (
+                    <span className={styles.hint}>
+                      Email is managed in Account Settings so your login and invites stay in sync.
+                    </span>
+                  )}
                 </div>
                 <div className={styles.field}>
                   <label className={styles.label} htmlFor="phoneNumber">Phone Number</label>
@@ -292,18 +333,9 @@ export default function TherapistProfilePage() {
                   <select id="timezone" name="timezone" required
                     value={form.timezone} onChange={handleChange}
                     className={`${styles.input} ${styles.select}`}>
-                    <option value="" disabled>Select timezone</option>
-                    <option value="Asia/Kolkata">Asia/Kolkata (IST, UTC+5:30)</option>
-                    <option value="Asia/Dubai">Asia/Dubai (GST, UTC+4)</option>
-                    <option value="Asia/Singapore">Asia/Singapore (SGT, UTC+8)</option>
-                    <option value="Asia/Tokyo">Asia/Tokyo (JST, UTC+9)</option>
-                    <option value="Europe/London">Europe/London (GMT/BST)</option>
-                    <option value="Europe/Paris">Europe/Paris (CET/CEST, UTC+1/+2)</option>
-                    <option value="America/New_York">America/New_York (EST/EDT)</option>
-                    <option value="America/Chicago">America/Chicago (CST/CDT)</option>
-                    <option value="America/Denver">America/Denver (MST/MDT)</option>
-                    <option value="America/Los_Angeles">America/Los_Angeles (PST/PDT)</option>
-                    <option value="UTC">UTC</option>
+                    {TIMEZONES.map(tz => (
+                      <option key={tz.value} value={tz.value}>{tz.label}</option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -316,7 +348,7 @@ export default function TherapistProfilePage() {
 
               <div className={styles.formActions}>
                 <button type="button" className={styles.cancelBtn}
-                  onClick={() => { setShowForm(false); setFormError(null); }}>
+                  onClick={() => { setShowForm(false); setEditing(false); setFormError(null); }}>
                   Cancel
                 </button>
                 <button type="submit" className={styles.submitBtn} disabled={formLoading}>

@@ -28,6 +28,8 @@
 .navActive { background: linear-gradient(90deg, rgba(34,211,238,0.16), rgba(52,211,153,0.05)); color: var(--text-1); border-color: rgba(34,211,238,0.24); }
 .navActive .navIcon { color: var(--primary); }
 .navIcon { flex-shrink: 0; }
+/* Count sits at the far end of the nav row, as in the admin console */
+.navCount { margin-left: auto; }
 
 .sideFoot { margin-top: auto; padding-top: 14px; border-top: 1px solid var(--wash-2); }
 

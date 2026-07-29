@@ -236,6 +236,10 @@ services:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery:8761/eureka/
       SPRING_APPLICATION_JSON: '{"eureka":{"client":{"serviceUrl":{"defaultZone":"http://discovery:8761/eureka/"}}}}'
       JWT_PUBLIC_KEY: file:/app/keys/gateway-public.pem
+      GOOGLE_FORMS_INTEGRATION_ID: ${GOOGLE_FORMS_INTEGRATION_ID}
+      GOOGLE_FORMS_THERAPIST_ID: ${GOOGLE_FORMS_THERAPIST_ID}
+      GOOGLE_FORMS_HMAC_SECRET: ${GOOGLE_FORMS_HMAC_SECRET}
+      GOOGLE_FORMS_MAX_CLOCK_SKEW_SECONDS: ${GOOGLE_FORMS_MAX_CLOCK_SKEW_SECONDS:-300}
     volumes:
       - ./keys:/app/keys:ro
       - ./logs:/logs

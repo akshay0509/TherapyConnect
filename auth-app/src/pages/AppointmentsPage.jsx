@@ -411,6 +411,32 @@ export default function AppointmentsPage() {
     });
   }, [daySlots, activeDayAppointments]);
 
+  // Contiguous free blocks collapse into one card, as in the prototype: a whole
+  // free afternoon reads as one "Available" area rather than eight identical
+  // 30-minute rows. The underlying blocks are kept on the run so a click can
+  // still resolve to the exact block it landed on — merging is presentation
+  // only, booking still targets a real slot.
+  const availableRuns = useMemo(() => {
+    const sorted = [...availableSlots].sort(
+      (a, b) => new Date(a.startTime) - new Date(b.startTime)
+    );
+    const runs = [];
+    for (const slot of sorted) {
+      const prev = runs[runs.length - 1];
+      // Same start time means two services offering the same block — that is a
+      // lane case, not a continuation, so it starts its own run.
+      const continues = prev
+        && new Date(prev.endTime).getTime() === new Date(slot.startTime).getTime();
+      if (continues) {
+        prev.endTime = slot.endTime;
+        prev.slots.push(slot);
+      } else {
+        runs.push({ startTime: slot.startTime, endTime: slot.endTime, slots: [slot] });
+      }
+    }
+    return runs;
+  }, [availableSlots]);
+
   // Slots are generated per service, so two services can offer the same time.
   // Without lane assignment those blocks sit exactly on top of each other and
   // only the last one is clickable. Greedy sweep: each item takes the first lane
@@ -1053,40 +1079,70 @@ export default function AppointmentsPage() {
                   );
                 })}
 
-                {availableSlots.map(slot => {
-                  const top = minutesToPx(toMinutes(slot.startTime));
+                {availableRuns.map(run => {
+                  const top = minutesToPx(toMinutes(run.startTime));
                   // trim the height (never the top) so consecutive blocks read as
                   // separate without shifting either off its start time
-                  const height = Math.max(minutesToPx(toMinutes(slot.endTime)) - top - BLOCK_GAP, 18);
-                  const slotStartMin = toMinutes(slot.startTime);
-                  const slotEndMin = toMinutes(slot.endTime);
-                  const overlapsD = dragging && dragStart !== null && dragEnd !== null && slotStartMin < dragEnd && slotEndMin > dragStart;
+                  const height = Math.max(minutesToPx(toMinutes(run.endTime)) - top - BLOCK_GAP, 18);
+                  const runStartMin = toMinutes(run.startTime);
+                  const runEndMin = toMinutes(run.endTime);
+                  const overlapsD = dragging && dragStart !== null && dragEnd !== null && runStartMin < dragEnd && runEndMin > dragStart;
+                  const multi = run.slots.length > 1;
                   return (
                     <div
-                      key={slot.slotId}
+                      key={run.slots[0].slotId}
                       className={`tl-block avail ${styles.availableBlock} ${overlapsD ? styles.availableBlockDimmed : ""}`}
-                      style={{ top, height, ...laneStyle(slot.slotId) }}
-                      onClick={e => { e.stopPropagation(); openBook(slot); }}
-                      title={`Available: ${formatTime(slot.startTime)} – ${formatTime(slot.endTime)}`}
+                      style={{ top, height, ...laneStyle(run.slots[0].slotId) }}
+                      title={`Available: ${formatTime(run.startTime)} – ${formatTime(run.endTime)}`}
                     >
-                      <span className={styles.availableBlockLabel}>
-                        <Icon name="plus" size={14} />
-                        <span className={styles.availableBlockTime}>{formatTime(slot.startTime)}</span>
-                        {/* the prototype's full wording, only where it fits */}
-                        {height > 30 && <span className={styles.availableBlockHint}>Available · click to book</span>}
-                      </span>
+                      {/* One card keeps the timeline calm, but each bookable
+                          30-minute block is still a real element inside it: the
+                          granularity stays visible, hover names the exact time,
+                          and the click lands on a slot rather than being derived
+                          from pixel maths. */}
+                      {run.slots.map((slot, i) => {
+                        const segTop = minutesToPx(toMinutes(slot.startTime)) - minutesToPx(toMinutes(run.startTime));
+                        const segH = minutesToPx(toMinutes(slot.endTime)) - minutesToPx(toMinutes(slot.startTime));
+                        return (
+                          <button
+                            key={slot.slotId}
+                            type="button"
+                            className={styles.availSegment}
+                            style={{ top: segTop, height: segH }}
+                            onClick={e => { e.stopPropagation(); openBook(slot); }}
+                            title={`Book ${formatTime(slot.startTime)}`}
+                          >
+                            <span className={styles.availSegmentTime}>{formatTime(slot.startTime)}</span>
+                            {i === 0 && (
+                              <span className={styles.availableBlockLabel}>
+                                <Icon name="plus" size={14} />
+                                <span className={styles.availableBlockHint}>
+                                  {multi ? "Available · click any time to book" : "Available · click to book"}
+                                </span>
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
                     </div>
                   );
                 })}
 
                 {activeDayAppointments.map(appt => {
                   const top = minutesToPx(toMinutes(appt.startTime));
-                  const height = Math.max(minutesToPx(toMinutes(appt.endTime)) - top - BLOCK_GAP, 28);
+                  const startMin = toMinutes(appt.startTime), endMin = toMinutes(appt.endTime);
+                  // Model B: a session reserves whole 30-minute blocks, so a
+                  // 50-minute appointment holds a full hour. Draw the reserved
+                  // footprint, not the session length — otherwise a 10-minute
+                  // sliver of dead space appears before the next free slot.
+                  // The label still shows the true session times.
+                  const footprintEnd = startMin
+                    + Math.ceil((endMin - startMin) / BLOCK_MINUTES) * BLOCK_MINUTES;
+                  const height = Math.max(minutesToPx(footprintEnd) - top - BLOCK_GAP, 28);
                   const apptAsSlot = toApptSlot(appt);
                   const modeName = modeMap[appt.modeId]?.displayName;
                   // "Live" is the prototype's green treatment — only while the
                   // session is actually running right now.
-                  const startMin = toMinutes(appt.startTime), endMin = toMinutes(appt.endTime);
                   const isLive = nowMinutes !== null && nowMinutes >= startMin && nowMinutes < endMin
                     && appt.status !== "COMPLETED";
                   return (
@@ -1097,12 +1153,16 @@ export default function AppointmentsPage() {
                       onClick={e => { e.stopPropagation(); openUpdate(apptAsSlot); }}
                       title={`${appt.clientName} · ${formatTime(appt.startTime)} – ${formatTime(appt.endTime)}`}
                     >
+                      {/* Two lines, matching the prototype: the client leads and
+                          mode/time share the second line. Three stacked lines did
+                          not fit a 50-minute block. */}
                       <div className={styles.bookedBlockContent}>
-                        <span className={styles.bookedBlockTime}>{formatTime(appt.startTime)} – {formatTime(appt.endTime)}</span>
-                        {height > 36 && <span className={styles.bookedBlockClient}>{appt.clientName}</span>}
-                        {height > 52 && (
+                        <span className={styles.bookedBlockClient}>{appt.clientName}</span>
+                        {height > 40 && (
                           <span className={styles.bookedBlockMeta}>
-                            {modeName ? modeName : titleCase(appt.status)}
+                            {[modeName || titleCase(appt.status),
+                              `${formatTime(appt.startTime)} – ${formatTime(appt.endTime)}`]
+                              .filter(Boolean).join(" · ")}
                           </span>
                         )}
                       </div>

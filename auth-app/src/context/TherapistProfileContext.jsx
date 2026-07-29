@@ -1,13 +1,12 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { getTherapistProfile } from "../api/therapistProfile";
+import { TherapistProfileContext } from "./therapistProfileStore";
 
 /**
  * The JWT only carries the username, but the workspace should address the
  * therapist by name. The profile is fetched once here and shared, so the
  * topbar and the dashboard greeting don't each request it.
  */
-const TherapistProfileContext = createContext({ profile: null, firstName: null, displayName: null });
-
 export function TherapistProfileProvider({ fallbackName, children }) {
   const [profile, setProfile] = useState(null);
 
@@ -40,8 +39,4 @@ export function TherapistProfileProvider({ fallbackName, children }) {
       {children}
     </TherapistProfileContext.Provider>
   );
-}
-
-export function useTherapistProfile() {
-  return useContext(TherapistProfileContext);
 }

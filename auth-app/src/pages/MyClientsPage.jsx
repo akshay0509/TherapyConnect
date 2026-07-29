@@ -1,8 +1,13 @@
 import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { getTherapistClients, createClient } from "../api/therapistClients";
+import { useAllModes } from "../context/DeliveryModesContext";
+import ChipSelect from "../components/ChipSelect";
 import Icon from "../components/icons";
 import styles from "./MyClientsPage.module.css";
+
+const DAY_OPTIONS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const TIMING_OPTIONS = ["Morning", "Afternoon", "Evening"];
 
 function getInitials(name) {
   if (!name) return "?";
@@ -49,11 +54,16 @@ function avatarGradient(id) {
 const EMPTY_FORM = {
   firstName: "", lastName: "", dob: "", phoneNumber: "",
   emergencyPhoneNumber: "", email: "", pronouns: "", gender: "",
+  qualification: "", currentOccupation: "",
+  preferredDays: "", preferredTimings: "", preferredModes: "",
+  emergencyContactName: "", emergencyContactAge: "", emergencyContactRelationship: "",
   dsf: false,
 };
 
 export default function MyClientsPage() {
   const navigate = useNavigate();
+  const allModes = useAllModes();
+  const modeOptions = (allModes ?? []).map(m => m.displayName).filter(Boolean);
 
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -62,7 +72,7 @@ export default function MyClientsPage() {
   const [statusFilter, setStatusFilter] = useState("ALL"); // ALL | ACTIVE | ARCHIVED
   const [recentFirst, setRecentFirst] = useState(false);
 
-  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [addModalOpen, setAddModalOpen] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [formLoading, setFormLoading] = useState(false);
   const [formError, setFormError] = useState(null);
@@ -79,7 +89,7 @@ export default function MyClientsPage() {
   useEffect(() => { fetchClients(); }, [fetchClients]);
 
   useEffect(() => {
-    const handler = (e) => { if (e.key === "Escape") closeDrawer(); };
+    const handler = (e) => { if (e.key === "Escape") closeAddModal(); };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, []);
@@ -87,8 +97,8 @@ export default function MyClientsPage() {
   const previewName = [form.firstName, form.lastName].filter(p => p && p.trim()).join(" ").trim();
   const previewInitials = ((form.firstName?.[0] ?? "") + (form.lastName?.[0] ?? "")).toUpperCase();
 
-  const openDrawer = () => { setForm(EMPTY_FORM); setFormError(null); setDrawerOpen(true); };
-  const closeDrawer = () => { setDrawerOpen(false); setFormError(null); };
+  const openAddModal = () => { setForm(EMPTY_FORM); setFormError(null); setAddModalOpen(true); };
+  const closeAddModal = () => { setAddModalOpen(false); setFormError(null); };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -104,9 +114,12 @@ export default function MyClientsPage() {
         ...form,
         dob: form.dob ? new Date(form.dob).toISOString() : null,
         dsf: form.dsf,
+        // ClientDto types this as Integer — "" will not deserialize.
+        emergencyContactAge: form.emergencyContactAge === ""
+          ? null : Number(form.emergencyContactAge),
       };
       await createClient(payload);
-      closeDrawer();
+      closeAddModal();
       fetchClients(); // re-query and refresh list
     } catch (err) {
       setFormError(err.message);
@@ -140,7 +153,7 @@ export default function MyClientsPage() {
             </div>
           </div>
           {!loading && (
-            <button className="btn btn-primary" onClick={openDrawer}>
+            <button className="btn btn-primary" onClick={openAddModal}>
               <Icon name="plus" size={16} /> Add client
             </button>
           )}
@@ -187,7 +200,7 @@ export default function MyClientsPage() {
             <span className={styles.emptyIcon}><Icon name="users" size={38} /></span>
             <h2 className={styles.emptyTitle}>No clients yet</h2>
             <p className={styles.emptyText}>Create your first client to get started.</p>
-            <button className="btn btn-primary" onClick={openDrawer}><Icon name="plus" size={16} /> Add client</button>
+            <button className="btn btn-primary" onClick={openAddModal}><Icon name="plus" size={16} /> Add client</button>
           </div>
         )}
 
@@ -224,6 +237,14 @@ export default function MyClientsPage() {
                   <div className={styles.cardStats}>
                     <span><b>{c.sessionCount ?? "—"}</b> session{c.sessionCount === 1 ? "" : "s"}</span>
                     <span>Last seen <b>{formatLastSeen(c.lastSeen)}</b></span>
+                    {/* DSF clients' pending notes are never surfaced as a concern
+                        on the list — only on the client's own page (owner, 29 Jul). */}
+                    {!c.dsf && c.pendingNotes > 0 && (
+                      <span className={`chip chip-warn ${styles.notesChip}`}
+                        title={`${c.pendingNotes} completed session${c.pendingNotes === 1 ? "" : "s"} without notes`}>
+                        {c.pendingNotes} note{c.pendingNotes === 1 ? "" : "s"} due
+                      </span>
+                    )}
                   </div>
                 </div>
               );
@@ -241,21 +262,24 @@ export default function MyClientsPage() {
 
       {/* Backdrop */}
       <div
-        className={`${styles.backdrop} ${drawerOpen ? styles.backdropVisible : ""}`}
-        onClick={closeDrawer}
+        className={`${styles.backdrop} ${addModalOpen ? styles.backdropVisible : ""}`}
+        onClick={closeAddModal}
       />
 
-      {/* Slide-out drawer */}
-      <div className={`${styles.drawer} ${drawerOpen ? styles.drawerOpen : ""}`}>
-        <div className={styles.drawerHeader}>
+      {/* Centred modal — creating a client is a focused task, not a glance */}
+      <div className={styles.modalWrap} aria-hidden={!addModalOpen}>
+      <div className={`${styles.modal} ${addModalOpen ? styles.modalOpen : ""}`}
+        role="dialog" aria-modal="true" aria-labelledby="add-client-title">
+        <div className={styles.modalHeader}>
           <div>
-            <h2 className={styles.drawerTitle}>Add client</h2>
-            <p className={styles.drawerSub}>Fill in the client's details below</p>
+            <h2 className={styles.modalTitle} id="add-client-title">Add client</h2>
+            <p className={styles.modalSub}>Fill in the client&apos;s details below</p>
           </div>
-          <button className={styles.closeBtn} onClick={closeDrawer} aria-label="Close"><Icon name="x" size={18} /></button>
+          <button className={styles.closeBtn} onClick={closeAddModal} aria-label="Close"><Icon name="x" size={18} /></button>
         </div>
 
         <form onSubmit={handleSubmit} className={styles.form}>
+        <div className={styles.formBody}>
 
           {/* Live preview: the client is represented by an initials avatar
               everywhere else in the app, so the form builds one as you type
@@ -269,6 +293,9 @@ export default function MyClientsPage() {
               <span>{form.email || "No email yet"}</span>
             </div>
           </div>
+
+          <div className={styles.formCols}>
+          <div className={styles.col}>
 
           <div className={styles.groupLabel}>Identity</div>
           <div className={styles.formRow}>
@@ -332,13 +359,89 @@ export default function MyClientsPage() {
             </div>
           </div>
 
-          <div className={styles.groupLabel}>Emergency &amp; billing</div>
+          <div className={styles.groupLabel}>
+            Background <span className={styles.optional}>optional</span>
+          </div>
+          <div className={styles.formRow}>
+            <div className={styles.field}>
+              <label className={styles.label} htmlFor="qualification">Qualification</label>
+              <input id="qualification" name="qualification" type="text"
+                value={form.qualification} onChange={handleChange}
+                className="input" placeholder="e.g. B.Sc Psychology" />
+            </div>
+            <div className={styles.field}>
+              <label className={styles.label} htmlFor="currentOccupation">Occupation</label>
+              <input id="currentOccupation" name="currentOccupation" type="text"
+                value={form.currentOccupation} onChange={handleChange}
+                className="input" placeholder="e.g. Student" />
+            </div>
+          </div>
+
+          </div>
+          <div className={styles.col}>
+
+          {/* Stored as comma-joined strings, matching what the intake form
+              produces for a multi-choice answer. */}
+          <div className={styles.groupLabel}>
+            Scheduling preferences <span className={styles.optional}>optional</span>
+          </div>
+          <div className={styles.field}>
+            <label className={styles.label}>Preferred days</label>
+            <ChipSelect label="Preferred days" options={DAY_OPTIONS}
+              value={form.preferredDays}
+              onChange={v => setForm(prev => ({ ...prev, preferredDays: v }))} />
+          </div>
+          <div className={styles.field}>
+            <label className={styles.label}>Preferred timings</label>
+            <ChipSelect label="Preferred timings" options={TIMING_OPTIONS}
+              value={form.preferredTimings}
+              onChange={v => setForm(prev => ({ ...prev, preferredTimings: v }))} />
+          </div>
+          {modeOptions.length > 0 && (
+            <div className={styles.field}>
+              <label className={styles.label}>Preferred modes</label>
+              <ChipSelect label="Preferred modes" options={modeOptions}
+                value={form.preferredModes}
+                onChange={v => setForm(prev => ({ ...prev, preferredModes: v }))} />
+            </div>
+          )}
+
+          <div className={styles.groupLabel}>Emergency contact</div>
           <div className={styles.field}>
             <label className={styles.label} htmlFor="emergencyPhoneNumber">Emergency phone</label>
             <input id="emergencyPhoneNumber" name="emergencyPhoneNumber" type="tel" required
               value={form.emergencyPhoneNumber} onChange={handleChange}
               className="input" placeholder="+91 91234 56789" />
             <span className={styles.hint}>Someone to reach if the client can&apos;t be contacted.</span>
+          </div>
+          <div className={styles.formRow}>
+            <div className={styles.field}>
+              <label className={styles.label} htmlFor="emergencyContactName">
+                Name <span className={styles.optional}>optional</span>
+              </label>
+              <input id="emergencyContactName" name="emergencyContactName" type="text"
+                value={form.emergencyContactName} onChange={handleChange}
+                className="input" placeholder="Priya Doe" />
+            </div>
+            <div className={styles.field}>
+              <label className={styles.label} htmlFor="emergencyContactRelationship">
+                Relationship <span className={styles.optional}>optional</span>
+              </label>
+              <input id="emergencyContactRelationship" name="emergencyContactRelationship" type="text"
+                value={form.emergencyContactRelationship} onChange={handleChange}
+                className="input" placeholder="Mother" />
+            </div>
+          </div>
+          <div className={styles.field}>
+            <label className={styles.label} htmlFor="emergencyContactAge">
+              Age <span className={styles.optional}>optional</span>
+            </label>
+            <input id="emergencyContactAge" name="emergencyContactAge" type="number" min="0" max="120"
+              value={form.emergencyContactAge} onChange={handleChange}
+              className={`input ${styles.ageInput}`} placeholder="48" />
+          </div>
+
+          </div>
           </div>
 
           {/* DSF is the partner non-profit; its students are seen pro bono.
@@ -365,13 +468,16 @@ export default function MyClientsPage() {
             </div>
           )}
 
+          </div>
+
           <div className={styles.formActions}>
-            <button type="button" className="btn" onClick={closeDrawer}>Cancel</button>
+            <button type="button" className="btn" onClick={closeAddModal}>Cancel</button>
             <button type="submit" className="btn btn-primary" disabled={formLoading}>
               {formLoading ? <span className={styles.btnSpinner} /> : "Add client"}
             </button>
           </div>
         </form>
+      </div>
       </div>
     </div>
   );

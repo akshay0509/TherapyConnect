@@ -187,7 +187,11 @@ public class TherapistAssembler {
 		therapistClientsDto.setClientId(therapistClients.getClientId());
 		therapistClientsDto.setClientName(therapistClients.getClientName());
 		therapistClientsDto.setDsf(therapistClients.isDsf());
+		therapistClientsDto.setStatus(therapistClients.getStatus());
+		therapistClientsDto.setCreatedAt(therapistClients.getCreatedAt());
 
+		// sessionCount / lastSeen / pendingNotes are aggregates, not entity
+		// columns — TherapistService fills them from one grouped query.
 		return therapistClientsDto;
 	}
 

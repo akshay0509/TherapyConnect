@@ -1,4 +1,4 @@
-﻿package com.org.events.TherapistAvailability;
+package com.org.events.TherapistAvailability;
 
 import java.time.LocalDateTime;
 import java.util.UUID;

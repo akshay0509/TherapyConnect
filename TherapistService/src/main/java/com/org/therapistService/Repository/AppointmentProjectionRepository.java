@@ -10,6 +10,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import com.org.events.TherapistAppointment.AppointmentStatus;
+import com.org.therapistService.Dto.ClientEnrichmentDto;
 import com.org.therapistService.Dto.EarningsSessionDto;
 import com.org.therapistService.Entity.AppointmentProjection;
 
@@ -112,6 +113,40 @@ public interface AppointmentProjectionRepository extends JpaRepository<Appointme
 			String serviceId,
 			String modeId
 			);
+
+	/**
+	 * Per-client aggregates for the clients list, in one grouped pass.
+	 *
+	 * The LEFT JOIN onto SessionNotes cannot fan out: SessionNotes.appointmentId
+	 * is unique, so each appointment matches at most one note row and COUNT(a)
+	 * stays a true session count.
+	 *
+	 * Only COMPLETED appointments count — a booked future session is not a
+	 * session had, and a session with no notes only becomes a backlog item once
+	 * it has actually happened.
+	 *
+	 * TherapistClients is joined to carry the DSF flag on each row. Per the owner
+	 * decision (29 Jul), a DSF client's pending notes are shown on that client's
+	 * own page but must never feed the practice-wide "Notes due" total or the
+	 * notification bell — so the caller sums pendingNotes only over non-DSF rows.
+	 * dsf is functionally dependent on clientId, so grouping by both is safe.
+	 */
+	@Query("""
+			SELECT new com.org.therapistService.Dto.ClientEnrichmentDto(
+				a.clientId,
+				COUNT(a),
+				MAX(a.startTime),
+				SUM(CASE WHEN n.noteId IS NULL THEN 1L ELSE 0L END),
+				c.dsf
+			)
+			FROM AppointmentProjection a
+			JOIN TherapistClients c ON c.therapistId = a.therapistId AND c.clientId = a.clientId
+			LEFT JOIN SessionNotes n ON n.appointmentId = a.appointmentId
+			WHERE a.therapistId = :therapistId
+				AND a.status = com.org.events.TherapistAppointment.AppointmentStatus.COMPLETED
+			GROUP BY a.clientId, c.dsf
+			""")
+	List<ClientEnrichmentDto> findClientEnrichment(String therapistId);
 
 	long countByTherapistIdAndStatusInAndStartTimeAfter(
 			String therapistId,
