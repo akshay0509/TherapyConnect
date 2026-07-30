@@ -4,7 +4,7 @@ import { getEarningsSummary, getEarningsSessions, exportEarningsCsv } from "../a
 import { useModeMap } from "../context/DeliveryModesContext";
 import api from "../api/client";
 import {
-  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
+  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Legend,
 } from "recharts";
 import Icon from "../components/icons";
 import { useChartTheme } from "../components/chartTheme";
@@ -172,25 +172,33 @@ export default function EarningsPage() {
     ? Number(summary.monthEarnings) / summary.monthPaidCount
     : 0;
 
-  // Daily revenue totals for the chart, built from the loaded session rows
+  // Daily totals for the chart. DSF sessions carry earningAmount 0, so revenue
+  // alone renders pro-bono work as nothing at all — it gets its own series
+  // (a count, not money) so delivered work stays visible beside income.
   const dailyTotals = (() => {
     if (!sessions.length) return [];
     const byDay = {};
     sessions.forEach((s) => {
       if (!s.startTime) return;
       const key = String(s.startTime).slice(0, 10); // YYYY-MM-DD
-      byDay[key] = (byDay[key] || 0) + Number(s.earningAmount ?? 0);
+      const row = byDay[key] || (byDay[key] = { total: 0, dsfSessions: 0 });
+      row.total += Number(s.earningAmount ?? 0);
+      if (s.dsf) row.dsfSessions += 1;
     });
     return Object.entries(byDay)
       .sort((a, b) => a[0].localeCompare(b[0]))
-      .map(([day, total]) => ({
+      .map(([day, row]) => ({
         day,
-        total,
+        total: row.total,
+        dsfSessions: row.dsfSessions,
         // "24 Jul" — readable axis label
         label: new Date(day).toLocaleDateString("en-IN", { day: "numeric", month: "short" }),
       }));
   })();
   const rangeTotal = dailyTotals.reduce((sum, d) => sum + d.total, 0);
+  const rangeDsfSessions = dailyTotals.reduce((sum, d) => sum + d.dsfSessions, 0);
+  // No-shows still bill (owner decision) — counted so the page can say so.
+  const rangeAbandoned = sessions.filter((s) => s.status === "ABANDONED").length;
 
   const summaryPeriods = summary ? [
     {
@@ -275,7 +283,19 @@ export default function EarningsPage() {
                 <h2>Revenue trend</h2>
                 <p>Daily collections · {formatRangeLabel(fromDate, toDate)}</p>
               </div>
-              <span className="chip chip-ok">{formatCurrency(rangeTotal)} total</span>
+              <div className={styles.trendChips}>
+                {rangeAbandoned > 0 && (
+                  <span className="chip chip-warn" title="No-shows bill the full session fee">
+                    {rangeAbandoned} no-show{rangeAbandoned === 1 ? "" : "s"} billed
+                  </span>
+                )}
+                {rangeDsfSessions > 0 && (
+                  <span className="chip chip-info" title="Pro bono — delivered work, no income">
+                    {rangeDsfSessions} DSF session{rangeDsfSessions === 1 ? "" : "s"}
+                  </span>
+                )}
+                <span className="chip chip-ok">{formatCurrency(rangeTotal)} total</span>
+              </div>
             </div>
             <div style={{ width: "100%", height: 220 }}>
               <ResponsiveContainer>
@@ -283,15 +303,34 @@ export default function EarningsPage() {
                   <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} vertical={false} />
                   <XAxis dataKey="label" tick={AXIS_TICK} tickLine={false} axisLine={false} />
                   <YAxis
+                    yAxisId="money"
                     tick={AXIS_TICK} tickLine={false} axisLine={false} width={62}
                     tickFormatter={(v) => `₹${Number(v).toLocaleString("en-IN")}`}
                   />
+                  {/* DSF is a session count, not money — it needs its own scale,
+                      otherwise a handful of pro-bono sessions vanish against
+                      four-figure revenue bars. */}
+                  {rangeDsfSessions > 0 && (
+                    <YAxis
+                      yAxisId="dsf" orientation="right" allowDecimals={false}
+                      tick={AXIS_TICK} tickLine={false} axisLine={false} width={34}
+                    />
+                  )}
                   <Tooltip
                     {...TOOLTIP}
                     cursor={BAR_CURSOR}
-                    formatter={(v) => [formatCurrency(v), "Earnings"]}
+                    formatter={(v, name) =>
+                      name === "DSF sessions" ? [v, name] : [formatCurrency(v), name]
+                    }
                   />
-                  <Bar dataKey="total" name="Earnings" fill="#22d3ee" radius={[6, 6, 0, 0]} maxBarSize={54} />
+                  {rangeDsfSessions > 0 && <Legend wrapperStyle={{ fontSize: "0.75rem" }} />}
+                  <Bar yAxisId="money" dataKey="total" name="Earnings" fill="#22d3ee" radius={[6, 6, 0, 0]} maxBarSize={54} />
+                  {rangeDsfSessions > 0 && (
+                    /* Green from the declared chart palette — DSF is delivered
+                       work, not a warning. Avatar/identity hues are not valid
+                       data-series colours (see the chart audit). */
+                    <Bar yAxisId="dsf" dataKey="dsfSessions" name="DSF sessions" fill="#34d399" radius={[6, 6, 0, 0]} maxBarSize={54} />
+                  )}
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -416,7 +455,15 @@ export default function EarningsPage() {
                         const isProBono = s.dsf;
                         return (
                           <tr key={s.appointmentId || i} className={`${styles.tr} ${isProBono ? styles.trProBono : ""}`}>
-                            <td className={styles.td}>{formatDateTime(s.startTime)}</td>
+                            <td className={styles.td}>
+                              {formatDateTime(s.startTime)}
+                              {/* The list now includes billed no-shows, so each row
+                                  has to say which it is — otherwise a fee appears
+                                  against a session nobody attended, unexplained. */}
+                              {s.status === "ABANDONED" && (
+                                <span className={`chip chip-warn ${styles.noShowChip}`}>No-show</span>
+                              )}
+                            </td>
                             <td className={styles.td}>
                               <div className={styles.clientCell}>
                                 <span className={styles.clientAvatar}>{s.clientName?.[0]?.toUpperCase() ?? "?"}</span>

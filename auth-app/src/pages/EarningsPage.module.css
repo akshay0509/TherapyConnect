@@ -321,3 +321,8 @@
 @keyframes spin { to { transform: rotate(360deg); } }
 
 .sortIcon { display: inline-block; vertical-align: middle; margin-left: 4px; }
+
+/* Chips beside the revenue-trend heading (no-shows billed, DSF volume) */
+.trendChips { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+/* Marks a billed no-show row in the transactions table */
+.noShowChip { margin-left: 8px; font-size: 0.6rem; }

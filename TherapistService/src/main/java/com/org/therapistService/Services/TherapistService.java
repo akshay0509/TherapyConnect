@@ -889,10 +889,16 @@ public class TherapistService {
 		long monthDsfCount     = appointmentProjectionRepository.countDsfCompletedBetween(therapistId, monthStart, now);
 		long lifetimeDsfCount  = appointmentProjectionRepository.countDsfCompletedBetween(therapistId, lifetimeStart, now);
 
+		// Subset of the paid counts above — no-shows that still billed.
+		long weekAbandonedCount     = appointmentProjectionRepository.countPaidAbandonedBetween(therapistId, weekStart, now);
+		long monthAbandonedCount    = appointmentProjectionRepository.countPaidAbandonedBetween(therapistId, monthStart, now);
+		long lifetimeAbandonedCount = appointmentProjectionRepository.countPaidAbandonedBetween(therapistId, lifetimeStart, now);
+
 		return new EarningsSummaryDto(
 				weekEarnings, monthEarnings, lifetimeEarnings,
 				weekPaidCount, monthPaidCount, lifetimePaidCount,
-				weekDsfCount, monthDsfCount, lifetimeDsfCount
+				weekDsfCount, monthDsfCount, lifetimeDsfCount,
+				weekAbandonedCount, monthAbandonedCount, lifetimeAbandonedCount
 				);
 	}
 

@@ -3,6 +3,8 @@ package com.org.therapistService.Dto;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
+import com.org.events.TherapistAppointment.AppointmentStatus;
+
 import lombok.Data;
 
 @Data
@@ -18,6 +20,12 @@ public class EarningsSessionDto {
     private BigDecimal sessionFee;
     private boolean dsf;
     private BigDecimal earningAmount;
+    /**
+     * The transactions list now contains no-shows as well as delivered sessions
+     * (both bill), so the row has to say which it is — otherwise a therapist
+     * cannot tell why they were paid for a session nobody attended.
+     */
+    private AppointmentStatus status;
 
     public EarningsSessionDto(
             String appointmentId,
@@ -28,7 +36,8 @@ public class EarningsSessionDto {
             LocalDateTime startTime,
             LocalDateTime endTime,
             BigDecimal sessionFee,
-            boolean dsf) {
+            boolean dsf,
+            AppointmentStatus status) {
         this.appointmentId = appointmentId;
         this.clientId = clientId;
         this.clientName = clientName;
@@ -39,5 +48,6 @@ public class EarningsSessionDto {
         this.sessionFee = sessionFee == null ? BigDecimal.ZERO : sessionFee;
         this.dsf = dsf;
         this.earningAmount = dsf ? BigDecimal.ZERO : this.sessionFee;
+        this.status = status;
     }
 }

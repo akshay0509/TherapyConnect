@@ -36,12 +36,29 @@ public interface AppointmentProjectionRepository extends JpaRepository<Appointme
 			LocalDateTime end
 			);
 
+	/*
+	 * BILLABLE = COMPLETED + ABANDONED (owner decision, 30 Jul). A no-show
+	 * consumed the slot and the therapist's time, so it bills the full session
+	 * fee. Safe to do purely in the query: AppointmentEventConsumer stamps
+	 * sessionFee at booking (createAppointment / rescheduleAppointment) and
+	 * updateStatus never clears it, so an ABANDONED row still carries its fee.
+	 *
+	 * Note this is retroactive by construction — earnings are derived live from
+	 * projection rows by status, so every historical no-show starts counting the
+	 * moment this ships.
+	 *
+	 * DSF stays COMPLETED-only below: it measures pro-bono work actually
+	 * delivered, and it earns nothing either way.
+	 */
 	@Query("""
 			SELECT SUM(a.sessionFee)
 			FROM AppointmentProjection a
 			JOIN TherapistClients c ON c.therapistId = a.therapistId AND c.clientId = a.clientId
 			WHERE a.therapistId = :therapistId
-				AND a.status = com.org.events.TherapistAppointment.AppointmentStatus.COMPLETED
+				AND a.status IN (
+					com.org.events.TherapistAppointment.AppointmentStatus.COMPLETED,
+					com.org.events.TherapistAppointment.AppointmentStatus.ABANDONED
+				)
 				AND c.dsf = false
 				AND a.startTime >= :start
 				AND a.startTime < :end
@@ -57,12 +74,33 @@ public interface AppointmentProjectionRepository extends JpaRepository<Appointme
 			FROM AppointmentProjection a
 			JOIN TherapistClients c ON c.therapistId = a.therapistId AND c.clientId = a.clientId
 			WHERE a.therapistId = :therapistId
-				AND a.status = com.org.events.TherapistAppointment.AppointmentStatus.COMPLETED
+				AND a.status IN (
+					com.org.events.TherapistAppointment.AppointmentStatus.COMPLETED,
+					com.org.events.TherapistAppointment.AppointmentStatus.ABANDONED
+				)
 				AND c.dsf = false
 				AND a.startTime >= :start
 				AND a.startTime < :end
 			""")
 	long countPaidCompletedBetween(
+			String therapistId,
+			LocalDateTime start,
+			LocalDateTime end
+			);
+
+	/** No-shows that billed — surfaced separately so the therapist can see what
+	 *  share of income came from sessions nobody attended. */
+	@Query("""
+			SELECT COUNT(a)
+			FROM AppointmentProjection a
+			JOIN TherapistClients c ON c.therapistId = a.therapistId AND c.clientId = a.clientId
+			WHERE a.therapistId = :therapistId
+				AND a.status = com.org.events.TherapistAppointment.AppointmentStatus.ABANDONED
+				AND c.dsf = false
+				AND a.startTime >= :start
+				AND a.startTime < :end
+			""")
+	long countPaidAbandonedBetween(
 			String therapistId,
 			LocalDateTime start,
 			LocalDateTime end
@@ -94,12 +132,16 @@ public interface AppointmentProjectionRepository extends JpaRepository<Appointme
 				a.startTime,
 				a.endTime,
 				a.sessionFee,
-				c.dsf
+				c.dsf,
+				a.status
 			)
 			FROM AppointmentProjection a
 			JOIN TherapistClients c ON c.therapistId = a.therapistId AND c.clientId = a.clientId
 			WHERE a.therapistId = :therapistId
-				AND a.status = com.org.events.TherapistAppointment.AppointmentStatus.COMPLETED
+				AND a.status IN (
+					com.org.events.TherapistAppointment.AppointmentStatus.COMPLETED,
+					com.org.events.TherapistAppointment.AppointmentStatus.ABANDONED
+				)
 				AND a.startTime >= :start
 				AND a.startTime < :end
 				AND (:serviceId IS NULL OR a.serviceId = :serviceId)
