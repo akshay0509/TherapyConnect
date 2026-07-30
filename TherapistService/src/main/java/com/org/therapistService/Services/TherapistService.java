@@ -37,6 +37,7 @@ import com.org.therapistService.Dto.DashboardStatsDto;
 import com.org.therapistService.Dto.EarningsSessionDto;
 import com.org.therapistService.Dto.EarningsSummaryDto;
 import com.org.therapistService.Dto.PageResponseDto;
+import com.org.therapistService.Dto.ServiceWithModeRequest;
 import com.org.therapistService.Dto.SessionDetailsDto;
 import com.org.therapistService.Dto.SessionNotesDto;
 import com.org.therapistService.Dto.SlotDeliveryOptionDto;
@@ -249,6 +250,44 @@ public class TherapistService {
 		TherapistServices therapistServices = therapistAssembler.assembleDtoToEntity(therapistServicesDto);
 		TherapistServices saved = therapistServicesRepository.save(therapistServices);
 		publishServiceDefinition(saved, "TherapistServiceDefinitionUpserted");
+	}
+
+	/**
+	 * Create a service together with its first delivery mode.
+	 *
+	 * Both in one transaction on purpose: a service with no mode is silently
+	 * unbookable (AppointmentService resolves duration and fee from the mode),
+	 * and two separate calls leave a window where the service commits and the
+	 * mode does not — producing exactly that broken state. If the mode is
+	 * rejected, the service is rolled back with it.
+	 */
+	@Transactional
+	public TherapistServicesDto createServiceWithMode(String therapistId, ServiceWithModeRequest request)
+			throws JsonProcessingException {
+
+		if (request == null || request.getService() == null || request.getMode() == null) {
+			throw new IllegalArgumentException("A service and one delivery mode are both required.");
+		}
+
+		TherapistServicesDto serviceDto = request.getService();
+		serviceDto.setTherapistId(therapistId);
+		validateServiceDuration(serviceDto);
+
+		TherapistServices saved = therapistServicesRepository.save(
+				therapistAssembler.assembleDtoToEntity(serviceDto));
+
+		// The mode is bound to the service just created — never to an id supplied
+		// by the caller, which could point at another therapist's service.
+		TherapyDeliveryModeDto modeDto = request.getMode();
+		modeDto.setServiceId(saved.getServiceId());
+		modeDto.setTherapistId(therapistId);
+		createDeliveryMode(therapistId, modeDto);
+
+		// Published after the mode exists, so no consumer ever projects a
+		// service that cannot be booked.
+		publishServiceDefinition(saved, "TherapistServiceDefinitionUpserted");
+
+		return therapistAssembler.assembleEntityToDto(saved);
 	}
 
 	@Transactional

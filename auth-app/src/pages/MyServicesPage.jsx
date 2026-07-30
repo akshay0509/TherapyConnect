@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { getMyServices, createService, updateService, deleteService } from "../api/therapistServices";
+import { getMyServices, createServiceWithMode, updateService, deleteService } from "../api/therapistServices";
 import {
   getDeliveryModes, createDeliveryMode, updateDeliveryMode, deleteDeliveryMode,
 } from "../api/deliveryModes";
@@ -51,6 +51,8 @@ export default function MyServicesPage() {
   const [error, setError] = useState(null);
 
   const [showForm, setShowForm] = useState(false);
+  // First delivery mode, captured alongside the service (see #43)
+  const [newMode, setNewMode] = useState(EMPTY_MODE_FORM);
   const [form, setForm] = useState(EMPTY_FORM);
   const [formLoading, setFormLoading] = useState(false);
   const [formError, setFormError] = useState(null);
@@ -111,15 +113,24 @@ export default function MyServicesPage() {
     setFormLoading(true);
     setFormError(null);
     try {
-      const payload = {
+      const servicePayload = {
         serviceType: form.serviceType,
         duration: parseInt(form.duration, 10),
         isActive: form.isActive,
       };
-      // createService returns void — re-fetch to get the new service with its generated ID
-      await createService(payload);
+      const modePayload = {
+        modeType: newMode.modeType,
+        displayName: newMode.displayName.trim(),
+        address: newMode.modeType === "OFFLINE" ? newMode.address.trim() : null,
+        price: newMode.price === "" ? null : Number(newMode.price),
+        isActive: true,
+      };
+      // One transactional call — the service and its first mode commit together,
+      // so an unbookable mode-less service cannot be created.
+      await createServiceWithMode(servicePayload, modePayload);
       await fetchServices();
       setForm(EMPTY_FORM);
+      setNewMode(EMPTY_MODE_FORM);
       setShowForm(false);
     } catch (err) {
       setFormError(err.message);
@@ -128,7 +139,7 @@ export default function MyServicesPage() {
     }
   };
 
-  const openForm = () => { setForm(EMPTY_FORM); setFormError(null); setShowForm(true); };
+  const openForm = () => { setForm(EMPTY_FORM); setNewMode(EMPTY_MODE_FORM); setFormError(null); setShowForm(true); };
   const closeForm = () => { setShowForm(false); setFormError(null); };
 
   const openEdit = (s) => {
@@ -443,6 +454,69 @@ export default function MyServicesPage() {
                 className={styles.input} placeholder="e.g. 60"
               />
             </div>
+          </div>
+
+          {/* ── First delivery mode — required ──────────────────────────────
+              A service without a mode cannot be booked: the booking panel
+              resolves duration and fee from the mode. Capturing one here means
+              that state can never exist. More can be added afterwards. */}
+          <div className={styles.modeSection}>
+            <div className={styles.modeSectionHead}>
+              <span className={styles.label}>How is it delivered?</span>
+              <span className={styles.modeSectionHint}>Required — a service needs at least one mode to be bookable</span>
+            </div>
+
+            <div className={styles.typeOptions}>
+              {Object.entries(MODE_TYPE_LABEL).map(([value, label]) => (
+                <label
+                  key={value}
+                  className={`${styles.typeOption} ${newMode.modeType === value ? styles.typeOptionSelected : ""}`}
+                >
+                  <input
+                    type="radio" name="newModeType" value={value} required
+                    checked={newMode.modeType === value}
+                    onChange={e => setNewMode(prev => ({ ...prev, modeType: e.target.value }))}
+                    className={styles.hiddenRadio}
+                  />
+                  <span className={styles.typeOptionIcon}><Icon name={MODE_TYPE_ICON[value] || "video"} size={20} /></span>
+                  <span className={styles.typeOptionLabel}>{label}</span>
+                </label>
+              ))}
+            </div>
+
+            <div className={styles.formRow}>
+              <div className={styles.field}>
+                <label className={styles.label} htmlFor="newModeName">Display name</label>
+                <input
+                  id="newModeName" type="text" required
+                  value={newMode.displayName}
+                  onChange={e => setNewMode(prev => ({ ...prev, displayName: e.target.value }))}
+                  className={styles.input}
+                  placeholder={newMode.modeType === "OFFLINE" ? "e.g. Indiranagar clinic" : "e.g. Google Meet"}
+                />
+              </div>
+              <div className={styles.field}>
+                <label className={styles.label} htmlFor="newModePrice">Price (₹)</label>
+                <input
+                  id="newModePrice" type="number" min="0" step="1" required
+                  value={newMode.price}
+                  onChange={e => setNewMode(prev => ({ ...prev, price: e.target.value }))}
+                  className={styles.input} placeholder="e.g. 1500"
+                />
+              </div>
+            </div>
+
+            {newMode.modeType === "OFFLINE" && (
+              <div className={styles.field}>
+                <label className={styles.label} htmlFor="newModeAddress">Address</label>
+                <input
+                  id="newModeAddress" type="text" required
+                  value={newMode.address}
+                  onChange={e => setNewMode(prev => ({ ...prev, address: e.target.value }))}
+                  className={styles.input} placeholder="Where the client should come"
+                />
+              </div>
+            )}
           </div>
 
           <div className={styles.field}>

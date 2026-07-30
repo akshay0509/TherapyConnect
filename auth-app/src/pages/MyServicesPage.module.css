@@ -687,3 +687,12 @@
   to   { opacity: 1; transform: translateY(0); }
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── First delivery mode, folded into service creation (#43) ── */
+.modeSection {
+  border-top: 1px solid var(--wash-2);
+  padding-top: 16px; margin-top: 4px;
+  display: flex; flex-direction: column; gap: 14px;
+}
+.modeSectionHead { display: flex; flex-direction: column; gap: 3px; }
+.modeSectionHint { font-size: 0.72rem; color: var(--text-4); }

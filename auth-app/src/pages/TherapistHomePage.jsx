@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { getAvailability, getDashboardStats } from "../api/appointments";
 import { useModeMap } from "../context/DeliveryModesContext";
 import SessionTimer from "../components/SessionTimer";
+import OnboardingChecklist from "../components/OnboardingChecklist";
 import Icon from "../components/icons";
 import styles from "./TherapistHomePage.module.css";
 
@@ -149,6 +150,9 @@ export default function TherapistHomePage() {
         onOpen={() => navigate("/therapist/appointments")}
         className={styles.homeTimer}
       />
+
+      {/* First-run guide — self-hides once setup is complete */}
+      <OnboardingChecklist activeClients={stats?.activeClients ?? 0} />
 
       <div className={`${styles.kpis} ${stats?.pendingNotes > 0 ? styles.kpis4 : ""} ${styles.reveal}`}>
         <div className="card kpi">

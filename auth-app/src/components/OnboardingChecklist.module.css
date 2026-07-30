@@ -1,0 +1,41 @@
+.wrap { padding: 20px 22px 18px; margin-bottom: 22px; }
+
+.head { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 16px; }
+.head > div { flex: 1; min-width: 0; }
+.title { margin: 7px 0 4px; font-size: 1.15rem; font-weight: 800; letter-spacing: -0.02em; color: var(--text-1); }
+.sub { margin: 0; font-size: 0.84rem; color: var(--text-3); }
+
+.steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+
+.step {
+  display: flex; align-items: center; gap: 14px;
+  padding: 12px 4px;
+  border-top: 1px solid var(--wash-2);
+}
+.step:first-child { border-top: none; }
+
+/* Numbered until done, then a tick — the number carries the ordering, which is
+   the point: these steps genuinely depend on each other. */
+.marker {
+  width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.76rem; font-weight: 800;
+  background: var(--wash-2); color: var(--text-3);
+  border: 1px solid var(--wash-3);
+}
+.stepDone .marker {
+  background: rgba(52,211,153,0.14); color: var(--ok-mid);
+  border-color: rgba(52,211,153,0.3);
+}
+.stepDone .stepText b { color: var(--text-3); text-decoration: line-through; }
+
+.stepText { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.stepText b { font-size: 0.9rem; color: var(--text-1); }
+.stepText span { font-size: 0.76rem; color: var(--text-4); }
+
+.stepChip { flex-shrink: 0; }
+
+@media (max-width: 560px) {
+  .step { flex-wrap: wrap; }
+  .stepText { flex-basis: 100%; order: 2; }
+}

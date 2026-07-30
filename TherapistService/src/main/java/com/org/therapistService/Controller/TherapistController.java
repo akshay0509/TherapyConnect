@@ -27,6 +27,7 @@ import com.org.therapistService.Dto.EarningsSummaryDto;
 import com.org.therapistService.Dto.PageResponseDto;
 import com.org.therapistService.Dto.PaymentSettingsDto;
 import com.org.therapistService.Dto.SessionDetailsDto;
+import com.org.therapistService.Dto.ServiceWithModeRequest;
 import com.org.therapistService.Dto.SessionNotesDto;
 import com.org.therapistService.Dto.TherapistAvailabilityDto;
 import com.org.therapistService.Dto.TherapistAvailabilityOverridesDto;
@@ -198,7 +199,22 @@ public class TherapistController {
 		return ResponseEntity.ok(therapistService.getClientsForTherapist(therapistId, page, size));
 	}
 
-	//create a therapist service
+	/**
+	 * Create a service together with its first delivery mode.
+	 *
+	 * This is the path the UI uses. A service without a mode cannot be booked
+	 * (duration and fee are resolved from the mode), so the two are created in
+	 * one transaction rather than two calls that can half-succeed.
+	 */
+	@PostMapping("/create-service-with-mode")
+	public ResponseEntity<TherapistServicesDto> createServiceWithMode(
+			@RequestBody ServiceWithModeRequest request) throws JsonProcessingException {
+		String therapistId = SecurityUtils.getTherapistId();
+		return ResponseEntity.ok(therapistService.createServiceWithMode(therapistId, request));
+	}
+
+	// Retained for existing callers. Prefer /create-service-with-mode — a service
+	// created here has no delivery mode and is unbookable until one is added.
 	@PostMapping("/create-service")
 	public void createTherapistService(@RequestBody TherapistServicesDto therapistServicesDto) {
 		String therapistId = SecurityUtils.getTherapistId();
