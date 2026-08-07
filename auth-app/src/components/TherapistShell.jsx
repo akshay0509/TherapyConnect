@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { NavLink, useNavigate, useLocation, Outlet } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { TherapistProfileProvider } from "../context/TherapistProfileContext";
@@ -67,6 +67,39 @@ function TherapistShellInner({ children }) {
   const [pendingIntakes, setPendingIntakes] = useState(0);
   const [pendingNotes, setPendingNotes] = useState(0);
   const [bellOpen, setBellOpen] = useState(false);
+  const bellRef = useRef(null);
+
+  /*
+   * Dismissal is bound to the document rather than to a full-screen scrim.
+   *
+   * The scrim was `position: fixed; inset: 0`, which should cover the viewport —
+   * but the header sets `backdrop-filter`, and that makes the header a
+   * containing block for fixed-position descendants. The scrim was therefore
+   * clipped to the header strip and only caught clicks in the top few pixels.
+   *
+   * pointerdown rather than click, so the panel closes on press instead of
+   * lingering until release, and so a drag started outside dismisses it too.
+   */
+  useEffect(() => {
+    if (!bellOpen) return undefined;
+
+    const onPointerDown = (event) => {
+      if (!bellRef.current?.contains(event.target)) setBellOpen(false);
+    };
+    const onKeyDown = (event) => {
+      if (event.key !== "Escape") return;
+      setBellOpen(false);
+      // Focus would otherwise be stranded on a panel that no longer exists.
+      bellRef.current?.querySelector("button")?.focus();
+    };
+
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [bellOpen]);
 
   /*
    * The shell wraps every route and never unmounts, so a mount-only fetch left
@@ -170,7 +203,7 @@ function TherapistShellInner({ children }) {
             <kbd className={styles.kbd}>⌘ K</kbd>
           </button>
           <div className={styles.topActions}>
-            <div className={styles.bellWrap}>
+            <div className={styles.bellWrap} ref={bellRef}>
               <button
                 className={styles.iconBtn}
                 aria-label={alerts.length ? `Notifications, ${alerts.length} item${alerts.length === 1 ? "" : "s"}` : "Notifications, nothing new"}
@@ -182,9 +215,7 @@ function TherapistShellInner({ children }) {
                 {alerts.length > 0 && <span className={styles.notif} />}
               </button>
               {bellOpen && (
-                <>
-                  <div className={styles.bellScrim} onClick={() => setBellOpen(false)} />
-                  <div className={styles.bellPanel} role="dialog" aria-label="Notifications">
+                <div className={styles.bellPanel} role="dialog" aria-label="Notifications">
                     <div className={styles.bellHead}>Needs your attention</div>
                     {alerts.length === 0 ? (
                       <div className={styles.bellEmpty}>Nothing waiting. You're up to date.</div>
@@ -198,9 +229,8 @@ function TherapistShellInner({ children }) {
                           {alert.text}
                         </button>
                       ))
-                    )}
-                  </div>
-                </>
+                  )}
+                </div>
               )}
             </div>
             <button className={styles.me} onClick={() => navigate("/account-settings")}>
