@@ -116,3 +116,20 @@
 .spinner { width: 26px; height: 26px; }
 .btnSpinner { width: 15px; height: 15px; border-top-color: var(--on-primary); }
 @keyframes tc-spin { to { transform: rotate(360deg); } }
+
+/* Comparison aid for reviewing a submission. Appears only on fields the
+   therapist has actually changed — a permanent echo of every answer would just
+   double the length of the form. */
+.inputChanged { border-color: var(--warn-mid) !important; }
+.originalHint {
+  display: flex; align-items: baseline; gap: 8px;
+  margin-top: 5px;
+  font-size: 0.73rem; color: var(--text-4); line-height: 1.4;
+}
+.originalHint em { color: var(--text-4); font-style: italic; }
+.revertBtn {
+  background: none; border: none; padding: 0;
+  color: var(--brand-1); font-family: var(--font-sans); font-size: 0.73rem;
+  cursor: pointer; text-decoration: underline; flex-shrink: 0;
+}
+.revertBtn:hover { color: var(--text-1); }

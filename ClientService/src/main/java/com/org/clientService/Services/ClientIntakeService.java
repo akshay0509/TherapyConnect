@@ -117,9 +117,15 @@ public class ClientIntakeService {
         intake.setResponseId(submission.responseId());
         intake.setTherapistId(configuredTherapistId);
         intake.setSubmittedAt(submission.submittedAt());
-        intake.setFullName(text(a, "fullName"));
-        intake.setFirstName(text(a, "firstName"));
-        intake.setLastName(text(a, "lastName"));
+        /* Split at STAGING, not at approval. Most forms ask only for "Full name",
+           and the therapist needs to SEE the derived first/last in the review
+           form so they can correct an odd split before the client is created —
+           deriving it silently on approve would hide the guess. Anything the
+           form actually collected wins; this only fills blanks. */
+        String submittedFullName = text(a, "fullName");
+        intake.setFullName(submittedFullName);
+        intake.setFirstName(firstOr(text(a, "firstName"), splitName(submittedFullName, 0)));
+        intake.setLastName(firstOr(text(a, "lastName"), splitName(submittedFullName, 1)));
         intake.setDob(date(a, "dob"));
         intake.setPronouns(text(a, "pronouns"));
         intake.setGender(text(a, "gender"));
@@ -162,9 +168,14 @@ public class ClientIntakeService {
     private ClientDto toClientDto(String therapistId, IntakeClientData data) {
         ClientDto dto = new ClientDto();
         dto.setTherapistId(therapistId);
-        dto.setFullName(clean(data.fullName()));
-        dto.setFirstName(clean(data.firstName()));
-        dto.setLastName(clean(data.lastName()));
+        String fullName = clean(data.fullName());
+        dto.setFullName(fullName);
+        /* Normally already populated at staging (see mapSubmission), and the
+           therapist may have corrected it. This stays as a backstop for intakes
+           staged before that existed: without first/last the avatar initials,
+           the clients list and every session header render as "?". */
+        dto.setFirstName(firstOr(clean(data.firstName()), splitName(fullName, 0)));
+        dto.setLastName(firstOr(clean(data.lastName()), splitName(fullName, 1)));
         dto.setDob(data.dob());
         dto.setPronouns(clean(data.pronouns()));
         dto.setGender(clean(data.gender()));
@@ -310,6 +321,33 @@ public class ClientIntakeService {
             return false;
         }
         return CONSENT_AFFIRMATIONS.stream().anyMatch(normalised::contains);
+    }
+
+    private String firstOr(String preferred, String fallback) {
+        return preferred != null ? preferred : fallback;
+    }
+
+    /**
+     * Splits a full name into a first part and a surname. index 0 is the first
+     * token; index 1 is everything after it, so "Mary Anne van der Berg" keeps
+     * "van der Berg" together rather than dropping the middle. A single-word
+     * name yields no surname rather than duplicating the given name.
+     */
+    private String splitName(String fullName, int index) {
+        if (fullName == null) {
+            return null;
+        }
+        String[] parts = fullName.trim().split("\s+");
+        if (parts.length == 0 || parts[0].isEmpty()) {
+            return null;
+        }
+        if (index == 0) {
+            return parts[0];
+        }
+        if (parts.length < 2) {
+            return null;
+        }
+        return String.join(" ", java.util.Arrays.copyOfRange(parts, 1, parts.length));
     }
 
     private String clean(String value) {

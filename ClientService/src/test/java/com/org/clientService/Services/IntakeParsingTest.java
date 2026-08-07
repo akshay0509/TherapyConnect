@@ -122,4 +122,43 @@ class IntakeParsingTest {
     void missingDateStaysNull() throws Exception {
         assertThat(dob(null)).isNull();
     }
+
+    // ── name splitting ───────────────────────────────────────────────────────
+    // Most intake forms ask only for "Full name". Without a split, the approved
+    // client has no firstName/lastName — and those drive the avatar initials and
+    // every name shown in the app, so the client renders as "?".
+
+    private String part(String fullName, int index) throws Exception {
+        Method m = ClientIntakeService.class.getDeclaredMethod("splitName", String.class, int.class);
+        m.setAccessible(true);
+        return (String) m.invoke(service, fullName, index);
+    }
+
+    @Test
+    void splitsAnOrdinaryTwoPartName() throws Exception {
+        assertThat(part("Akshay Nataraj", 0)).isEqualTo("Akshay");
+        assertThat(part("Akshay Nataraj", 1)).isEqualTo("Nataraj");
+    }
+
+    /** The surname keeps every remaining token — middle names are not dropped. */
+    @Test
+    void keepsMultiWordSurnamesIntact() throws Exception {
+        assertThat(part("Mary Anne van der Berg", 0)).isEqualTo("Mary");
+        assertThat(part("Mary Anne van der Berg", 1)).isEqualTo("Anne van der Berg");
+    }
+
+    /** A single word is a given name, not a surname — better blank than duplicated. */
+    @Test
+    void singleWordNameHasNoSurname() throws Exception {
+        assertThat(part("Madonna", 0)).isEqualTo("Madonna");
+        assertThat(part("Madonna", 1)).isNull();
+    }
+
+    @Test
+    void toleratesUntidyWhitespaceAndNulls() throws Exception {
+        assertThat(part("  Akshay   Nataraj  ", 0)).isEqualTo("Akshay");
+        assertThat(part("  Akshay   Nataraj  ", 1)).isEqualTo("Nataraj");
+        assertThat(part(null, 0)).isNull();
+        assertThat(part("   ", 0)).isNull();
+    }
 }

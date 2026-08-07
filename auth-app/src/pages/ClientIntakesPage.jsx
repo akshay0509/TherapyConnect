@@ -106,6 +106,7 @@ export default function ClientIntakesPage() {
   const [items, setItems] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [draft, setDraft] = useState(null);
+  const [submitted, setSubmitted] = useState(null);
   const [reason, setReason] = useState("");
   const [mode, setMode] = useState("create");   // create | reject
   const [showRaw, setShowRaw] = useState(false);
@@ -142,6 +143,10 @@ export default function ClientIntakesPage() {
     // The submitted answers are the starting point; the therapist can correct
     // typos before the client record is created. rawAnswers stays untouched.
     setDraft({ ...intake.client });
+    /* Frozen copy of what the client actually submitted. Reviewing means
+       COMPARING, and the raw answers sit far below the form — so any field the
+       therapist edits shows the original inline instead of making them scroll. */
+    setSubmitted({ ...intake.client });
     setMode("create");
     setReason("");
     setShowRaw(false);
@@ -258,7 +263,7 @@ export default function ClientIntakesPage() {
                   {mode === "create" && draft && (
                     <div className={styles.form}>
                       <p className={styles.modeHint}>
-                        Correct anything the client mistyped — the original answers are kept untouched below.
+                        Correct anything the client mistyped. Changed fields show what they originally wrote; the full submission is kept verbatim below.
                       </p>
                       {GROUPS.map(group => (
                         <div key={group.label}>
@@ -272,11 +277,22 @@ export default function ClientIntakesPage() {
                                 </label>
                                 <input
                                   id={f.key}
-                                  className="input"
+                                  className={`input ${(submitted?.[f.key] ?? "") !== (draft[f.key] ?? "") ? styles.inputChanged : ""}`}
                                   type={f.type || "text"}
                                   value={draft[f.key] ?? ""}
                                   onChange={e => setField(f.key, e.target.value)}
                                 />
+                                {/* Shown only where the therapist has changed something,
+                                    so the form stays quiet until a correction is made. */}
+                                {(submitted?.[f.key] ?? "") !== (draft[f.key] ?? "") && (
+                                  <span className={styles.originalHint}>
+                                    they wrote: {String(submitted?.[f.key] ?? "").trim() || <em>nothing</em>}
+                                    <button type="button" className={styles.revertBtn}
+                                      onClick={() => setField(f.key, submitted?.[f.key] ?? "")}>
+                                      revert
+                                    </button>
+                                  </span>
+                                )}
                               </div>
                             ))}
                           </div>
