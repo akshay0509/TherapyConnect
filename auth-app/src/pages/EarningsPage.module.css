@@ -343,3 +343,7 @@
 .presetChipOn {
   background: rgba(34,211,238,0.12); border-color: rgba(34,211,238,0.45); color: var(--brand);
 }
+
+/* Secondary note in the session summary line — present but not competing with
+   the paid count and the money. */
+.subMuted { color: var(--text-4); }

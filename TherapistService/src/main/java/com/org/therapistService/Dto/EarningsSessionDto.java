@@ -47,7 +47,19 @@ public class EarningsSessionDto {
         this.endTime = endTime;
         this.sessionFee = sessionFee == null ? BigDecimal.ZERO : sessionFee;
         this.dsf = dsf;
-        this.earningAmount = dsf ? BigDecimal.ZERO : this.sessionFee;
+        /*
+         * The stamped fee IS the answer. resolveSessionFee writes sessionFee = 0
+         * at booking for a pro-bono client, so a zero fee already means zero
+         * earned and no second test is needed.
+         *
+         * Reading the dsf flag here read the client's status TODAY and applied it
+         * to sessions billed months ago: a client who paid normally and later
+         * moved to DSF had every past session's Earning column rewritten to zero
+         * while the Fee column still showed what they actually paid. The two
+         * columns contradicted each other and the totals under-reported real
+         * income. Same retroactivity the earnings queries were fixed for.
+         */
+        this.earningAmount = this.sessionFee;
         this.status = status;
     }
 }

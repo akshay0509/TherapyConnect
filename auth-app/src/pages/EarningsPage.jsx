@@ -101,6 +101,7 @@ export default function EarningsPage() {
   const [services, setServices]           = useState([]);
 
   // Sessions filter
+  const [sessionKind, setSessionKind]     = useState("all");
   const [fromDate, setFromDate]           = useState(startOfMonth());
   const [toDate, setToDate]               = useState(today());
   const [filterServiceId, setFilterServiceId] = useState("");
@@ -192,6 +193,37 @@ export default function EarningsPage() {
     return from === fromDate && to === toDate;
   });
 
+  /**
+   * A session was pro bono if it was BOOKED at zero — resolveSessionFee stamps
+   * sessionFee = 0 for a DSF client at the moment of booking, and that stamp is
+   * what makes history immutable.
+   *
+   * The row also carries c.dsf, but that is the client's flag TODAY. Reading it
+   * meant a client who paid for six months and then moved to DSF had every past
+   * paid session re-labelled DSF, with a real fee printed next to the badge
+   * contradicting it. Same retroactivity the earnings queries were fixed for;
+   * this was the last place still reading the live flag.
+   */
+  const isProBonoSession = (session) => Number(session?.sessionFee ?? 0) === 0;
+
+  const SESSION_KINDS = [
+    { id: "all",  label: "All sessions", match: () => true },
+    { id: "paid", label: "Paid",         match: s => !isProBonoSession(s) },
+    { id: "dsf",  label: "Pro bono (DSF)", match: isProBonoSession },
+    { id: "noshow", label: "No-shows",   match: s => s.status === "ABANDONED" },
+  ];
+
+  /* Filtering happens on rows already loaded — no refetch, so switching between
+     Paid and Pro bono is instant and cannot disagree with what the totals say. */
+  const kind = SESSION_KINDS.find(k => k.id === sessionKind) ?? SESSION_KINDS[0];
+  const visibleSessions = sessions.filter(kind.match);
+  const paidVisible = visibleSessions.filter(s => !isProBonoSession(s));
+  const proBonoVisible = visibleSessions.length - paidVisible.length;
+  const visibleTotal = visibleSessions.reduce((acc, s) => acc + Number(s.sessionFee ?? 0), 0);
+  /* Divided by PAID sessions, matching the summary card: a pro-bono session in
+     the denominator would drag the average below anything actually charged. */
+  const avgPerPaid = paidVisible.length > 0 ? visibleTotal / paidVisible.length : 0;
+
   const handleSort = (field) => {
     if (sortField === field) {
       setSortDir(d => d === "asc" ? "desc" : "asc");
@@ -201,7 +233,7 @@ export default function EarningsPage() {
     }
   };
 
-  const sortedSessions = [...sessions].sort((a, b) => {
+  const sortedSessions = [...visibleSessions].sort((a, b) => {
     let va = a[sortField], vb = b[sortField];
     if (sortField === "startTime") { va = new Date(va); vb = new Date(vb); }
     if (sortField === "earningAmount" || sortField === "sessionFee") { va = Number(va ?? 0); vb = Number(vb ?? 0); }
@@ -224,6 +256,7 @@ export default function EarningsPage() {
 
   const allModes = Object.values(modeMap);
 
+
   // Average earning per paid session this month (derived from the summary)
   const avgPerSession = summary && summary.monthPaidCount > 0
     ? Number(summary.monthEarnings) / summary.monthPaidCount
@@ -240,7 +273,7 @@ export default function EarningsPage() {
       const key = String(s.startTime).slice(0, 10); // YYYY-MM-DD
       const row = byDay[key] || (byDay[key] = { total: 0, dsfSessions: 0 });
       row.total += Number(s.earningAmount ?? 0);
-      if (s.dsf) row.dsfSessions += 1;
+      if (isProBonoSession(s)) row.dsfSessions += 1;
     });
     return Object.entries(byDay)
       .sort((a, b) => a[0].localeCompare(b[0]))
@@ -471,6 +504,19 @@ export default function EarningsPage() {
                 </select>
               </div>
 
+              <div className={styles.filterField}>
+                <label className={styles.dateLabel}>Sessions</label>
+                <select
+                  className={styles.filterSelect}
+                  value={sessionKind}
+                  onChange={e => setSessionKind(e.target.value)}
+                >
+                  {SESSION_KINDS.map(k => (
+                    <option key={k.id} value={k.id}>{k.label}</option>
+                  ))}
+                </select>
+              </div>
+
               <button className="btn btn-primary" onClick={() => loadSessions()} disabled={sessionsLoading}>
                 {sessionsLoading ? <span className={styles.btnSpinner} /> : "Load Sessions"}
               </button>
@@ -486,15 +532,37 @@ export default function EarningsPage() {
           {sessionsLoaded && (
             <div className={styles.tableSection}>
               <div className={styles.tableSectionHeader}>
+                {/* Reads as arithmetic that works. "10 sessions, Rs 12,000"
+                    invited dividing by 10 when two of those were pro bono and
+                    only eight carried a fee. */}
                 <p className={styles.tableSub}>
-                  {sessions.length} completed session{sessions.length !== 1 ? "s" : ""}
+                  {paidVisible.length > 0 ? (
+                    <>
+                      <strong>{paidVisible.length}</strong> paid session{paidVisible.length !== 1 ? "s" : ""}
+                      {" · "}{formatCurrency(visibleTotal)}
+                      {" · "}{formatCurrency(avgPerPaid)} avg
+                      {proBonoVisible > 0 && (
+                        <span className={styles.subMuted}> · {proBonoVisible} pro bono</span>
+                      )}
+                    </>
+                  ) : proBonoVisible > 0 ? (
+                    /* Leading with "0 paid" when the view is deliberately the
+                       pro-bono one reports an absence instead of the thing asked
+                       for. The count that matters here is the sessions given. */
+                    <>
+                      <strong>{proBonoVisible}</strong> pro bono session{proBonoVisible !== 1 ? "s" : ""}
+                      <span className={styles.subMuted}> · no charge</span>
+                    </>
+                  ) : (
+                    <>No sessions</>
+                  )}
                 </p>
                 <div className={styles.tableActions}>
                   {exportError && <span className={styles.exportError}>{exportError}</span>}
                   <button
                     className={styles.exportBtn}
                     onClick={handleExport}
-                    disabled={exporting || sessions.length === 0}
+                    disabled={exporting || visibleSessions.length === 0}
                   >
                     {exporting ? <span className={styles.btnSpinner} /> : "Export CSV"}
                   </button>
@@ -525,7 +593,7 @@ export default function EarningsPage() {
                         const modeLabel = mode?.displayName ?? s.modeId ?? "—";
                         const svc = services.find(sv => sv.serviceId === s.serviceId);
                         const svcLabel = svc ? formatServiceType(svc.serviceType) : (s.serviceId ?? "—");
-                        const isProBono = s.dsf;
+                        const isProBono = isProBonoSession(s);
                         return (
                           <tr key={s.appointmentId || i} className={`${styles.tr} ${isProBono ? styles.trProBono : ""}`}>
                             <td className={styles.td}>
@@ -571,7 +639,7 @@ export default function EarningsPage() {
                         <td className={styles.td} colSpan={4}><strong>Total</strong></td>
                         <td className={styles.td}>
                           <span className={styles.feeCell}>
-                            <strong>{formatCurrency(sessions.reduce((acc, s) => acc + Number(s.sessionFee ?? 0), 0))}</strong>
+                            <strong>{formatCurrency(visibleTotal)}</strong>
                           </span>
                         </td>
                         <td className={styles.td} />
