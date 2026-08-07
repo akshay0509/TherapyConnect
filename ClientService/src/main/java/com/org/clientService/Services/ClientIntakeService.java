@@ -217,13 +217,56 @@ public class ClientIntakeService {
         return value == null ? null : clean(String.valueOf(value));
     }
 
+    /**
+     * Google Forms sends whatever the respondent's locale produced, so a date
+     * item commonly arrives as "29/03/1983" rather than ISO. Rejecting those
+     * meant the submission returned 400, Apps Script marked the row FAILED, and
+     * a prospective client was never seen by the therapist.
+     *
+     * Ambiguity is resolved deliberately, not guessed: if either component is
+     * greater than 12 the order is certain, and only when BOTH could be a month
+     * does it fall back to day-first, matching the en-IN convention the rest of
+     * the app formats with. A genuinely impossible date still throws — failing
+     * loudly is right when the alternative is storing the wrong birthday.
+     */
+    private static final java.util.regex.Pattern SLASH_OR_DASH_DATE =
+            java.util.regex.Pattern.compile("^(\\d{1,2})[/-](\\d{1,2})[/-](\\d{4})$");
+
     private Date date(Map<String, Object> values, String key) {
         String value = text(values, key);
-        try {
-            return value == null ? null : Date.valueOf(value);
-        } catch (IllegalArgumentException ex) {
-            throw new IllegalArgumentException(key + " must use YYYY-MM-DD.");
+        if (value == null) {
+            return null;
         }
+        try {
+            return Date.valueOf(value);                     // already YYYY-MM-DD
+        } catch (IllegalArgumentException ignored) {
+            // fall through to the locale forms below
+        }
+
+        java.util.regex.Matcher m = SLASH_OR_DASH_DATE.matcher(value);
+        if (m.matches()) {
+            int first = Integer.parseInt(m.group(1));
+            int second = Integer.parseInt(m.group(2));
+            int year = Integer.parseInt(m.group(3));
+
+            int day;
+            int month;
+            if (first > 12 && second <= 12) {
+                day = first; month = second;               // unambiguously D/M
+            } else if (second > 12 && first <= 12) {
+                day = second; month = first;               // unambiguously M/D
+            } else {
+                day = first; month = second;               // ambiguous -> day first (en-IN)
+            }
+            try {
+                return Date.valueOf(java.time.LocalDate.of(year, month, day));
+            } catch (java.time.DateTimeException ex) {
+                throw new IllegalArgumentException(
+                        key + " is not a valid date: \"" + value + "\".");
+            }
+        }
+        throw new IllegalArgumentException(
+                key + " must be YYYY-MM-DD or DD/MM/YYYY, but was \"" + value + "\".");
     }
 
     private Integer integer(Map<String, Object> values, String key) {
@@ -235,10 +278,38 @@ public class ClientIntakeService {
         }
     }
 
+    /**
+     * Consent arrives as the option's LABEL, whatever the therapist typed into
+     * the form — "I agree to the above terms and conditions", "I consent", and
+     * so on. Matching a fixed list of four exact strings rejected almost every
+     * real wording, and a rejected submission is one the therapist never sees.
+     *
+     * Negatives are checked FIRST and on their own: "I do not agree" contains
+     * "agree", so an affirmative-substring test alone would read a refusal as
+     * consent. That is the one error worth being careful about here — recording
+     * consent that was never given is worse than rejecting a valid submission.
+     */
+    private static final List<String> CONSENT_DENIALS = List.of(
+            "do not", "don't", "dont", "not agree", "disagree", "decline", "refuse", "no");
+
+    private static final List<String> CONSENT_AFFIRMATIONS = List.of(
+            "agree", "consent", "accept", "yes", "true", "confirm", "understood", "ok");
+
     private boolean bool(Map<String, Object> values, String key) {
         String value = text(values, key);
-        return value != null && List.of("true", "yes", "accepted", "i agree")
-                .contains(value.toLowerCase(Locale.ROOT));
+        if (value == null) {
+            return false;
+        }
+        String normalised = value.toLowerCase(Locale.ROOT).trim();
+
+        // Exact "no" only — a substring test would match "nothing", "notes"...
+        if (normalised.equals("no") || normalised.equals("false")) {
+            return false;
+        }
+        if (CONSENT_DENIALS.stream().anyMatch(d -> !d.equals("no") && normalised.contains(d))) {
+            return false;
+        }
+        return CONSENT_AFFIRMATIONS.stream().anyMatch(normalised::contains);
     }
 
     private String clean(String value) {
