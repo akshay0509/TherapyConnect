@@ -88,6 +88,12 @@ function toClientPayload(draft) {
   }
   const age = draft?.emergencyContactAge;
   out.emergencyContactAge = age === "" || age == null ? null : Number(age);
+  /* A pro-bono client carries no stored fee: sessionFee == 0 means pro bono,
+     and that is decided at booking by resolveSessionFee. Storing a rate next to
+     the flag would be two answers to one question, and the flag wins anyway. */
+  const fee = draft?.sessionFee;
+  out.sessionFee = draft?.dsf || fee === "" || fee == null ? null : Number(fee);
+  out.dsf = !!draft?.dsf;
   return out;
 }
 
@@ -98,6 +104,12 @@ function blockers(draft) {
   if (!String(draft?.fullName ?? "").trim()) missing.push("a full name");
   if (!draft?.dob) missing.push("a date of birth");
   if (!draft?.consent) missing.push("recorded consent");
+  /* normaliseSessionFee throws on a negative amount. Catching it here turns a
+     400 on submit into something the therapist can see and correct in place. */
+  const fee = draft?.sessionFee;
+  if (!draft?.dsf && fee !== "" && fee != null && !(Number(fee) > 0)) {
+    missing.push("a positive session fee");
+  }
   return missing;
 }
 
@@ -168,6 +180,7 @@ export default function ClientIntakesPage() {
   }
 
   const setField = (key, value) => setDraft(prev => ({ ...prev, [key]: value }));
+  const setDsf = (on) => setDraft(prev => ({ ...prev, dsf: on, sessionFee: on ? "" : prev.sessionFee }));
   const missing = blockers(draft);
 
   return (
@@ -293,6 +306,41 @@ export default function ClientIntakesPage() {
                           </div>
                         </div>
                       ))}
+
+                      {/* Not from the form: no intake item asks a client to price
+                          their own therapy. Asked here because approval is the
+                          one moment the therapist is already looking at this
+                          person — otherwise every migrated client needs a second
+                          pass through the edit form just to become bookable. */}
+                      <div>
+                        <div className={styles.groupLabel}>Fees</div>
+                        <div className={styles.fieldGrid}>
+                          <div className={styles.half}>
+                            <label className={styles.label} htmlFor="sessionFee">Session fee (₹)</label>
+                            <input
+                              id="sessionFee" className="input"
+                              type="number" min="1" step="1"
+                              placeholder={draft.dsf ? "Pro bono — no charge" : "Falls back to the service price"}
+                              value={draft.dsf ? "" : (draft.sessionFee ?? "")}
+                              disabled={!!draft.dsf}
+                              onChange={e => setField("sessionFee", e.target.value)}
+                            />
+                          </div>
+                          <div className={styles.half}>
+                            <label className={styles.label}>Pro bono</label>
+                            <label className={styles.checkRow}>
+                              <input type="checkbox" checked={!!draft.dsf}
+                                onChange={e => setDsf(e.target.checked)} />
+                              <span>Discounted / free sessions</span>
+                            </label>
+                          </div>
+                        </div>
+                        <p className={styles.feeHint}>
+                          {draft.dsf
+                            ? "Sessions for this client are booked at zero and stay out of earnings."
+                            : "Leave blank to charge whatever the delivery mode costs at the time of booking."}
+                        </p>
+                      </div>
                     </div>
                   )}
 

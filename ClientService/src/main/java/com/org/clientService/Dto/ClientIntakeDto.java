@@ -26,7 +26,10 @@ public record ClientIntakeDto(
                 intake.getPronouns(), intake.getGender(), intake.getQualification(), intake.getOccupation(),
                 intake.getPhoneNumber(), intake.getEmail(), intake.getPreferredDays(), intake.getPreferredTimings(),
                 intake.getPreferredModes(), intake.getEmergencyContactName(), intake.getEmergencyContactAge(),
-                intake.getEmergencyContactRelationship(), intake.getEmergencyPhoneNumber(), intake.isConsent());
+                intake.getEmergencyContactRelationship(), intake.getEmergencyPhoneNumber(), intake.isConsent(),
+                /* Never part of a submission, so never read back out of one. The
+                   therapist supplies these on the approve screen. */
+                null, null);
         return new ClientIntakeDto(
                 intake.getIntakeId(), intake.getResponseId(), intake.getStatus(),
                 intake.getClientId(), intake.getSubmittedAt(), intake.getReceivedAt(), intake.getReviewedAt(),

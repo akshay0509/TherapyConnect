@@ -190,6 +190,14 @@ public class ClientIntakeService {
         dto.setEmergencyContactAge(data.emergencyContactAge());
         dto.setEmergencyContactRelationship(clean(data.emergencyContactRelationship()));
         dto.setEmergencyPhoneNumber(clean(data.emergencyPhoneNumber()));
+        /* A migrated client that arrives unpriced needs a second pass through
+           the edit form, once per client. createClient() runs the fee through
+           normaliseSessionFee, so a negative amount is rejected here exactly as
+           it would be anywhere else, and zero collapses to null. Where dsf is
+           set the fee is left null: sessionFee == 0 means pro bono is decided at
+           booking time by resolveSessionFee, not stored twice. */
+        dto.setSessionFee(Boolean.TRUE.equals(data.dsf()) ? null : data.sessionFee());
+        dto.setDsf(data.dsf());
         dto.setSource("GOOGLE_FORM");
         return dto;
     }

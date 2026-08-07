@@ -143,3 +143,14 @@
   cursor: pointer; text-decoration: underline; flex-shrink: 0;
 }
 .revertBtn:hover { color: var(--text-1); }
+
+/* Fees — therapist-set, so no "they wrote / revert" affordance applies. */
+.checkRow {
+  display: flex; align-items: center; gap: 9px;
+  padding: 9px 12px; border: 1px solid var(--line); border-radius: 9px;
+  background: var(--surface-2); cursor: pointer;
+  font-size: 0.84rem; color: var(--text-2);
+}
+.checkRow input { width: 15px; height: 15px; accent-color: var(--brand); cursor: pointer; }
+.checkRow:hover { border-color: var(--line-strong, var(--line)); }
+.feeHint { margin: 9px 0 0; font-size: 0.74rem; color: var(--text-4); line-height: 1.5; }
