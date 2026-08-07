@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   getClientById, getSessionDetails, createSessionNotes, updateSessionNotes,
@@ -28,6 +28,11 @@ function ageFromDob(dob) {
   let a = now.getFullYear() - d.getFullYear();
   if (now.getMonth() < d.getMonth() || (now.getMonth() === d.getMonth() && now.getDate() < d.getDate())) a--;
   return a >= 0 && a < 130 ? a : null;
+}
+
+function wordCount(text) {
+  const t = (text ?? "").trim();
+  return t ? t.split(/\s+/).length : 0;
 }
 
 function getInitials(firstName, lastName) {
@@ -195,6 +200,14 @@ export default function ClientDetailPage() {
   const [sessionsError, setSessionsError]     = useState(null);
   const [sessionsLoaded, setSessionsLoaded]   = useState(false);
   const [notesState, setNotesState]           = useState({});
+  /* Closed by default. The point of enlarging this editor was reclaiming
+     writing space, so re-shrinking it unasked would undo that — the toggle
+     carries the previous session's date, which is enough to advertise it. */
+  const [prevNoteOpen, setPrevNoteOpen]       = useState(false);
+  /* Expanded entries in the panel, by appointmentId. The most recent is opened
+     on mount of the panel — everything older stays collapsed so a client with
+     fifty sessions is still navigable rather than a wall of text. */
+  const [prevExpanded, setPrevExpanded]       = useState(() => new Set());
   const [notesPopup, setNotesPopup]           = useState(null);
 
   const loadSessions = () => {
@@ -207,12 +220,46 @@ export default function ClientDetailPage() {
   };
 
   const startEdit = (apptId, existing) => {
-    setNotesState(prev => ({ ...prev, [apptId]: { editing: true, draft: existing || "", saving: false, error: null } }));
-    setNotesPopup({ appointmentId: apptId, hasExisting: !!existing });
+    // `original` is kept so an accidental Escape or backdrop click can be told
+    // apart from a deliberate one. Losing a session note to a stray keypress is
+    // the worst small failure in the app — it is the one thing here that cannot
+    // be reconstructed from anywhere else.
+    setNotesState(prev => ({
+      ...prev,
+      [apptId]: { editing: true, draft: existing || "", original: existing || "", saving: false, error: null },
+    }));
+    setNotesPopup({ appointmentId: apptId, hasExisting: !!existing, confirmDiscard: false });
+    setPrevNoteOpen(false);
+    setPrevExpanded(new Set());
   };
+
   const cancelEdit = (apptId) => {
     setNotesState(prev => ({ ...prev, [apptId]: { ...prev[apptId], editing: false, error: null } }));
     setNotesPopup(null);
+  };
+
+  /* Read through a ref, not the captured state. The Escape listener is
+     registered with deps [notesPopup, editOpen, statusConfirm] — deliberately
+     not notesState, or it would re-bind on every keystroke — so its closure
+     holds notesState from when the modal OPENED, where draft still equals
+     original. Checking that captured copy reports "not dirty" every time and
+     Escape silently destroys the note. The ref always holds the live value. */
+  const notesStateRef = useRef(notesState);
+  useEffect(() => { notesStateRef.current = notesState; }, [notesState]);
+
+  const isNotesDirty = (apptId) => {
+    const ns = notesStateRef.current[apptId];
+    if (!ns) return false;
+    return (ns.draft ?? "") !== (ns.original ?? "");
+  };
+
+  /** Every close route goes through here: the X, Cancel, Escape and the backdrop. */
+  const requestCloseNotes = (apptId) => {
+    if (isNotesDirty(apptId)) {
+      setNotesPopup(prev => (prev ? { ...prev, confirmDiscard: true } : prev));
+      return;
+    }
+    cancelEdit(apptId);
   };
   const updateDraft = (apptId, val) => {
     setNotesState(prev => ({ ...prev, [apptId]: { ...prev[apptId], draft: val } }));
@@ -224,7 +271,7 @@ export default function ClientDetailPage() {
       if (hasExisting) await updateSessionNotes(clientId, apptId, draft);
       else await createSessionNotes(clientId, apptId, draft);
       setSessions(prev => prev.map(s => s.appointmentId === apptId ? { ...s, sessionNotes: draft } : s));
-      setNotesState(prev => ({ ...prev, [apptId]: { editing: false, draft: "", saving: false, error: null } }));
+      setNotesState(prev => ({ ...prev, [apptId]: { editing: false, draft: "", original: "", saving: false, error: null } }));
       setNotesPopup(null);
     } catch (err) {
       setNotesState(prev => ({ ...prev, [apptId]: { ...prev[apptId], saving: false, error: err.message } }));
@@ -328,7 +375,7 @@ export default function ClientDetailPage() {
   useEffect(() => {
     const handler = (e) => {
       if (e.key === "Escape") {
-        if (notesPopup) cancelEdit(notesPopup.appointmentId);
+        if (notesPopup) requestCloseNotes(notesPopup.appointmentId);
         else if (editOpen) setEditOpen(false);
         else if (statusConfirm) setStatusConfirm(false);
       }
@@ -696,7 +743,7 @@ export default function ClientDetailPage() {
       <div
         className={`${styles.backdrop} ${!!notesPopup || editOpen ? styles.backdropVisible : ""}`}
         onClick={() => {
-          if (notesPopup) cancelEdit(notesPopup.appointmentId);
+          if (notesPopup) requestCloseNotes(notesPopup.appointmentId);
           else if (editOpen) setEditOpen(false);
         }}
       />
@@ -705,22 +752,154 @@ export default function ClientDetailPage() {
       {notesPopup && (() => {
         const apptId = notesPopup.appointmentId;
         const ns = notesState[apptId] || {};
+        const session = sessions.find(x => x.appointmentId === apptId);
+        /* Computed from state, not from isNotesDirty(): that reads a ref which
+           is refreshed in an effect AFTER render, so using it here would leave
+           the indicator one keystroke behind. The ref exists for the Escape and
+           backdrop handlers, which run outside the render. */
+        const dirty = (ns.draft ?? "") !== (ns.original ?? "");
+        /* Every EARLIER session that actually has notes, newest first. Derived
+           from the sessions already loaded for this page — no extra request,
+           and it stays correct as notes are added because `sessions` is updated
+           in place on save. Sessions without notes are omitted: the Sessions
+           tab already lists those, and here they would be noise. */
+        const previousNotes = session
+          ? sessions
+              .filter(x =>
+                x.appointmentId !== apptId &&
+                (x.sessionNotes ?? "").trim() &&
+                new Date(x.startTime) < new Date(session.startTime))
+              .sort((a, b) => new Date(b.startTime) - new Date(a.startTime))
+          : [];
+        const previousNote = previousNotes[0] ?? null;
+        const toggleExpanded = (id) => setPrevExpanded(prev => {
+          const next = new Set(prev);
+          next.has(id) ? next.delete(id) : next.add(id);
+          return next;
+        });
         return (
           <div className={styles.notesModal}>
             <div className={styles.notesModalHeader}>
-              <h3 className={styles.notesModalTitle}>{notesPopup.hasExisting ? "Modify Notes" : "Add Notes"}</h3>
-              <button className={styles.closeBtn} onClick={() => cancelEdit(apptId)}><Icon name="x" size={18} /></button>
+              <div>
+                <h3 className={styles.notesModalTitle}>{notesPopup.hasExisting ? "Modify notes" : "Add notes"}</h3>
+                {/* The session being written about, so the note is not composed
+                    blind — the modal covers the row it belongs to. */}
+                {session && (
+                  <p className={styles.notesModalSub}>
+                    {formatDate2(session.startTime)} · {formatTime(session.startTime)}
+                    {modeMap[session.modeId]?.displayName ? ` · ${modeMap[session.modeId].displayName}` : ""}
+                    {durationMins(session.startTime, session.endTime) ? ` · ${durationMins(session.startTime, session.endTime)} min` : ""}
+                  </p>
+                )}
+              </div>
+              <button className={styles.closeBtn} onClick={() => requestCloseNotes(apptId)} aria-label="Close"><Icon name="x" size={18} /></button>
             </div>
+
             <div className={styles.notesModalBody}>
-              <textarea className={styles.notesTextarea} value={ns.draft} onChange={e => updateDraft(apptId, e.target.value)} placeholder="Write session notes here…" autoFocus/>
+              <div className={styles.notesEditorCol}>
+              <textarea
+                className={styles.notesTextarea}
+                value={ns.draft}
+                onChange={e => updateDraft(apptId, e.target.value)}
+                // Save without leaving the keyboard — the hands are already there.
+                onKeyDown={e => {
+                  if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && ns.draft?.trim() && !ns.saving) {
+                    e.preventDefault();
+                    saveNotes(apptId, notesPopup.hasExisting);
+                  }
+                }}
+                placeholder="Presentation, what was worked on, interventions, risk, plan for next time…"
+                autoFocus
+              />
               {ns.error && <p className={styles.notesError}>{ns.error}</p>}
+              </div>
+
+              {/* "What did we do last time" is the first thing reconsidered with
+                  a returning client. Rendered only when there is one — an empty
+                  panel would be a toggle that promises something and delivers
+                  nothing. */}
+              {previousNote && prevNoteOpen && (
+                <aside className={styles.prevNote}>
+                  <div className={styles.prevNoteHead}>
+                    <span className={styles.prevNoteLabel}>
+                      Previous notes ({previousNotes.length})
+                    </span>
+                    <button
+                      className={styles.prevNoteClose}
+                      onClick={() => setPrevNoteOpen(false)}
+                      aria-label="Hide previous notes"
+                    >
+                      <Icon name="x" size={14} />
+                    </button>
+                  </div>
+
+                  <div className={styles.prevNoteList}>
+                    {previousNotes.map((n, i) => {
+                      // The newest opens by default; the rest are one click away.
+                      const open = i === 0 ? !prevExpanded.has(n.appointmentId)
+                                           : prevExpanded.has(n.appointmentId);
+                      return (
+                        <div key={n.appointmentId} className={styles.prevNoteItem}>
+                          <button
+                            className={`${styles.prevNoteItemHead} ${open ? styles.prevNoteItemOpen : ""}`}
+                            onClick={() => toggleExpanded(n.appointmentId)}
+                            aria-expanded={open}
+                          >
+                            <span className={styles.prevNoteChevron}><Icon name="chevron" size={13} /></span>
+                            <span className={styles.prevNoteItemWhen}>
+                              {formatDate2(n.startTime)} · {formatTime(n.startTime)}
+                            </span>
+                            {!open && (
+                              /* A first-line preview so a collapsed row still says
+                                 something — a column of bare dates is not scannable. */
+                              <span className={styles.prevNoteItemPeek}>
+                                {n.sessionNotes.trim().split(/\s+/).slice(0, 7).join(" ")}…
+                              </span>
+                            )}
+                          </button>
+                          {open && <div className={styles.prevNoteItemBody}>{n.sessionNotes}</div>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </aside>
+              )}
             </div>
+
             <div className={styles.notesModalFooter}>
-              <button className={styles.notesCancelBtn} onClick={() => cancelEdit(apptId)} disabled={ns.saving}>Cancel</button>
-              <button className={styles.notesSaveBtn} onClick={() => saveNotes(apptId, notesPopup.hasExisting)} disabled={ns.saving || !ns.draft?.trim()}>
-                {ns.saving ? <span className={styles.btnSpinner}/> : "Save"}
-              </button>
+              <span className={styles.notesMeta}>
+                {wordCount(ns.draft)} word{wordCount(ns.draft) === 1 ? "" : "s"}
+                {dirty && <span className={styles.notesUnsaved}>· unsaved</span>}
+                {previousNote && !prevNoteOpen && (
+                  <button className={styles.prevNoteToggle} onClick={() => setPrevNoteOpen(true)}>
+                    <Icon name="clipboard" size={13} /> Previous notes ({previousNotes.length})
+                  </button>
+                )}
+              </span>
+              <span className={styles.notesFooterBtns}>
+                <button className="btn" onClick={() => requestCloseNotes(apptId)} disabled={ns.saving}>Cancel</button>
+                <button className="btn btn-primary" onClick={() => saveNotes(apptId, notesPopup.hasExisting)} disabled={ns.saving || !ns.draft?.trim()}>
+                  {ns.saving ? <span className={styles.btnSpinner}/> : "Save"}
+                </button>
+              </span>
             </div>
+
+            {/* Asked, not assumed. Closing a dirty editor is the only place in the
+                app where real clinical writing can vanish in one click. */}
+            {notesPopup.confirmDiscard && (
+              <div className={styles.discardOverlay}>
+                <div className={styles.discardBox}>
+                  <b>Discard this note?</b>
+                  <span>{wordCount(ns.draft)} words will be lost. This cannot be undone.</span>
+                  <div className={styles.discardActions}>
+                    <button className="btn" onClick={() => setNotesPopup(prev => ({ ...prev, confirmDiscard: false }))}>
+                      Keep writing
+                    </button>
+                    <button className={`btn ${styles.discardBtn}`} onClick={() => cancelEdit(apptId)}>Discard</button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         );
       })()}

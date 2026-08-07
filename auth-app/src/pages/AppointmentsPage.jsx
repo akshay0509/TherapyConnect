@@ -696,7 +696,11 @@ export default function AppointmentsPage() {
     // terminal appointments can't be rescheduled (backend rejects them too)
     if (["COMPLETED", "CANCELLED", "ABANDONED"].includes(slot.appointmentStatus)) return;
     setPanelSlot(slot);
-    setReschedWeekStart(getWeekStart(new Date()));
+    /* Start on the appointment's own week, not today's. A session next month
+       opened the picker on the current week — every one of those days already
+       gone — and rescheduling usually moves a session by days, not back to
+       whenever "now" happens to be. */
+    setReschedWeekStart(getWeekStart(slot.startTime ? new Date(slot.startTime) : new Date()));
     setReschedSelectedDate(null); setReschedNewSlot(null);
     setReschedModeId("");
     setReschedReason(""); setReschedError(null);
