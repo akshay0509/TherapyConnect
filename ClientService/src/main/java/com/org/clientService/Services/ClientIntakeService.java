@@ -288,13 +288,34 @@ public class ClientIntakeService {
                 key + " must be YYYY-MM-DD or DD/MM/YYYY, but was \"" + value + "\".");
     }
 
+    /**
+     * The emergency-contact age comes from a free TEXT item on the form, so
+     * "45", "45 years", "N/A" and "-" are all ordinary answers. Rejecting the
+     * non-numeric ones failed the whole submission over a field that carries no
+     * clinical weight — and because the batch importer aborted on the throw, it
+     * took every later row with it.
+     *
+     * Leniency costs nothing here: the answer is kept verbatim in rawAnswers and
+     * shown on the approve screen, so the record still holds exactly what the
+     * client wrote. Refusing to guess is different from refusing the record.
+     */
+    private static final java.util.regex.Pattern FIRST_NUMBER =
+            java.util.regex.Pattern.compile("\\d{1,9}");
+
     private Integer integer(Map<String, Object> values, String key) {
         String value = text(values, key);
-        try {
-            return value == null ? null : Integer.valueOf(value);
-        } catch (NumberFormatException ex) {
-            throw new IllegalArgumentException(key + " must be a number.");
+        if (value == null) {
+            return null;
         }
+        java.util.regex.Matcher matcher = FIRST_NUMBER.matcher(value);
+        if (!matcher.find()) {
+            return null;
+        }
+        int parsed = Integer.parseInt(matcher.group());
+        /* A birth year typed into an age box is not an age. Storing 1983 would
+           be worse than storing nothing, because nothing sends the therapist to
+           the raw answer while 1983 looks like a fact. */
+        return parsed >= 0 && parsed <= 120 ? parsed : null;
     }
 
     /**

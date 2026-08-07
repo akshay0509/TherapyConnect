@@ -45,6 +45,14 @@ class IntakeParsingTest {
         }
     }
 
+    private Integer age(String raw) throws Exception {
+        Method m = ClientIntakeService.class.getDeclaredMethod("integer", Map.class, String.class);
+        m.setAccessible(true);
+        Map<String, Object> values = new HashMap<>();
+        values.put("emergencyContactAge", raw);
+        return (Integer) m.invoke(service, values, "emergencyContactAge");
+    }
+
     // ── consent ──────────────────────────────────────────────────────────────
 
     @Test
@@ -160,5 +168,31 @@ class IntakeParsingTest {
         assertThat(part("  Akshay   Nataraj  ", 1)).isEqualTo("Nataraj");
         assertThat(part(null, 0)).isNull();
         assertThat(part("   ", 0)).isNull();
+    }
+
+    /* The emergency-contact age is a free TEXT item on the real form, so these
+       are the answers people actually give. None of them should cost a client
+       their intake. */
+    @Test
+    void emergencyContactAgeAcceptsWhatPeopleActuallyType() throws Exception {
+        assertThat(age("45")).isEqualTo(45);
+        assertThat(age("45 years")).isEqualTo(45);
+        assertThat(age("approx 62")).isEqualTo(62);
+    }
+
+    @Test
+    void unusableEmergencyContactAgeIsDroppedRatherThanRefused() throws Exception {
+        assertThat(age("N/A")).isNull();
+        assertThat(age("-")).isNull();
+        assertThat(age("")).isNull();
+    }
+
+    /* A birth year in an age box would be stored as a plausible-looking number
+       that is simply wrong. Null sends the therapist to the raw answer; 1983
+       does not. */
+    @Test
+    void aBirthYearIsNotAnAge() throws Exception {
+        assertThat(age("1983")).isNull();
+        assertThat(age("999")).isNull();
     }
 }
