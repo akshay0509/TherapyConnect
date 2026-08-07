@@ -131,6 +131,21 @@ public class TherapistService {
 
 	@Transactional
 	public TherapistDto createTherapist(TherapistDto therapistDto, String userId) throws JsonProcessingException {
+		/*
+		 * One profile per user, enforced here rather than assumed.
+		 *
+		 * A second row for the same userId is not merely untidy: getTherapistIdByUserId
+		 * calls findByUserId, which returns a single entity, so a duplicate makes that
+		 * lookup throw from then on. Every later login would fail to resolve a
+		 * therapistId, route the user back to setup, and invite yet another profile —
+		 * with their clients and appointments split across the ids. Cheap to prevent,
+		 * expensive to unpick.
+		 */
+		Therapist existing = therapistRepository.findByUserId(userId);
+		if (existing != null) {
+			throw new IllegalStateException("A therapist profile already exists for this account.");
+		}
+
 		Therapist therapist = therapistAssembler.assembleDtoToEntity(therapistDto);
 		therapist.setUserId(userId);
 		Therapist saved = therapistRepository.save(therapist);

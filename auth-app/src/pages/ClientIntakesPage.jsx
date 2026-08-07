@@ -172,6 +172,10 @@ export default function ClientIntakesPage() {
       await action();
       setNotice("Intake updated.");
       await load();
+      /* The sidebar badge lives in the shell, which does not re-render on an
+         action taken inside a page. Telling it directly is cheaper and more
+         accurate than making it poll. */
+      window.dispatchEvent(new Event("therapy:signals-changed"));
     } catch (err) {
       setError(err.message);
     } finally {

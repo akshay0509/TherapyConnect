@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
-import { NavLink, useNavigate, Outlet } from "react-router-dom";
+import { useCallback, useEffect, useState } from "react";
+import { NavLink, useNavigate, useLocation, Outlet } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { TherapistProfileProvider } from "../context/TherapistProfileContext";
 import { useTherapistProfile } from "../context/therapistProfileStore";
 import { getClientIntakes } from "../api/clientIntakes";
+import { getDashboardStats } from "../api/appointments";
 import Icon from "./icons";
 import styles from "./TherapistShell.module.css";
 
@@ -57,19 +58,55 @@ function TherapistShellInner({ children }) {
   const { logout } = useAuth();
   const [drawer, setDrawer] = useState(false);
   // Address the therapist by name, not by login username.
+  const location = useLocation();
   const { displayName } = useTherapistProfile();
   const name = displayName;
 
   // Pending intakes badge the Intakes item, the same affordance the admin
   // console uses for dead letters: the count lives where you would act on it.
   const [pendingIntakes, setPendingIntakes] = useState(0);
-  useEffect(() => {
-    let alive = true;
+  const [pendingNotes, setPendingNotes] = useState(0);
+  const [bellOpen, setBellOpen] = useState(false);
+
+  /*
+   * The shell wraps every route and never unmounts, so a mount-only fetch left
+   * this count frozen for the whole session — approving ten intakes still showed
+   * the number you logged in with, and only signing out fixed it.
+   *
+   * Refetching on navigation covers moving between pages; the custom event covers
+   * acting on the Intakes page itself, where the path does not change. No polling:
+   * the count only moves when the therapist does something.
+   */
+  const refreshSignals = useCallback(() => {
     getClientIntakes("PENDING")
-      .then(list => { if (alive) setPendingIntakes(Array.isArray(list) ? list.length : 0); })
+      .then(list => setPendingIntakes(Array.isArray(list) ? list.length : 0))
       .catch(() => {});   // a badge is never worth surfacing an error for
-    return () => { alive = false; };
+    getDashboardStats()
+      .then(stats => setPendingNotes(Number(stats?.pendingNotes ?? 0)))
+      .catch(() => {});
   }, []);
+
+  useEffect(() => { refreshSignals(); }, [location.pathname, refreshSignals]);
+
+  useEffect(() => {
+    window.addEventListener("therapy:signals-changed", refreshSignals);
+    return () => window.removeEventListener("therapy:signals-changed", refreshSignals);
+  }, [refreshSignals]);
+
+  /* Only real, actionable things. An indicator that is always lit teaches people
+     to ignore it, which is worse than having none. */
+  const alerts = [
+    pendingIntakes > 0 && {
+      id: "intakes",
+      text: `${pendingIntakes} submission${pendingIntakes === 1 ? "" : "s"} waiting for review`,
+      to: "/therapist/client-intakes",
+    },
+    pendingNotes > 0 && {
+      id: "notes",
+      text: `${pendingNotes} completed session${pendingNotes === 1 ? "" : "s"} without notes`,
+      to: "/therapist/clients",
+    },
+  ].filter(Boolean);
 
   const handleSignOut = () => { logout(); navigate("/login"); };
 
@@ -133,7 +170,39 @@ function TherapistShellInner({ children }) {
             <kbd className={styles.kbd}>⌘ K</kbd>
           </button>
           <div className={styles.topActions}>
-            <button className={styles.iconBtn} aria-label="Notifications"><Icon name="bell" size={18} /><span className={styles.notif} /></button>
+            <div className={styles.bellWrap}>
+              <button
+                className={styles.iconBtn}
+                aria-label={alerts.length ? `Notifications, ${alerts.length} item${alerts.length === 1 ? "" : "s"}` : "Notifications, nothing new"}
+                aria-expanded={bellOpen}
+                onClick={() => setBellOpen(o => !o)}
+              >
+                <Icon name="bell" size={18} />
+                {/* The dot used to be permanent decoration. It now means something. */}
+                {alerts.length > 0 && <span className={styles.notif} />}
+              </button>
+              {bellOpen && (
+                <>
+                  <div className={styles.bellScrim} onClick={() => setBellOpen(false)} />
+                  <div className={styles.bellPanel} role="dialog" aria-label="Notifications">
+                    <div className={styles.bellHead}>Needs your attention</div>
+                    {alerts.length === 0 ? (
+                      <div className={styles.bellEmpty}>Nothing waiting. You're up to date.</div>
+                    ) : (
+                      alerts.map(alert => (
+                        <button
+                          key={alert.id}
+                          className={styles.bellItem}
+                          onClick={() => { setBellOpen(false); navigate(alert.to); }}
+                        >
+                          {alert.text}
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
             <button className={styles.me} onClick={() => navigate("/account-settings")}>
               <span className={styles.avatar}>{initials(name)}</span>
               <span className={styles.meText}><b>{name}</b><span>Therapist</span></span>

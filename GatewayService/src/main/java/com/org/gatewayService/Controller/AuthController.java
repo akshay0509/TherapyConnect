@@ -10,6 +10,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -22,6 +23,7 @@ import com.org.events.login.LoginSuccessEvent;
 import com.org.gatewayService.Dto.AuthRequest;
 import com.org.gatewayService.Dto.AuthResponse;
 import com.org.gatewayService.Entity.RefreshTokens;
+import com.org.gatewayService.Exception.TherapistLookupUnavailableException;
 import com.org.gatewayService.Messaging.LoginEventProducer;
 import com.org.gatewayService.Proxy.TherapistServiceProxy;
 import com.org.gatewayService.Proxy.UserServiceProxy;
@@ -95,7 +97,28 @@ public class AuthController {
 
         loginEventProducer.publishLoginSuccess(loginSuccessEvent);
 
-		String therapistId = therapistServiceProxy.getTherapistId(authResponse.getUserId());
+		/*
+		 * Only therapists need this claim, so a client is not held hostage by a
+		 * TherapistService restart.
+		 *
+		 * And when the lookup cannot answer, the login FAILS rather than issuing a
+		 * token that quietly asserts "no profile". That assertion is what routed
+		 * existing therapists to the create-profile page during a restart — and
+		 * createTherapist had no duplicate guard, so following that prompt wrote a
+		 * second profile for the same user. A retryable 503 is a far smaller
+		 * problem than a split identity.
+		 */
+		String therapistId = null;
+		if (isTherapist(authResponse.getRoles())) {
+			try {
+				therapistId = therapistServiceProxy.getTherapistId(authResponse.getUserId());
+			} catch (TherapistLookupUnavailableException ex) {
+				logger.warn("Login blocked: therapist profile lookup unavailable for {}", authRequest.getUsername());
+				return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+						.body(Map.of("message",
+								"Cannot sign in right now — the therapist service is unavailable. Please try again in a moment."));
+			}
+		}
 
 		String accessToken = jwtUtil.generateToken(
 				authRequest.getUsername(),
@@ -110,6 +133,14 @@ public class AuthController {
 		return ResponseEntity.ok()
 				.header(HttpHeaders.SET_COOKIE, buildRefreshCookie(refreshToken.getToken()).toString())
 				.body(Map.of("token", accessToken));
+	}
+
+	/** Roles arrive as e.g. ["ROLE_THERAPIST"] or ["THERAPIST"] depending on the
+	 *  issuer, so match on the suffix rather than an exact string. */
+	private boolean isTherapist(java.util.Set<String> roles) {
+		return roles != null && roles.stream()
+				.filter(java.util.Objects::nonNull)
+				.anyMatch(role -> role.toUpperCase().endsWith("THERAPIST"));
 	}
 
 	@PostMapping("/refresh")
@@ -130,7 +161,14 @@ public class AuthController {
 		// If therapistId was null at login time (new user pre-setup), try to fetch it now
 		String therapistId = stored.getTherapistId();
 		if (therapistId == null) {
-			therapistId = therapistServiceProxy.getTherapistId(stored.getUserId());
+			try {
+				therapistId = therapistServiceProxy.getTherapistId(stored.getUserId());
+			} catch (TherapistLookupUnavailableException ex) {
+				// Leave it unknown and let the next refresh try again. Refresh runs on
+				// a timer, so failing it would sign the user out mid-session over a
+				// blip — worse than carrying the claim we already have.
+				logger.warn("Refresh could not resolve therapist profile for userId={}", stored.getUserId());
+			}
 		}
 
 		// Rotate: delete old token, issue new one preserving roles (and updated therapistId)
