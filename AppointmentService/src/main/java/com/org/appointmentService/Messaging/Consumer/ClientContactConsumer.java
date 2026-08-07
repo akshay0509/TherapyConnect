@@ -55,6 +55,8 @@ public class ClientContactConsumer {
 		projection.setLastName(event.getLastName());
 		projection.setEmail(event.getEmail());
 		projection.setPhoneNumber(event.getPhoneNumber());
+		projection.setSessionFee(event.getSessionFee());
+		projection.setDsf(event.isDsf());
 
 		clientContactProjectionRepository.save(projection);
 

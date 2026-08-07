@@ -30,6 +30,16 @@ export async function getClientById(clientId) {
   }
 }
 
+export async function getClientFeeHistory(clientId) {
+  try {
+    const response = await api.get(`/client/${clientId}/fee-history`);
+    return response.data;
+  } catch (err) {
+    // The audit trail is supporting detail, never the reason a page fails to load.
+    return [];
+  }
+}
+
 export async function getSessionDetails(clientId) {
   try {
     const response = await api.get(`/therapist/${clientId}/session-details`);

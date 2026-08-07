@@ -265,8 +265,17 @@ public class TherapistService {
 	public TherapistServicesDto createServiceWithMode(String therapistId, ServiceWithModeRequest request)
 			throws JsonProcessingException {
 
-		if (request == null || request.getService() == null || request.getMode() == null) {
-			throw new IllegalArgumentException("A service and one delivery mode are both required.");
+		// Accepts either shape: the modes list, or the older single mode.
+		java.util.List<TherapyDeliveryModeDto> modeDtos =
+				request == null ? null
+					: request.getModes() != null && !request.getModes().isEmpty()
+						? request.getModes()
+						: request.getMode() != null
+							? java.util.List.of(request.getMode())
+							: null;
+
+		if (request == null || request.getService() == null || modeDtos == null) {
+			throw new IllegalArgumentException("A service and at least one delivery mode are both required.");
 		}
 
 		TherapistServicesDto serviceDto = request.getService();
@@ -276,12 +285,13 @@ public class TherapistService {
 		TherapistServices saved = therapistServicesRepository.save(
 				therapistAssembler.assembleDtoToEntity(serviceDto));
 
-		// The mode is bound to the service just created — never to an id supplied
+		// Modes are bound to the service just created — never to an id supplied
 		// by the caller, which could point at another therapist's service.
-		TherapyDeliveryModeDto modeDto = request.getMode();
-		modeDto.setServiceId(saved.getServiceId());
-		modeDto.setTherapistId(therapistId);
-		createDeliveryMode(therapistId, modeDto);
+		for (TherapyDeliveryModeDto modeDto : modeDtos) {
+			modeDto.setServiceId(saved.getServiceId());
+			modeDto.setTherapistId(therapistId);
+			createDeliveryMode(therapistId, modeDto);
+		}
 
 		// Published after the mode exists, so no consumer ever projects a
 		// service that cannot be booked.

@@ -13,8 +13,11 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.org.clientService.Dto.ClientDto;
+import com.org.clientService.Dto.ClientFeeHistoryDto;
 import com.org.clientService.Dto.ClientStatusUpdateRequest;
 import com.org.clientService.Services.ClientService;
 import com.org.clientService.Utility.SecurityUtils;
@@ -54,6 +57,14 @@ public class ClientController {
 	public ResponseEntity<ClientDto> updateClient(@PathVariable String clientId, @RequestBody ClientDto clientDto) throws JsonProcessingException {
 		String therapistId = SecurityUtils.getTherapistId();
 		return ResponseEntity.ok(clientService.updateClient(therapistId, clientId, clientDto));
+	}
+
+	/* Read-only audit trail for the negotiated rate. Therapist scope comes from
+	   the JWT, same as every other method here — the path id is not a boundary. */
+	@GetMapping("/{clientId}/fee-history")
+	public List<ClientFeeHistoryDto> getFeeHistory(@PathVariable String clientId) {
+		String therapistId = SecurityUtils.getTherapistId();
+		return clientService.getFeeHistory(therapistId, clientId);
 	}
 
 	@PatchMapping("/update-status/{clientId}")

@@ -190,8 +190,8 @@
 .gender { font-size: 0.78rem; color: var(--text-3); }
 .expBadge {
   display: flex; flex-direction: column; align-items: center;
-  background: rgba(16,185,129,0.1);
-  border: 1px solid rgba(16,185,129,0.2);
+  background: rgba(52,211,153,0.1);
+  border: 1px solid rgba(52,211,153,0.2);
   border-radius: 8px;
   padding: 6px 10px; flex-shrink: 0;
 }
@@ -353,9 +353,9 @@
   letter-spacing: 0.06em;
 }
 .badgeActive {
-  background: rgba(16,185,129,0.12);
+  background: rgba(52,211,153,0.12);
   color: var(--ok-mid);
-  border: 1px solid rgba(16,185,129,0.25);
+  border: 1px solid rgba(52,211,153,0.25);
 }
 .badgeInactive {
   background: rgba(100,116,139,0.12);

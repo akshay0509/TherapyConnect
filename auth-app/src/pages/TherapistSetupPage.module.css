@@ -158,7 +158,7 @@
   outline: none;
   appearance: none;
 }
-.calSelect:focus { border-color: #10b981; }
+.calSelect:focus { border-color: var(--ok-mid); }
 .calSelect option { background: var(--elev); color: var(--text-1); }
 
 .calGrid {
@@ -189,6 +189,6 @@
   font-family: var(--font-sans);
   width: 100%;
 }
-.calDay:hover:not(:disabled) { background: rgba(16,185,129,0.15); color: var(--ok-mid); }
-.calDaySelected { background: #10b981 !important; color: #fff !important; }
+.calDay:hover:not(:disabled) { background: rgba(52,211,153,0.15); color: var(--ok-mid); }
+.calDaySelected { background: var(--ok-mid) !important; color: #fff !important; }
 .calDay:disabled { color: var(--bg-elev); cursor: not-allowed; }

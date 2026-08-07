@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { getAvailability, createAppointment, generateSlots, updateAppointmentStatus, rescheduleAppointment, createAvailabilityOverride, deleteAvailabilityOverride, bulkAvailabilityOverrides, getPaymentInfo, ensurePaymentLink } from "../api/appointments";
-import { getTherapistClients, createSessionNotes } from "../api/therapistClients";
+import { getTherapistClients, createSessionNotes, getClientById } from "../api/therapistClients";
 import api from "../api/client";
 import { useModeMap, useAllModes } from "../context/DeliveryModesContext";
 import SessionTimer from "../components/SessionTimer";
@@ -265,6 +265,10 @@ export default function AppointmentsPage() {
 
   // Booking form
   const [booking, setBooking] = useState({ clientId: "", clientName: "", serviceId: "", modeId: "", useCustomPrice: false, customPrice: "" });
+  /* The client list DTO carries dsf but not the negotiated rate, so the rate is
+     fetched when a client is picked. Purely for the preview — the server
+     resolves the fee itself, this never gets sent. */
+  const [clientRate, setClientRate] = useState(null);
   const [bookingModes, setBookingModes] = useState([]); // modes for the slot's service
   const [bookingLoading, setBookingLoading] = useState(false);
   const [bookingError, setBookingError] = useState(null);
@@ -572,6 +576,7 @@ export default function AppointmentsPage() {
 
   const onCanvasMouseDown = (e) => {
     if (e.button !== 0) return;
+    if (isPastDay) return;
     const y = getCanvasY(e.clientY);
     const mins = snapToSlot(pxToMinutes(y));
     dragRef.current = { active: true, startY: y, startMins: mins, endMins: mins + 30, moved: false };
@@ -642,6 +647,7 @@ export default function AppointmentsPage() {
     const only = services.length === 1 ? services[0].serviceId : "";
     setBookingModes(only ? allModes.filter(m => m.serviceId === only && m.isActive) : []);
     setBooking({ clientId: "", clientName: "", serviceId: only, modeId: "", useCustomPrice: false, customPrice: "" });
+    setClientRate(null);
     setBookingError(null); setBookingSuccess(false);
     setBookingPayment(null); setLinkCopied(false);
     setPanel("book");
@@ -907,6 +913,18 @@ export default function AppointmentsPage() {
     return h === 12 ? "12 PM" : h < 12 ? `${h} AM` : `${h-12} PM`;
   });
 
+  /* A day that has already finished cannot take a new override — the thing an
+     override does is stop future bookings landing in a slot, which is
+     meaningless once the slot is gone. Dragging one out silently created a
+     record that could never apply. */
+  const isPastDay = useMemo(() => {
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const d = new Date(selectedDate);
+    d.setHours(0, 0, 0, 0);
+    return d < startOfToday;
+  }, [selectedDate]);
+
   const nowMinutes = now.toDateString() === selectedDate.toDateString()
     ? now.getHours() * 60 + now.getMinutes() : null;
 
@@ -1036,7 +1054,7 @@ export default function AppointmentsPage() {
               </div>
 
               <div
-                className={styles.canvas}
+                className={`${styles.canvas} ${isPastDay ? styles.canvasPast : ""}`}
                 style={{ height: CANVAS_HEIGHT }}
                 ref={canvasRef}
                 onMouseDown={onCanvasMouseDown}
@@ -1261,7 +1279,17 @@ export default function AppointmentsPage() {
               ) : (
                 <form onSubmit={handleBook} className={styles.panelForm}>
                   <div className={styles.field}><label className={styles.label}>Client</label>
-                    <ClientDropdown clients={clients} value={booking.clientId} onChange={(id,name) => setBooking(p => ({...p, clientId:id, clientName:name}))} />
+                    <ClientDropdown clients={clients} value={booking.clientId} onChange={(id,name) => {
+                      setBooking(p => ({...p, clientId:id, clientName:name}));
+                      setClientRate(null);
+                      getClientById(id).then(c => {
+                        setClientRate({ id, fee: c?.sessionFee ?? null, dsf: !!c?.dsf });
+                        // A pro-bono client cannot carry a custom fee. Clear any
+                        // already-entered one, or the form would submit a price
+                        // the server discards while the panel displays zero.
+                        if (c?.dsf) setBooking(p => ({ ...p, useCustomPrice: false, customPrice: "" }));
+                      }).catch(() => {});
+                    }} />
                   </div>
                   <div className={styles.field}><label className={styles.label}>Service</label>
                     <ServiceDropdown
@@ -1279,13 +1307,29 @@ export default function AppointmentsPage() {
                   {booking.modeId && (() => {
                     const selectedMode = bookingModes.find(m => m.modeId === booking.modeId);
                     if (!selectedMode || selectedMode.price == null) return null;
+                    /* Mirrors AppointmentService.resolveSessionFee: custom entry wins,
+                       then the client's negotiated rate, then the mode price — and a
+                       DSF client is never charged at all. */
+                    const rate = clientRate?.id === booking.clientId ? clientRate : null;
+                    const modePrice = parseFloat(selectedMode.price);
+                    const clientFee = rate && !rate.dsf && rate.fee != null && Number(rate.fee) > 0
+                      ? Number(rate.fee) : null;
+                    /* Mirrors AppointmentService.resolveSessionFee exactly: a DSF
+                       client is stamped at zero and nothing overrides it, so the
+                       custom-fee entry is closed off rather than silently ignored. */
+                    const proBono = !!rate?.dsf;
+                    const effective = proBono ? 0 : (clientFee ?? modePrice);
+                    const tier = proBono ? "Pro bono (DSF) — this session is not billed"
+                      : clientFee != null ? `Client rate for ${booking.clientName || "this client"} · standard is ₹${modePrice.toFixed(0)}`
+                      : "Standard service price";
                     return (
                       <div className={styles.customFeeBox}>
                         <label className={styles.customFeeLabel}>
                           <input
                             type="checkbox"
                             className={styles.customFeeCheck}
-                            checked={booking.useCustomPrice}
+                            checked={booking.useCustomPrice && !proBono}
+                            disabled={proBono}
                             onChange={e => setBooking(p => ({ ...p, useCustomPrice: e.target.checked, customPrice: "" }))}
                           />
                           Custom session fee
@@ -1297,14 +1341,14 @@ export default function AppointmentsPage() {
                             min="0"
                             step="1"
                             className={`${styles.customFeeInput} ${!booking.useCustomPrice ? styles.customFeeInputOff : ""}`}
-                            disabled={!booking.useCustomPrice}
-                            value={booking.useCustomPrice ? booking.customPrice : parseFloat(selectedMode.price).toFixed(0)}
+                            disabled={!booking.useCustomPrice || proBono}
+                            value={booking.useCustomPrice && !proBono ? booking.customPrice : effective.toFixed(0)}
                             onChange={e => setBooking(p => ({ ...p, customPrice: e.target.value }))}
                             placeholder="0"
                           />
                         </div>
-                        {!booking.useCustomPrice && (
-                          <p className={styles.customFeeHint}>Default: ₹{parseFloat(selectedMode.price).toFixed(0)}</p>
+                        {(!booking.useCustomPrice || proBono) && (
+                          <p className={styles.customFeeHint}>{tier}</p>
                         )}
                       </div>
                     );

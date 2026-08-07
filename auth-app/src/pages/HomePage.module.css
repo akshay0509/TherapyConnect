@@ -79,7 +79,7 @@
 
 .eyebrow {
   font-size: 0.85rem;
-  color: #10b981;
+  color: var(--ok-mid);
   font-weight: 500;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -96,7 +96,7 @@
 }
 
 .accent {
-  background: linear-gradient(135deg, #6366f1, #10b981);
+  background: linear-gradient(135deg, #6366f1, var(--ok-mid));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;

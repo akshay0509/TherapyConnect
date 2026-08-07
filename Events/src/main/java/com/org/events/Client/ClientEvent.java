@@ -18,6 +18,9 @@ public class ClientEvent {
     private String firstName;
     private String lastName;
     private String fullName;
+	// Negotiated per-client rate. Null means the client has no special rate
+	// and the delivery-mode price applies.
+	private java.math.BigDecimal sessionFee;
     private ClientStatus status;
     private boolean dsf;
     

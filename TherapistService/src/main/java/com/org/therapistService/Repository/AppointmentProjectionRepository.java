@@ -49,17 +49,25 @@ public interface AppointmentProjectionRepository extends JpaRepository<Appointme
 	 *
 	 * DSF stays COMPLETED-only below: it measures pro-bono work actually
 	 * delivered, and it earns nothing either way.
+	 *
+	 * These queries deliberately do NOT join TherapistClients for the DSF flag.
+	 * A pro-bono session is stamped with sessionFee = 0 at booking, so zero fee
+	 * IS the pro-bono marker, and it is frozen per appointment. Filtering on the
+	 * client's live flag instead would mean a therapist ending a pro-bono
+	 * arrangement retroactively turned months of free sessions into income.
+	 * Nothing else can produce a zero fee: ClientService rejects a negative rate
+	 * and normalises zero to "no rate", and AppointmentService.resolveSessionFee
+	 * returns zero only from its DSF branch — every other branch is checked for
+	 * a positive amount before it returns.
 	 */
 	@Query("""
 			SELECT SUM(a.sessionFee)
 			FROM AppointmentProjection a
-			JOIN TherapistClients c ON c.therapistId = a.therapistId AND c.clientId = a.clientId
 			WHERE a.therapistId = :therapistId
 				AND a.status IN (
 					com.org.events.TherapistAppointment.AppointmentStatus.COMPLETED,
 					com.org.events.TherapistAppointment.AppointmentStatus.ABANDONED
 				)
-				AND c.dsf = false
 				AND a.startTime >= :start
 				AND a.startTime < :end
 			""")
@@ -72,13 +80,12 @@ public interface AppointmentProjectionRepository extends JpaRepository<Appointme
 	@Query("""
 			SELECT COUNT(a)
 			FROM AppointmentProjection a
-			JOIN TherapistClients c ON c.therapistId = a.therapistId AND c.clientId = a.clientId
 			WHERE a.therapistId = :therapistId
 				AND a.status IN (
 					com.org.events.TherapistAppointment.AppointmentStatus.COMPLETED,
 					com.org.events.TherapistAppointment.AppointmentStatus.ABANDONED
 				)
-				AND c.dsf = false
+				AND a.sessionFee > 0
 				AND a.startTime >= :start
 				AND a.startTime < :end
 			""")
@@ -93,10 +100,9 @@ public interface AppointmentProjectionRepository extends JpaRepository<Appointme
 	@Query("""
 			SELECT COUNT(a)
 			FROM AppointmentProjection a
-			JOIN TherapistClients c ON c.therapistId = a.therapistId AND c.clientId = a.clientId
 			WHERE a.therapistId = :therapistId
 				AND a.status = com.org.events.TherapistAppointment.AppointmentStatus.ABANDONED
-				AND c.dsf = false
+				AND a.sessionFee > 0
 				AND a.startTime >= :start
 				AND a.startTime < :end
 			""")
@@ -109,10 +115,9 @@ public interface AppointmentProjectionRepository extends JpaRepository<Appointme
 	@Query("""
 			SELECT COUNT(a)
 			FROM AppointmentProjection a
-			JOIN TherapistClients c ON c.therapistId = a.therapistId AND c.clientId = a.clientId
 			WHERE a.therapistId = :therapistId
 				AND a.status = com.org.events.TherapistAppointment.AppointmentStatus.COMPLETED
-				AND c.dsf = true
+				AND a.sessionFee = 0
 				AND a.startTime >= :start
 				AND a.startTime < :end
 			""")

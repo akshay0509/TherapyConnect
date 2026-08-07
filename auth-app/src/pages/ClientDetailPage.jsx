@@ -2,15 +2,14 @@ import { useEffect, useState, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   getClientById, getSessionDetails, createSessionNotes, updateSessionNotes,
-  updateClient, updateClientStatus, getClientNotes, upsertClientNote,
+  updateClient, updateClientStatus, getClientNotes, upsertClientNote, getClientFeeHistory,
 } from "../api/therapistClients";
 import { useModeMap, useAllModes } from "../context/DeliveryModesContext";
-import ChipSelect, { splitList } from "../components/ChipSelect";
+import { splitList } from "../components/ChipSelect";
 import Icon from "../components/icons";
+import ClientFormModal from "../components/ClientFormModal";
 import styles from "./ClientDetailPage.module.css";
 
-const DAY_OPTIONS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-const TIMING_OPTIONS = ["Morning", "Afternoon", "Evening"];
 
 // "COMPLETED" → "Completed" (the prototype uses sentence case, not raw enums)
 function titleCase(s) {
@@ -93,43 +92,20 @@ function PreferenceRow({ label, value }) {
    unconditionally, so a key missing from the payload is written as null —
    an edit that omitted them would silently wipe whatever the intake form
    collected. */
-const EDIT_GROUPS = [
-  {
-    label: "Identity",
-    fields: [
-      { name: "firstName", label: "First name", type: "text" },
-      { name: "lastName",  label: "Last name",  type: "text" },
-      { name: "dob",       label: "Date of birth", type: "date" },
-      { name: "gender",    label: "Gender",     type: "text" },
-      { name: "pronouns",  label: "Pronouns",   type: "text" },
-    ],
-  },
-  {
-    label: "Contact",
-    fields: [
-      { name: "email",       label: "Email",        type: "email" },
-      { name: "phoneNumber", label: "Phone number", type: "tel" },
-    ],
-  },
-  {
-    label: "Background",
-    fields: [
-      { name: "qualification",     label: "Qualification", type: "text" },
-      { name: "currentOccupation", label: "Occupation",    type: "text" },
-    ],
-  },
-  {
-    label: "Emergency contact",
-    fields: [
-      { name: "emergencyPhoneNumber",         label: "Emergency phone", type: "tel" },
-      { name: "emergencyContactName",         label: "Name",            type: "text" },
-      { name: "emergencyContactRelationship", label: "Relationship",    type: "text" },
-      { name: "emergencyContactAge",          label: "Age",             type: "number" },
-    ],
-  },
+/* Every field updateClient() writes must be seeded into the edit form. It
+   assigns each one unconditionally, so a key missing from the payload is
+   written as null — an edit that omitted them would silently wipe whatever the
+   intake form collected. (handleEditSave also spreads the loaded client as a
+   second guard; see the comment there.) */
+const EDIT_FIELD_NAMES_LIST = [
+  "firstName", "lastName", "dob", "gender", "pronouns",
+  "email", "phoneNumber",
+  "qualification", "currentOccupation",
+  "sessionFee",
+  "emergencyPhoneNumber", "emergencyContactName", "emergencyContactRelationship", "emergencyContactAge",
 ];
 
-const EDIT_FIELD_NAMES = EDIT_GROUPS.flatMap(g => g.fields.map(f => f.name));
+const EDIT_FIELD_NAMES = EDIT_FIELD_NAMES_LIST;
 
 export default function ClientDetailPage() {
   const { clientId } = useParams();
@@ -147,6 +123,7 @@ export default function ClientDetailPage() {
   // ── Edit client ──────────────────────────────────────────
   const [editOpen, setEditOpen]       = useState(false);
   const [editForm, setEditForm]       = useState({});
+  const [feeHistory, setFeeHistory]   = useState([]);
   const [editLoading, setEditLoading] = useState(false);
   const [editError, setEditError]     = useState(null);
 
@@ -158,6 +135,7 @@ export default function ClientDetailPage() {
     next.preferredDays = client.preferredDays ?? "";
     next.preferredTimings = client.preferredTimings ?? "";
     next.preferredModes = client.preferredModes ?? "";
+    next.dsf = !!client.dsf;
     setEditForm(next);
     setEditError(null);
     setEditOpen(true);
@@ -166,15 +144,26 @@ export default function ClientDetailPage() {
   const handleEditSave = async () => {
     setEditLoading(true); setEditError(null);
     try {
+      /* Spread the loaded record first. updateClient is a full replace, so any
+         field absent from the payload is written as null — building it from the
+         form alone means every future column added to the client record has to
+         be remembered here or it is silently wiped. Starting from `client`
+         removes that trap: the form only overrides what it actually edits. */
       const payload = {
+        ...client,
         ...editForm,
+        dsf: !!editForm.dsf,
         dob: editForm.dob ? new Date(editForm.dob).toISOString() : null,
         // ClientDto types this as Integer — "" will not deserialize.
         emergencyContactAge: editForm.emergencyContactAge === "" || editForm.emergencyContactAge == null
           ? null : Number(editForm.emergencyContactAge),
+        // Blank clears the negotiated rate, so the standard mode price applies.
+        sessionFee: editForm.sessionFee === "" || editForm.sessionFee == null
+          ? null : Number(editForm.sessionFee),
       };
       const updated = await updateClient(clientId, payload);
       setClient(prev => ({ ...prev, ...updated }));
+      getClientFeeHistory(clientId).then(setFeeHistory);
       setEditOpen(false);
     } catch (err) {
       setEditError(err.message);
@@ -300,6 +289,7 @@ export default function ClientDetailPage() {
     // Load sessions up-front too so the at-a-glance stats can render on the
     // overview (the Sessions tab reuses the same cache via its loaded guard).
     loadSessions();
+    getClientFeeHistory(clientId).then(setFeeHistory);
   }, [clientId]);
 
   // At-a-glance metrics, computed from session history.
@@ -307,7 +297,9 @@ export default function ClientDetailPage() {
   const glance = useMemo(() => {
     if (!sessions.length) return null;
     const done = sessions.filter(s => s.status === "COMPLETED").length;
-    const missed = sessions.filter(s => ["CANCELLED", "ABANDONED"].includes(s.status)).length;
+    const noShow = sessions.filter(s => s.status === "ABANDONED").length;
+    const cancelled = sessions.filter(s => s.status === "CANCELLED").length;
+    const missed = cancelled + noShow;
     const attendance = (done + missed) > 0 ? Math.round((done / (done + missed)) * 100) : null;
     const counts = {};
     sessions.forEach(s => { if (s.modeId) counts[s.modeId] = (counts[s.modeId] || 0) + 1; });
@@ -320,7 +312,12 @@ export default function ClientDetailPage() {
       : sessions
           .filter(s => s.status === "COMPLETED")
           .reduce((sum, s) => sum + (Number(s.sessionFee) || 0), 0);
-    return { total: sessions.length, attendance, primaryMode: modeMap[topMode]?.displayName ?? "—", totalPaid };
+    /* "Sessions held" is deliberately NOT sessions.length. A cancelled booking is
+       not a session that happened, and counting it made this tile contradict the
+       two beneath it — five sessions, one completed, 20% attendance. A no-show
+       does count: the slot was consumed and it bills the full fee (owner
+       decision, 30 Jul), which is the rule earnings already uses. */
+    return { held: done + noShow, cancelled, attendance, primaryMode: modeMap[topMode]?.displayName ?? "—", totalPaid };
   }, [sessions, modeMap, client]);
 
   // Same rule the backend aggregate uses (COMPLETED with no notes), derived from
@@ -369,7 +366,21 @@ export default function ClientDetailPage() {
                 {getInitials(client.firstName, client.lastName)}
               </div>
               <div className={styles.heroText}>
-                <h1 className={styles.name}>{fullName || "—"}</h1>
+                {/* Status sits with the name because it describes the client, not
+                    an action to take on them. It was previously a 20px chip
+                    wedged into a row of 38px buttons — misaligned, and a control
+                    disguised as a badge. */}
+                <div className={styles.nameRow}>
+                  <h1 className={styles.name}>{fullName || "—"}</h1>
+                  <button
+                    className={`chip ${client.status === "ACTIVE" ? "chip-ok" : "chip-bad"} ${styles.statusToggle}`}
+                    onClick={() => handleStatusChange(client.status === "ACTIVE" ? "TERMINATED" : "ACTIVE")}
+                    disabled={statusLoading || statusConfirm}
+                    title={client.status === "ACTIVE" ? "Mark this client as terminated" : "Reactivate this client"}
+                  >
+                    {statusLoading ? "…" : (client.status === "ACTIVE" ? "● Active" : "● Terminated")}
+                  </button>
+                </div>
                 <p className={styles.heroMeta}>
                   <span className={styles.clientIdText}>{clientId}</span>
                   {ageFromDob(client.dob) != null && <> · {ageFromDob(client.dob)}</>}
@@ -382,16 +393,9 @@ export default function ClientDetailPage() {
                 </div>
               </div>
 
+              {/* Two controls of equal weight and equal height. */}
               <div className={styles.heroActions}>
-                <button
-                  className={`chip ${client.status === "ACTIVE" ? "chip-ok" : "chip-bad"} ${styles.statusToggle}`}
-                  onClick={() => handleStatusChange(client.status === "ACTIVE" ? "TERMINATED" : "ACTIVE")}
-                  disabled={statusLoading || statusConfirm}
-                  title="Click to change status"
-                >
-                  {statusLoading ? "…" : (client.status === "ACTIVE" ? "● Active" : "● Terminated")}
-                </button>
-                <button className="btn" onClick={openEdit}><Icon name="edit" size={16} /> Edit</button>
+                <button className="btn" onClick={openEdit}><Icon name="edit" size={16} /> Edit details</button>
                 <button className="btn btn-primary" onClick={() => navigate("/therapist/appointments")}><Icon name="plus" size={16} /> Book session</button>
               </div>
             </div>
@@ -474,11 +478,21 @@ export default function ClientDetailPage() {
                       <div className="card" style={{ padding: 20 }}>
                         <h2 style={{ margin: "0 0 12px", fontSize: "1rem" }}>At a glance</h2>
                         <div className="rows">
-                          <div><span className="k">Total sessions</span><span className="v">{glance ? glance.total : "—"}</span></div>
+                          <div><span className="k">Sessions held</span><span className="v">{glance ? glance.held : "—"}</span></div>
+                          {glance?.cancelled > 0 && (
+                            <div><span className="k">Cancelled</span><span className="v" style={{ color: "var(--text-3)" }}>{glance.cancelled}</span></div>
+                          )}
                           {/* Total paid — summed from the captured fee on each completed
                               session (SessionDetailsDto.sessionFee). DSF clients read "Pro bono". */}
                           <div><span className="k">Total paid</span><span className="v">{client.dsf ? "Pro bono" : glance ? `₹${glance.totalPaid.toLocaleString("en-IN")}` : "—"}</span></div>
-                          <div><span className="k">Attendance</span><span className="v" style={{ color: "var(--ok-mid)" }}>{glance?.attendance != null ? `${glance.attendance}%` : "—"}</span></div>
+                          {/* Colour tracks the value: 20% attendance rendered in the
+                              success green read as though it were good news. */}
+                          <div><span className="k">Attendance</span><span className="v" style={{
+                            color: glance?.attendance == null ? "var(--text-2)"
+                              : glance.attendance >= 75 ? "var(--ok-mid)"
+                              : glance.attendance >= 50 ? "var(--warn-mid)"
+                              : "var(--danger-mid)"
+                          }}>{glance?.attendance != null ? `${glance.attendance}%` : "—"}</span></div>
                           <div><span className="k">Primary mode</span>{glance && glance.primaryMode !== "—" ? <span className="chip chip-online">{glance.primaryMode}</span> : <span className="v">—</span>}</div>
                         </div>
                       </div>
@@ -525,6 +539,39 @@ export default function ClientDetailPage() {
                   <DetailField label="Qualification" value={client.qualification} />
                   <DetailField label="Occupation"    value={client.currentOccupation} />
                 </div>
+
+                <div className={styles.detailGroup}>Billing</div>
+                <div className={styles.grid}>
+                  {/* DSF wins over any negotiated rate — a pro-bono client is
+                      never charged, whatever fee is stored. */}
+                  <DetailField
+                    label="Session fee"
+                    value={client.dsf
+                      ? "Pro bono (DSF)"
+                      : client.sessionFee != null
+                        ? `₹${Number(client.sessionFee).toLocaleString("en-IN")} (negotiated)`
+                        : "Standard service price"}
+                  />
+                </div>
+                {feeHistory.length > 0 && (
+                  /* Past appointments keep the fee they were booked at, so this
+                     explains a rate that no longer matches the current one. */
+                  <div className={styles.feeHistory}>
+                    <span className={styles.fieldLabel}>Rate changes</span>
+                    <ul className={styles.feeHistoryList}>
+                      {feeHistory.map(h => (
+                        <li key={h.feeHistoryId}>
+                          <span className={styles.feeHistoryMove}>
+                            {h.oldFee != null ? `₹${Number(h.oldFee).toLocaleString("en-IN")}` : "Standard price"}
+                            {" → "}
+                            {h.newFee != null ? `₹${Number(h.newFee).toLocaleString("en-IN")}` : "Standard price"}
+                          </span>
+                          <span className={styles.feeHistoryWhen}>{formatDate2(h.changedAt)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
 
                 <div className={styles.detailGroup}>Scheduling preferences</div>
                 <div className={styles.prefRows}>
@@ -677,66 +724,20 @@ export default function ClientDetailPage() {
       })()}
 
       {/* ── Edit client modal ── */}
-      {editOpen && (
-        <div className={styles.notesModal} style={{ maxWidth: 560 }}>
-          <div className={styles.notesModalHeader}>
-            <h3 className={styles.notesModalTitle}>Edit Client</h3>
-            <button className={styles.closeBtn} onClick={() => setEditOpen(false)}><Icon name="x" size={18} /></button>
-          </div>
-          <div className={styles.notesModalBody} style={{ maxHeight: "60vh", overflowY: "auto" }}>
-            {EDIT_GROUPS.map(group => (
-              <div key={group.label}>
-                <div className={styles.editGroupLabel}>{group.label}</div>
-                <div className={styles.editGrid}>
-                  {group.fields.map(f => (
-                    <div key={f.name} className={styles.editField}>
-                      <label className={styles.editLabel} htmlFor={`edit-${f.name}`}>{f.label}</label>
-                      <input
-                        id={`edit-${f.name}`}
-                        className={styles.editInput}
-                        type={f.type}
-                        value={editForm[f.name] ?? ""}
-                        onChange={e => setEditForm(prev => ({ ...prev, [f.name]: e.target.value }))}
-                      />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-
-            <div className={styles.editGroupLabel}>Scheduling preferences</div>
-            <div className={styles.editChips}>
-              <div className={styles.editField}>
-                <label className={styles.editLabel}>Preferred days</label>
-                <ChipSelect label="Preferred days" options={DAY_OPTIONS}
-                  value={editForm.preferredDays}
-                  onChange={v => setEditForm(prev => ({ ...prev, preferredDays: v }))} />
-              </div>
-              <div className={styles.editField}>
-                <label className={styles.editLabel}>Preferred timings</label>
-                <ChipSelect label="Preferred timings" options={TIMING_OPTIONS}
-                  value={editForm.preferredTimings}
-                  onChange={v => setEditForm(prev => ({ ...prev, preferredTimings: v }))} />
-              </div>
-              {modeOptions.length > 0 && (
-                <div className={styles.editField}>
-                  <label className={styles.editLabel}>Preferred modes</label>
-                  <ChipSelect label="Preferred modes" options={modeOptions}
-                    value={editForm.preferredModes}
-                    onChange={v => setEditForm(prev => ({ ...prev, preferredModes: v }))} />
-                </div>
-              )}
-            </div>
-            {editError && <div className={styles.errorBox} style={{ marginTop: 12 }}><span className={styles.errorIcon}>!</span>{editError}</div>}
-          </div>
-          <div className={styles.notesModalFooter}>
-            <button className={styles.notesCancelBtn} onClick={() => setEditOpen(false)} disabled={editLoading}>Cancel</button>
-            <button className={styles.notesSaveBtn} onClick={handleEditSave} disabled={editLoading}>
-              {editLoading ? <span className={styles.btnSpinner}/> : "Save Changes"}
-            </button>
-          </div>
-        </div>
-      )}
+      {/* Same shared component the Clients page uses for Add — see
+          components/ClientFormModal. Editing a client is the same task as
+          creating one, so it is literally the same form. */}
+      <ClientFormModal
+        open={editOpen}
+        mode="edit"
+        form={editForm}
+        onChange={(name, value) => setEditForm(prev => ({ ...prev, [name]: value }))}
+        onSubmit={handleEditSave}
+        onClose={() => setEditOpen(false)}
+        loading={editLoading}
+        error={editError}
+        modeOptions={modeOptions}
+      />
     </div>
   );
 }

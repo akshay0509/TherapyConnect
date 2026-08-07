@@ -176,7 +176,7 @@
   gap: 10px;
   padding: 12px 16px;
   background: rgba(52, 211, 153, 0.12);
-  border: 1px solid rgba(16, 185, 129, 0.25);
+  border: 1px solid rgba(52,211,153, 0.25);
   border-radius: 10px;
   color: var(--ok-soft);
   font-size: 0.875rem;
@@ -186,7 +186,7 @@
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  background: rgba(16, 185, 129, 0.25);
+  background: rgba(52,211,153, 0.25);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -408,7 +408,7 @@
   font-family: inherit;
 }
 .roleOption:hover { background: var(--wash-2); color: var(--text-1); border-color: var(--wash-4); }
-.roleOptionActive { background: rgba(16,185,129,0.15) !important; border-color: #10b981 !important; color: var(--ok-mid) !important; }
+.roleOptionActive { background: rgba(52,211,153,0.15) !important; border-color: var(--ok-mid) !important; color: var(--ok-mid) !important; }
 
 /* ─── Forgot password link ─── */
 .forgotLink { background: none; border: none; color: var(--text-3); font-family: var(--font-sans); font-size: 0.82rem; cursor: pointer; text-align: center; width: 100%; margin-top: 4px; transition: color 0.15s; display: block; }

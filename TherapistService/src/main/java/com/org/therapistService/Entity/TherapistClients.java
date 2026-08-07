@@ -7,6 +7,8 @@ import com.org.events.Client.ClientStatus;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
@@ -31,6 +33,8 @@ public class TherapistClients {
 	
 	private String clientName;
 	private LocalDateTime createdAt = LocalDateTime.now();
+	/* STRING, not the JPA default ORDINAL — see Client.status in ClientService. */
+	@Enumerated(EnumType.STRING)
 	private ClientStatus status = ClientStatus.ACTIVE;
 	private boolean dsf = false;
 	

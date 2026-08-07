@@ -37,7 +37,7 @@
   font-family: var(--font-sans);
   font-weight: 800;
   font-size: 1.1rem;
-  color: #10b981;
+  color: var(--ok-mid);
   flex: 1;
   text-align: center;
 }
@@ -48,9 +48,9 @@
   letter-spacing: 0.08em;
   padding: 3px 10px;
   border-radius: 20px;
-  background: rgba(16,185,129,0.12);
+  background: rgba(52,211,153,0.12);
   color: var(--ok-mid);
-  border: 1px solid rgba(16,185,129,0.25);
+  border: 1px solid rgba(52,211,153,0.25);
 }
 
 /* ─── Main ─── */
@@ -98,7 +98,7 @@
   font-weight: 700;
   cursor: pointer;
   transition: opacity 0.2s, transform 0.15s;
-  box-shadow: 0 4px 18px rgba(16,185,129,0.3);
+  box-shadow: 0 4px 18px rgba(52,211,153,0.3);
   white-space: nowrap;
 }
 .addBtn:hover { opacity: 0.9; transform: translateY(-1px); }
@@ -116,7 +116,7 @@
 .spinner {
   width: 36px; height: 36px;
   border: 3px solid var(--wash-3);
-  border-top-color: #10b981;
+  border-top-color: var(--ok-mid);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -137,7 +137,7 @@
   font-size: 0.95rem; font-weight: 700;
   cursor: pointer;
   transition: opacity 0.2s, transform 0.15s;
-  box-shadow: 0 4px 20px rgba(16,185,129,0.3);
+  box-shadow: 0 4px 20px rgba(52,211,153,0.3);
 }
 .addBtnLarge:hover { opacity: 0.9; transform: translateY(-1px); }
 
@@ -197,9 +197,9 @@
   width: fit-content;
 }
 .badgeActive {
-  background: rgba(16,185,129,0.12);
+  background: rgba(52,211,153,0.12);
   color: var(--ok-mid);
-  border: 1px solid rgba(16,185,129,0.25);
+  border: 1px solid rgba(52,211,153,0.25);
 }
 .badgeInactive {
   background: rgba(100,116,139,0.12);
@@ -266,15 +266,15 @@
 
 .modesToggleBtn {
   flex: 1; padding: 8px;
-  background: rgba(16,185,129,0.06);
-  border: 1px solid rgba(16,185,129,0.18);
+  background: rgba(52,211,153,0.06);
+  border: 1px solid rgba(52,211,153,0.18);
   border-radius: 8px; color: var(--ok-mid);
   font-size: 0.82rem; font-weight: 600;
   font-family: var(--font-sans);
   cursor: pointer; transition: background 0.15s, border-color 0.15s;
   white-space: nowrap;
 }
-.modesToggleBtn:hover { background: rgba(16,185,129,0.12); border-color: rgba(16,185,129,0.3); }
+.modesToggleBtn:hover { background: rgba(52,211,153,0.12); border-color: rgba(52,211,153,0.3); }
 
 /* ─── Delivery modes expandable section ─── */
 .modesSection {
@@ -304,16 +304,16 @@
 .addModeBtn {
   font-size: 0.75rem;
   font-weight: 600;
-  color: #10b981;
-  background: rgba(16,185,129,0.08);
-  border: 1px solid rgba(16,185,129,0.2);
+  color: var(--ok-mid);
+  background: rgba(52,211,153,0.08);
+  border: 1px solid rgba(52,211,153,0.2);
   border-radius: 6px;
   padding: 4px 10px;
   cursor: pointer;
   font-family: var(--font-sans);
   transition: background 0.15s, border-color 0.15s;
 }
-.addModeBtn:hover { background: rgba(16,185,129,0.14); border-color: rgba(16,185,129,0.35); }
+.addModeBtn:hover { background: rgba(52,211,153,0.14); border-color: rgba(52,211,153,0.35); }
 
 .modesLoading {
   display: flex;
@@ -324,7 +324,7 @@
 .spinnerSm {
   width: 20px; height: 20px;
   border: 2px solid var(--wash-3);
-  border-top-color: #10b981;
+  border-top-color: var(--ok-mid);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -532,10 +532,10 @@
   transition: border-color 0.2s, background 0.2s;
   user-select: none;
 }
-.typeOption:hover { border-color: rgba(16,185,129,0.3); background: rgba(16,185,129,0.04); }
+.typeOption:hover { border-color: rgba(52,211,153,0.3); background: rgba(52,211,153,0.04); }
 .typeOptionSelected {
-  border-color: #10b981 !important;
-  background: rgba(16,185,129,0.1) !important;
+  border-color: var(--ok-mid) !important;
+  background: rgba(52,211,153,0.1) !important;
 }
 .typeOptionIcon { font-size: 1.6rem; }
 .typeOptionLabel {
@@ -560,9 +560,9 @@
 }
 .input::placeholder { color: var(--text-4); }
 .input:focus {
-  border-color: #10b981;
-  background: rgba(16,185,129,0.06);
-  box-shadow: 0 0 0 3px rgba(16,185,129,0.15);
+  border-color: var(--ok-mid);
+  background: rgba(52,211,153,0.06);
+  box-shadow: 0 0 0 3px rgba(52,211,153,0.15);
 }
 
 /* Toggle */
@@ -587,8 +587,8 @@
   transition: background 0.25s;
   outline: none;
 }
-.toggle:focus-visible { box-shadow: 0 0 0 3px rgba(16,185,129,0.3); }
-.toggleOn { background: #10b981; }
+.toggle:focus-visible { box-shadow: 0 0 0 3px rgba(52,211,153,0.3); }
+.toggleOn { background: var(--ok-mid); }
 .toggleThumb {
   position: absolute;
   top: 3px; left: 3px;
@@ -630,7 +630,7 @@
   min-width: 148px;
   display: flex; align-items: center; justify-content: center;
   transition: opacity 0.2s, transform 0.15s;
-  box-shadow: 0 4px 20px rgba(16,185,129,0.3);
+  box-shadow: 0 4px 20px rgba(52,211,153,0.3);
 }
 .submitBtn:hover:not(:disabled) { opacity: 0.9; transform: translateY(-1px); }
 .submitBtn:disabled { opacity: 0.6; cursor: not-allowed; }
@@ -696,3 +696,21 @@
 }
 .modeSectionHead { display: flex; flex-direction: column; gap: 3px; }
 .modeSectionHint { font-size: 0.72rem; color: var(--text-4); }
+
+/* Per-mode field group inside the create-service form. Indented and ruled so it
+   reads as belonging to the mode card selected above it, rather than floating as
+   another top-level form section. */
+.modeDetailBlock {
+  margin-top: 14px;
+  padding: 14px 16px;
+  background: var(--wash-1);
+  border: 1px solid var(--wash-3);
+  border-radius: 10px;
+}
+.modeDetailBlock + .modeDetailBlock { margin-top: 10px; }
+.modeDetailHead {
+  display: flex; align-items: center; gap: 7px;
+  margin-bottom: 12px;
+  font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--text-3);
+}

@@ -20,6 +20,7 @@ import com.org.appointmentService.Dto.BookAppointmentRequest;
 import com.org.appointmentService.Dto.RescheduleAppointmentRequest;
 import com.org.appointmentService.Dto.UpdateAppointmentStatusRequest;
 import com.org.appointmentService.Entity.AppointmentPayment;
+import com.org.appointmentService.Entity.ClientContactProjection;
 import com.org.appointmentService.Entity.TherapistAppointments;
 import com.org.appointmentService.Entity.TherapistAvailability;
 import com.org.appointmentService.Entity.TherapistAvailabilityOverride;
@@ -32,6 +33,7 @@ import com.org.appointmentService.Repository.AppointmentPaymentRepository;
 import com.org.appointmentService.Repository.TherapistAppointmentsRepository;
 import com.org.appointmentService.Repository.TherapistAvailabilityOverrideRepository;
 import com.org.appointmentService.Repository.TherapistAvailabilityRepository;
+import com.org.appointmentService.Repository.ClientContactProjectionRepository;
 import com.org.appointmentService.Repository.TherapistServiceProjectionRepository;
 import com.org.appointmentService.Repository.TherapyDeliveryModeRepository;
 import com.org.events.TherapistAppointment.AppointmentEvent;
@@ -64,6 +66,9 @@ public class AppointmentService {
 	private TherapistServiceProjectionRepository therapistServiceProjectionRepository;
 
 	@Autowired
+	private ClientContactProjectionRepository clientContactProjectionRepository;
+
+	@Autowired
 	private GenericBlockReservationService genericBlockReservationService;
 
 	private static final EnumSet<AppointmentStatus> TERMINAL_STATUSES = EnumSet.of(
@@ -79,13 +84,53 @@ public class AppointmentService {
 			AppointmentStatus.ABANDONED
 			);
 
-	// a null/zero fee would create a financially broken appointment: earnings
-	// queries would count it and the Razorpay link amount would be invalid
-	private void requirePositiveFee(BigDecimal sessionFee) {
-		if (sessionFee == null || sessionFee.signum() <= 0) {
+	/**
+	 * Resolves AND validates the fee for a booking. Every path either returns a
+	 * usable amount or throws — there is no separate validation step, because a
+	 * second pass could only re-derive what this method already knows.
+	 *
+	 * Precedence, highest first:
+	 *   0. the client is pro bono (DSF) — always zero, nothing overrides it
+	 *   1. a custom fee typed at booking time
+	 *   2. the client's negotiated flat rate, if one is set
+	 *   3. the delivery mode's standard price
+	 *
+	 * The resolved value is stamped onto the appointment, so later changes to a
+	 * client's rate — or to the DSF flag itself — never alter an existing
+	 * booking. That immutability is what earnings depends on: it sums the stamped
+	 * fee rather than joining the client's current flag, so a therapist ending a
+	 * pro-bono arrangement cannot retroactively turn free sessions into income.
+	 *
+	 * Hence the invariant the earnings queries rely on: sessionFee == 0 if and
+	 * only if the session was pro bono. It holds structurally here — the DSF
+	 * branch is the only one that can return zero, and every other branch is
+	 * checked for a positive amount before it returns. A null or non-positive fee
+	 * reaching the database would be financially broken anyway: earnings would
+	 * count it and the Razorpay link amount would be invalid.
+	 */
+	private BigDecimal resolveSessionFee(String clientId, BigDecimal customPrice, TherapyDeliveryMode deliveryMode) {
+		// Request input, so it is checked where it enters rather than downstream
+		// where the reason for the failure is no longer obvious.
+		if (customPrice != null && customPrice.signum() <= 0) {
+			throw new IllegalArgumentException("A custom session fee must be a positive amount.");
+		}
+
+		ClientContactProjection client = clientContactProjectionRepository.findById(clientId).orElse(null);
+
+		if (client != null && Boolean.TRUE.equals(client.getDsf())) {
+			return BigDecimal.ZERO;   // the only legitimate zero
+		}
+		if (customPrice != null) {
+			return customPrice;       // already proven positive above
+		}
+
+		BigDecimal clientRate = client == null ? null : client.getSessionFee();
+		BigDecimal fee = clientRate != null && clientRate.signum() > 0 ? clientRate : deliveryMode.getPrice();
+		if (fee == null || fee.signum() <= 0) {
 			throw new IllegalArgumentException(
 					"Session fee must be a positive amount — set a valid price on the delivery mode.");
 		}
+		return fee;
 	}
 
 	@Transactional
@@ -110,11 +155,11 @@ public class AppointmentService {
 		LocalDateTime appointmentEnd = therapistAvailability.getStartTime()
 				.plusMinutes(service.getDurationMinutes());
 
-		BigDecimal sessionFee = bookAppointmentRequest.getCustomPrice() != null
-				? bookAppointmentRequest.getCustomPrice()
-				: deliveryMode.getPrice();
+		BigDecimal sessionFee = resolveSessionFee(
+				bookAppointmentRequest.getClientId(),
+				bookAppointmentRequest.getCustomPrice(),
+				deliveryMode);
 
-		requirePositiveFee(sessionFee);
 
 		if (isBlockedByUnavailableOverride(
 				bookAppointmentRequest.getTherapistId(),
@@ -253,9 +298,15 @@ public class AppointmentService {
 		LocalDateTime newEndTime =
 				newSlot.getStartTime().plusMinutes(service.getDurationMinutes());
 
-		BigDecimal sessionFee = deliveryMode.getPrice();
-
-		requirePositiveFee(sessionFee);
+		// Rescheduling moves the time, not the price: keep the fee captured at
+		// booking so a negotiated or custom rate survives. Only a genuine mode
+		// change re-resolves. Previously this always reset to the mode price,
+		// silently wiping any custom fee on reschedule.
+		BigDecimal sessionFee =
+				deliveryMode.getModeId().equals(therapistAppointment.getModeId())
+						&& therapistAppointment.getSessionFee() != null
+					? therapistAppointment.getSessionFee()
+					: resolveSessionFee(therapistAppointment.getClientId(), null, deliveryMode);
 
 		if (isBlockedByUnavailableOverride(
 				therapistId, newSlot.getStartTime(), newEndTime)) {

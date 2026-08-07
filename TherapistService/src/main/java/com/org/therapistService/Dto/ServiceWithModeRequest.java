@@ -15,5 +15,18 @@ import lombok.Data;
 public class ServiceWithModeRequest {
 
     private TherapistServicesDto service;
+
+    /**
+     * Single-mode form, kept so an older client keeps working. Prefer modes.
+     */
     private TherapyDeliveryModeDto mode;
+
+    /**
+     * All modes the service launches with. A therapist who works both online and
+     * from a clinic offers one service in two ways, and making them create the
+     * service and then come back to add the second mode is an artificial detour
+     * — worse, it leaves the service half-configured if they never return.
+     * Created in the same transaction as the service.
+     */
+    private java.util.List<TherapyDeliveryModeDto> modes;
 }

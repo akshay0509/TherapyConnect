@@ -15,9 +15,10 @@ export async function getMyServices() {
  * A service with no mode cannot be booked — AppointmentService resolves
  * duration and fee from the mode — so the two must not be able to half-succeed.
  */
-export async function createServiceWithMode(service, mode) {
+export async function createServiceWithMode(service, modes) {
   try {
-    const response = await api.post("/therapist/create-service-with-mode", { service, mode });
+    // `modes` is an array; the backend also still accepts a single `mode`.
+    const response = await api.post("/therapist/create-service-with-mode", { service, modes });
     return response.data;
   } catch (err) {
     const message = err.response?.data?.message || err.response?.data?.error || "Failed to create service.";

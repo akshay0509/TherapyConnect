@@ -35,4 +35,5 @@ public class ClientDto {
 	private String emergencyContactName;
 	private Integer emergencyContactAge;
 	private String emergencyContactRelationship;
+	private java.math.BigDecimal sessionFee;
 }

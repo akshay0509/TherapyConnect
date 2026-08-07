@@ -16,7 +16,7 @@
 
 /* --accent carries the big number and the fills; --accent-text is the stronger
    sibling used for label-sized text, which needs 4.5:1 rather than 3:1. */
-.live     { --accent: var(--ok-mid);     --accent-text: var(--ok-soft);     --accent-wash: rgba(16,185,129,0.10); --accent-line: rgba(16,185,129,0.30); }
+.live     { --accent: var(--ok-mid);     --accent-text: var(--ok-soft);     --accent-wash: rgba(52,211,153,0.10); --accent-line: rgba(52,211,153,0.30); }
 .upcoming { --accent: var(--indigo-mid); --accent-text: var(--indigo-soft); --accent-wash: rgba(99,102,241,0.10); --accent-line: rgba(99,102,241,0.30); }
 .wrap     { --accent: var(--warn-mid);   --accent-text: var(--warn-soft);   --accent-wash: rgba(245,158,11,0.12); --accent-line: rgba(245,158,11,0.35); }
 .overtime { --accent: var(--danger-mid); --accent-text: var(--danger-soft); --accent-wash: rgba(239,68,68,0.12);  --accent-line: rgba(239,68,68,0.35); }

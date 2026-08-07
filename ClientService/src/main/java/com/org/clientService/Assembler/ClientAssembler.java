@@ -34,6 +34,7 @@ public class ClientAssembler {
 		client.setEmergencyContactName(clientDto.getEmergencyContactName());
 		client.setEmergencyContactAge(clientDto.getEmergencyContactAge());
 		client.setEmergencyContactRelationship(clientDto.getEmergencyContactRelationship());
+		client.setSessionFee(clientDto.getSessionFee());
 		client.setSource(source);
 		
 		return client;
@@ -61,6 +62,7 @@ public class ClientAssembler {
 		clientDto.setEmergencyContactName(client.getEmergencyContactName());
 		clientDto.setEmergencyContactAge(client.getEmergencyContactAge());
 		clientDto.setEmergencyContactRelationship(client.getEmergencyContactRelationship());
+		clientDto.setSessionFee(client.getSessionFee());
 		clientDto.setSource(client.getSource());
 		
 		return clientDto;

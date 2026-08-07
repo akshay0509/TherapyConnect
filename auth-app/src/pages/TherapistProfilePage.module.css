@@ -15,7 +15,7 @@
 .spinner {
   width: 36px; height: 36px;
   border: 3px solid var(--wash-3);
-  border-top-color: #10b981;
+  border-top-color: var(--ok-mid);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -39,7 +39,7 @@
   font-weight: 700;
   cursor: pointer;
   transition: opacity 0.2s, transform 0.15s;
-  box-shadow: 0 4px 20px rgba(16,185,129,0.3);
+  box-shadow: 0 4px 20px rgba(52,211,153,0.3);
 }
 .createBtn:hover { opacity: 0.9; transform: translateY(-1px); }
 
@@ -67,8 +67,8 @@
   align-items: center;
   gap: 10px;
   padding: 14px 18px;
-  background: rgba(16,185,129,0.08);
-  border: 1px solid rgba(16,185,129,0.2);
+  background: rgba(52,211,153,0.08);
+  border: 1px solid rgba(52,211,153,0.2);
   border-radius: 10px;
   color: var(--ok-soft);
   font-size: 0.875rem;
@@ -77,7 +77,7 @@
 }
 .successIcon {
   width: 20px; height: 20px; border-radius: 50%;
-  background: rgba(16,185,129,0.25);
+  background: rgba(52,211,153,0.25);
   display: flex; align-items: center; justify-content: center;
   font-size: 0.75rem; font-weight: 700; flex-shrink: 0;
 }
@@ -105,7 +105,7 @@
   font-family: var(--font-sans);
   font-size: 1.6rem; font-weight: 800; color: #fff;
   flex-shrink: 0;
-  box-shadow: 0 6px 24px rgba(16,185,129,0.35);
+  box-shadow: 0 6px 24px rgba(52,211,153,0.35);
 }
 .profileName {
   font-family: var(--font-sans);
@@ -182,9 +182,9 @@
 }
 .input::placeholder { color: var(--text-4); }
 .input:focus {
-  border-color: #10b981;
-  background: rgba(16,185,129,0.06);
-  box-shadow: 0 0 0 3px rgba(16,185,129,0.15);
+  border-color: var(--ok-mid);
+  background: rgba(52,211,153,0.06);
+  box-shadow: 0 0 0 3px rgba(52,211,153,0.15);
 }
 
 .dateInput::-webkit-calendar-picker-indicator {
@@ -236,7 +236,7 @@
   display: flex; align-items: center; justify-content: center;
   min-width: 140px;
   transition: opacity 0.2s, transform 0.15s;
-  box-shadow: 0 4px 20px rgba(16,185,129,0.3);
+  box-shadow: 0 4px 20px rgba(52,211,153,0.3);
 }
 .submitBtn:hover:not(:disabled) { opacity: 0.9; transform: translateY(-1px); }
 .submitBtn:disabled { opacity: 0.6; cursor: not-allowed; }
@@ -286,8 +286,8 @@
   border-color: var(--wash-4);
 }
 .optionBtnActive {
-  background: rgba(16,185,129,0.15) !important;
-  border-color: #10b981 !important;
+  background: rgba(52,211,153,0.15) !important;
+  border-color: var(--ok-mid) !important;
   color: var(--ok-mid) !important;
 }
 

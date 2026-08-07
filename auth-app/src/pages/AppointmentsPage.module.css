@@ -14,8 +14,8 @@
 /* ─── Error/Success ─── */
 .errorBox { display: flex; align-items: center; gap: 10px; padding: 11px 14px; background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.2); border-radius: 10px; color: var(--danger-soft); font-size: 0.85rem; }
 .errorIcon { width: 18px; height: 18px; border-radius: 50%; background: rgba(239,68,68,0.25); display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 700; flex-shrink: 0; }
-.successBox { display: flex; align-items: center; gap: 10px; padding: 11px 14px; background: rgba(16,185,129,0.08); border: 1px solid rgba(16,185,129,0.2); border-radius: 10px; color: var(--ok-soft); font-size: 0.85rem; }
-.successIcon { width: 18px; height: 18px; border-radius: 50%; background: rgba(16,185,129,0.25); display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 700; flex-shrink: 0; }
+.successBox { display: flex; align-items: center; gap: 10px; padding: 11px 14px; background: rgba(52,211,153,0.08); border: 1px solid rgba(52,211,153,0.2); border-radius: 10px; color: var(--ok-soft); font-size: 0.85rem; }
+.successIcon { width: 18px; height: 18px; border-radius: 50%; background: rgba(52,211,153,0.25); display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 700; flex-shrink: 0; }
 .weekLabel { font-family: var(--font-sans); font-size: 0.88rem; font-weight: 700; color: var(--text-1); }
 .dotBooked { width: 5px; height: 5px; border-radius: 50%; background: var(--primary); display: inline-block; }
 /* ─── Day label ─── */
@@ -29,6 +29,8 @@
 .timeGutter { width: 64px; flex-shrink: 0; position: relative; }
 .hourLabel { position: absolute; right: 8px; font-size: 0.65rem; color: var(--text-4); transform: translateY(-50%); white-space: nowrap; user-select: none; }
 .canvas { flex: 1; position: relative; border-left: 1px solid var(--line); cursor: crosshair; user-select: none; }
+/* Past day: the crosshair promised a drag that is now refused, so drop it. */
+.canvasPast { cursor: default; }
 .hourLine { position: absolute; left: 0; right: 0; height: 1px; background: var(--wash-2); pointer-events: none; }
 .halfHourLine { position: absolute; left: 0; right: 0; height: 1px; background: var(--wash-1); pointer-events: none; }
 /* Now indicator */
@@ -64,9 +66,9 @@
   margin: 0;
 
   position: absolute; left: 3px; right: 3px;
-  background: rgba(16,185,129,0.06);
-  border: 1px solid rgba(16,185,129,0.2);
-  border-left: 3px solid rgba(16,185,129,0.5);
+  background: rgba(52,211,153,0.06);
+  border: 1px solid rgba(52,211,153,0.2);
+  border-left: 3px solid rgba(52,211,153,0.5);
   border-radius: 4px; cursor: pointer; z-index: 5;
   padding: 0;
   transition: border-color 0.15s;
@@ -74,7 +76,7 @@
 }
 /* The card itself no longer lights up — the individual 30-minute segment does,
    so the therapist sees exactly which slot a click will book. */
-.availableBlock:hover { border-color: rgba(16,185,129,0.45); }
+.availableBlock:hover { border-color: rgba(52,211,153,0.45); }
 
 /* One bookable 30-minute block inside a merged run */
 .availSegment {
@@ -82,12 +84,12 @@
   display: flex; align-items: center; gap: 8px;
   padding: 0 8px;
   background: none; border: none;
-  border-top: 1px dashed rgba(16,185,129,0.16);
+  border-top: 1px dashed rgba(52,211,153,0.16);
   color: var(--ok-mid); font-family: var(--font-sans); text-align: left;
   cursor: pointer; transition: background 0.15s;
 }
 .availSegment:first-child { border-top: none; }
-.availSegment:hover { background: rgba(16,185,129,0.16); }
+.availSegment:hover { background: rgba(52,211,153,0.16); }
 .availSegment:focus-visible { outline: 2px solid var(--ok-mid); outline-offset: -2px; }
 /* The start time stays quiet until the row is pointed at, so a long free
    afternoon does not read as a wall of timestamps. */
@@ -169,7 +171,7 @@
 .formActions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px; flex-wrap: wrap; }
 .cancelBtn { padding: 9px 16px; background: transparent; border: 1px solid var(--wash-3); border-radius: 8px; color: var(--text-2); font-family: var(--font-sans); font-size: 0.82rem; cursor: pointer; transition: border-color 0.2s,color 0.2s; }
 .cancelBtn:hover { border-color: var(--wash-4); color: var(--text-1); }
-.submitBtn { padding: 9px 18px; background: var(--brand); border: none; border-radius: 8px; color: #fff; font-family: var(--font-sans); font-size: 0.85rem; font-weight: 700; cursor: pointer; min-width: 80px; display: flex; align-items: center; justify-content: center; transition: opacity 0.2s; box-shadow: 0 3px 12px rgba(16,185,129,0.25); }
+.submitBtn { padding: 9px 18px; background: var(--brand); border: none; border-radius: 8px; color: #fff; font-family: var(--font-sans); font-size: 0.85rem; font-weight: 700; cursor: pointer; min-width: 80px; display: flex; align-items: center; justify-content: center; transition: opacity 0.2s; box-shadow: 0 3px 12px rgba(52,211,153,0.25); }
 .submitBtn:hover:not(:disabled) { opacity: 0.9; }
 .submitBtn:disabled { opacity: 0.5; cursor: not-allowed; }
 .generateSubmitBtn { padding: 9px 18px; background: var(--brand); border: none; border-radius: 8px; color: #fff; font-family: var(--font-sans); font-size: 0.85rem; font-weight: 700; cursor: pointer; min-width: 110px; display: flex; align-items: center; justify-content: center; transition: opacity 0.2s; box-shadow: 0 3px 12px rgba(99,102,241,0.3); }
@@ -188,7 +190,7 @@
 .statusOption_CANCELLED.statusOptionActive { background: rgba(239,68,68,0.15); border-color: #ef4444; color: var(--danger-mid) !important; }
 .statusOption_ABANDONED.statusOptionActive { background: rgba(245,158,11,0.15); border-color: #f59e0b; color: var(--warn-mid) !important; }
 /* Appointment status badges */
-.statusOption_SCHEDULED.statusOptionActive { background: rgba(16,185,129,0.2); border-color: var(--ok-mid); color: var(--ok-mid) !important; }
+.statusOption_SCHEDULED.statusOptionActive { background: rgba(52,211,153,0.2); border-color: var(--ok-mid); color: var(--ok-mid) !important; }
 .statusOption_RESCHEDULED.statusOptionActive { background: rgba(245,158,11,0.15); border-color: #f59e0b; color: var(--warn-mid) !important; }
 /* ─── Generate date row ─── */
 .dateRow { display: flex; align-items: flex-end; gap: 10px; }
@@ -204,7 +206,7 @@
 .reschedDay { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 3px; border-radius: 7px; border: 1px solid transparent; cursor: pointer; transition: background 0.15s,border-color 0.15s; user-select: none; }
 .reschedDay:hover:not(.reschedDayNoSlots) { background: var(--wash-2); border-color: var(--wash-3); }
 .reschedDayNoSlots { opacity: 0.3; cursor: default; }
-.reschedDayToday { border-color: rgba(16,185,129,0.3) !important; }
+.reschedDayToday { border-color: rgba(52,211,153,0.3) !important; }
 .reschedDaySelected { background: rgba(245,158,11,0.12) !important; border-color: rgba(245,158,11,0.45) !important; }
 .reschedDayName { font-size: 0.55rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-4); }
 .reschedDayNum { font-family: var(--font-sans); font-size: 0.9rem; font-weight: 800; color: var(--text-2); line-height: 1; }
@@ -226,12 +228,12 @@
 .overrideToggleBtn { padding: 10px 8px; border-radius: 8px; border: 1px solid var(--wash-3); background: var(--wash-1); color: var(--text-3); font-family: var(--font-sans); font-size: 0.82rem; font-weight: 600; cursor: pointer; transition: all 0.15s; }
 .overrideToggleBtn:hover { background: var(--wash-2); color: var(--text-2); }
 .overrideToggleBtnUnavailable { background: rgba(239,68,68,0.12) !important; border-color: rgba(239,68,68,0.4) !important; color: var(--danger-mid) !important; }
-.overrideToggleBtnAvailable { background: rgba(16,185,129,0.12) !important; border-color: rgba(16,185,129,0.4) !important; color: var(--ok-mid) !important; }
+.overrideToggleBtnAvailable { background: rgba(52,211,153,0.12) !important; border-color: rgba(52,211,153,0.4) !important; color: var(--ok-mid) !important; }
 /* ─── Custom dropdown ─── */
 .customDropdown { position: relative; width: 100%; }
 .dropdownTrigger { width: 100%; display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; background: var(--wash-2); border: 1px solid var(--wash-3); border-radius: 8px; color: var(--text-1); font-size: 0.85rem; font-family: var(--font-sans); cursor: pointer; text-align: left; transition: border-color 0.2s,box-shadow 0.2s,background 0.2s; }
 .dropdownTrigger:hover { border-color: var(--wash-4); background: var(--wash-2); }
-.dropdownTriggerOpen { border-color: var(--ok-mid) !important; box-shadow: 0 0 0 3px rgba(16,185,129,0.12); background: rgba(16,185,129,0.05) !important; }
+.dropdownTriggerOpen { border-color: var(--ok-mid) !important; box-shadow: 0 0 0 3px rgba(52,211,153,0.12); background: rgba(52,211,153,0.05) !important; }
 .dropdownPlaceholder { color: var(--text-4); }
 .dropdownValueSet { color: var(--text-1); }
 .dropdownChevron { color: var(--text-3); font-size: 0.7rem; transition: transform 0.2s; flex-shrink: 0; }
@@ -246,8 +248,8 @@
 .dropdownList::-webkit-scrollbar-thumb { background: var(--wash-3); border-radius: 2px; }
 .dropdownEmpty { padding: 14px; text-align: center; color: var(--text-4); font-size: 0.8rem; }
 .dropdownItem { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 6px; font-size: 0.82rem; color: var(--text-2); cursor: pointer; transition: background 0.12s,color 0.12s; }
-.dropdownItem:hover { background: rgba(16,185,129,0.12); color: var(--text-1); }
-.dropdownItemActive { background: rgba(16,185,129,0.18) !important; color: var(--ok-mid) !important; font-weight: 600; }
+.dropdownItem:hover { background: rgba(52,211,153,0.12); color: var(--text-1); }
+.dropdownItemActive { background: rgba(52,211,153,0.18) !important; color: var(--ok-mid) !important; font-weight: 600; }
 .dropdownItemAvatar { width: 24px; height: 24px; border-radius: 5px; background: rgba(99,102,241,0.2); color: var(--indigo-mid); display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 700; flex-shrink: 0; }
 to { transform: rotate(360deg); }
 from { opacity:0; transform:translateY(-4px); }
@@ -276,7 +278,7 @@ to { opacity:1; transform:translateY(0); }
 .customFeeCurrency { padding: 9px 10px; background: var(--wash-1); border: 1px solid var(--wash-3); border-right: none; border-radius: 8px 0 0 8px; color: var(--text-2); font-size: 0.9rem; display: flex; align-items: center; }
 .customFeeInput { flex: 1; padding: 9px 12px; background: var(--wash-2); border: 1px solid var(--wash-3); border-radius: 0 8px 8px 0; color: var(--text-1); font-size: 0.9rem; font-family: var(--font-sans); outline: none; transition: border-color 0.2s, background 0.2s; -moz-appearance: textfield; }
 .customFeeInput::-webkit-outer-spin-button,.customFeeInput::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-.customFeeInput:focus:not(:disabled) { border-color: var(--ok-mid); background: rgba(16,185,129,0.06); }
+.customFeeInput:focus:not(:disabled) { border-color: var(--ok-mid); background: rgba(52,211,153,0.06); }
 .customFeeInputOff { color: var(--text-4); background: var(--wash-1); cursor: not-allowed; }
 .customFeeHint { font-size: 0.72rem; color: var(--text-4); margin: 0; }
 
@@ -295,6 +297,12 @@ to { opacity:1; transform:translateY(0); }
   flex: 1; min-height: 0;
   display: flex; gap: 0;
   overflow-y: auto; overscroll-behavior: contain;
+  /* Hour labels are centred on their line via translateY(-50%), so the first
+     and last ones hang half outside the content box and were being clipped by
+     this scroller. Padding on the flex container shifts the gutter and the
+     canvas together, so the labels stay aligned to their grid lines. */
+  padding-top: 8px;
+  padding-bottom: 8px;
   padding-right: 14px;
   scrollbar-width: thin;
   scrollbar-color: var(--line-2) transparent;

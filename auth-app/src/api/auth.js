@@ -27,13 +27,35 @@ export async function loginRequest(username, password) {
 
 // Called on AuthProvider mount to silently restore the session from the HttpOnly cookie.
 // Returns { token } on success, throws on failure (user must log in again).
-export async function refreshRequest() {
-  const { data } = await axios.post(
-    `${BASE_URL}/auth/refresh`,
-    {},
-    { withCredentials: true }
-  );
-  return data;
+//
+// Deliberately deduplicated. The refresh token ROTATES: the first call consumes
+// it and issues a replacement, so a second call carrying the same cookie value
+// presents an already-revoked token and gets a 401. Two callers overlapping
+// therefore means one of them fails and the session is torn down.
+//
+// That is not hypothetical — React StrictMode double-invokes the mount effect in
+// development, so every page load fired two refreshes: the first succeeded but
+// its result was discarded by the effect cleanup, and the second (the one whose
+// result would have been used) got the 401. The user was logged out on every
+// reload. In production the same collision happens whenever two tabs start at
+// once, or a request is retried.
+//
+// Sharing one in-flight promise means concurrent callers all receive the single
+// rotation, and the token is spent exactly once.
+let inFlightRefresh = null;
+
+export function refreshRequest() {
+  if (inFlightRefresh) return inFlightRefresh;
+
+  inFlightRefresh = axios
+    .post(`${BASE_URL}/auth/refresh`, {}, { withCredentials: true })
+    .then(({ data }) => data)
+    .finally(() => {
+      // Cleared only once settled, so a later refresh still performs a real call.
+      inFlightRefresh = null;
+    });
+
+  return inFlightRefresh;
 }
 
 // Clears the HttpOnly cookie server-side and revokes the stored refresh token.

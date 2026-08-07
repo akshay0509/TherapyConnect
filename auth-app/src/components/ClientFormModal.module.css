@@ -1,0 +1,202 @@
+/* Shared shell for Add client / Edit client.
+   Section rail on the left, one section at a time on the right — twenty inputs
+   in a single scroll read as a chore; six short sections read as a form. */
+
+.wrap {
+  position: fixed; inset: 0; z-index: 60;
+  display: flex; align-items: center; justify-content: center;
+  padding: 28px 24px;
+}
+.backdrop {
+  position: absolute; inset: 0;
+  background: rgba(2, 6, 14, 0.66);
+  backdrop-filter: blur(3px);
+  animation: fade .18s ease both;
+}
+@keyframes fade { from { opacity: 0 } to { opacity: 1 } }
+
+.modal {
+  position: relative;
+  width: min(1020px, 100%);
+  height: min(660px, 92vh);
+  background: var(--bg-page);
+  border: 1px solid var(--wash-3);
+  border-radius: 20px;
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.55);
+  display: flex; flex-direction: column; overflow: hidden;
+  animation: rise .26s cubic-bezier(.22, 1, .36, 1) both;
+}
+@keyframes rise {
+  from { opacity: 0; transform: translateY(14px) scale(.985) }
+  to   { opacity: 1; transform: none }
+}
+
+/* ── Header ─────────────────────────────────────────────────────────────── */
+.head {
+  display: flex; align-items: center; gap: 16px;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--wash-2);
+  background: var(--bg-elev);
+  flex-shrink: 0;
+}
+.avatar {
+  background: linear-gradient(135deg, var(--brand-1), var(--ok-mid));
+  color: #04121a; font-weight: 800; flex-shrink: 0;
+}
+.headText { flex: 1; min-width: 0; }
+.title {
+  font-family: var(--font-sans); font-size: 1.16rem; font-weight: 800;
+  letter-spacing: -0.02em; margin: 0 0 2px; color: var(--text-1);
+}
+.sub {
+  margin: 0; font-size: 0.82rem; color: var(--text-3);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.close {
+  background: var(--wash-2); border: 1px solid var(--wash-3);
+  border-radius: 9px; color: var(--text-3);
+  width: 34px; height: 34px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; transition: color .18s, background .18s;
+}
+.close:hover:not(:disabled) { color: var(--text-1); background: var(--wash-3); }
+
+/* ── Body: rail + pane ──────────────────────────────────────────────────── */
+.body { flex: 1; min-height: 0; display: grid; grid-template-columns: 232px 1fr; grid-template-rows: 1fr auto; }
+
+.rail {
+  grid-row: 1 / 2;
+  border-right: 1px solid var(--wash-2);
+  background: var(--wash-1);
+  padding: 14px 12px;
+  display: flex; flex-direction: column; gap: 2px;
+  overflow-y: auto;
+}
+.railItem {
+  display: flex; align-items: center; gap: 11px;
+  padding: 11px 12px;
+  background: transparent; border: 1px solid transparent; border-radius: 10px;
+  color: var(--text-3); font-family: var(--font-sans); font-size: 0.86rem; font-weight: 600;
+  cursor: pointer; text-align: left; width: 100%;
+  transition: background .16s, color .16s, border-color .16s;
+}
+.railItem:hover { background: var(--wash-2); color: var(--text-1); }
+.railActive {
+  background: rgba(34, 211, 238, 0.1);
+  border-color: rgba(34, 211, 238, 0.28);
+  color: var(--text-1);
+}
+.railIcon { display: flex; flex-shrink: 0; opacity: .85; }
+.railActive .railIcon { color: var(--brand-1); opacity: 1; }
+.railLabel { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.railNum {
+  font-size: 0.7rem; font-weight: 700; color: var(--text-4);
+  background: var(--wash-2); border-radius: 999px;
+  min-width: 20px; height: 20px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+}
+.railActive .railNum { background: rgba(34, 211, 238, 0.18); color: var(--brand-1); }
+
+/* Only shown once a submit has been attempted — flagging gaps before the user
+   has had a chance to fill them would be nagging, not helping. */
+.railDot {
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  background: var(--warn-mid);
+  box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.16);
+}
+.railIncomplete { color: var(--warn-mid); }
+
+/* ── Pane ───────────────────────────────────────────────────────────────── */
+.pane {
+  grid-row: 1 / 2;
+  padding: 24px 28px 28px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+.paneHead { margin-bottom: 20px; }
+.paneHead h3 {
+  margin: 0 0 3px; font-size: 1.02rem; font-weight: 800;
+  letter-spacing: -0.01em; color: var(--text-1);
+}
+.paneHead p { margin: 0; font-size: 0.82rem; color: var(--text-4); }
+
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 18px; }
+.field { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+.fieldWide { grid-column: 1 / -1; }
+
+.label {
+  font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--text-3);
+  display: flex; align-items: center; gap: 7px;
+}
+.optional {
+  text-transform: none; letter-spacing: 0; font-weight: 500;
+  font-size: 0.7rem; color: var(--text-4);
+}
+.hint { font-size: 0.74rem; color: var(--text-4); line-height: 1.45; }
+
+.inputBad {
+  border-color: var(--warn-mid) !important;
+  box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.13);
+}
+
+.toggleRow {
+  display: flex; align-items: center; gap: 16px;
+  padding: 14px 16px;
+  background: var(--wash-1); border: 1px solid var(--wash-3); border-radius: 12px;
+}
+.toggleText { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.toggleText b { font-size: 0.88rem; color: var(--text-1); }
+.toggleText span { font-size: 0.76rem; color: var(--text-4); line-height: 1.45; }
+
+.sectionError, .formError {
+  display: flex; align-items: center; gap: 8px;
+  margin: 18px 0 0; padding: 10px 13px;
+  font-size: 0.8rem; border-radius: 9px;
+}
+.sectionError {
+  color: var(--warn-mid);
+  background: rgba(251, 191, 36, 0.09);
+  border: 1px solid rgba(251, 191, 36, 0.24);
+}
+.formError {
+  color: var(--danger-mid);
+  background: rgba(248, 113, 113, 0.09);
+  border: 1px solid rgba(248, 113, 113, 0.26);
+}
+
+/* ── Footer ─────────────────────────────────────────────────────────────── */
+.foot {
+  grid-column: 1 / -1; grid-row: 2 / 3;
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 14px 24px;
+  border-top: 1px solid var(--wash-2);
+  background: var(--bg-elev);
+}
+.footStep { font-size: 0.76rem; color: var(--text-4); }
+.footBtns { display: flex; gap: 10px; }
+
+.spinner {
+  width: 16px; height: 16px; display: inline-block;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #fff; border-radius: 50%;
+  animation: spin .7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg) } }
+
+@media (max-width: 860px) {
+  .wrap { padding: 0; }
+  .modal { width: 100%; height: 100vh; border-radius: 0; border: none; }
+  .body { grid-template-columns: 1fr; grid-template-rows: auto 1fr auto; }
+  .rail {
+    grid-row: 1 / 2;
+    flex-direction: row; overflow-x: auto; gap: 6px;
+    border-right: none; border-bottom: 1px solid var(--wash-2);
+    padding: 10px 12px;
+  }
+  .railItem { width: auto; flex-shrink: 0; }
+  .railLabel { display: none; }
+  .pane { grid-row: 2 / 3; padding: 20px 18px 24px; }
+  .grid { grid-template-columns: 1fr; }
+}

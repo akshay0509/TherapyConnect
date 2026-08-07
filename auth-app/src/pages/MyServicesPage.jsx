@@ -34,6 +34,7 @@ const EMPTY_FORM = {
   isActive: true,
 };
 
+// Single-mode shape, used by the add/edit-mode forms on an existing service.
 const EMPTY_MODE_FORM = {
   modeType: "",
   displayName: "",
@@ -41,6 +42,18 @@ const EMPTY_MODE_FORM = {
   price: "",
   isActive: true,
 };
+
+/* Create-service form only. Keyed by mode type rather than a single selection:
+   a therapist who works both online and from a clinic offers one service two
+   ways, and forcing them to create the service and come back for the second
+   mode is an artificial detour — worse, it leaves the service half-configured
+   if they never come back. Each type carries its own name, price and address,
+   because an in-person session commonly costs more than the same session online. */
+const EMPTY_MODE_FORMS = {
+  ONLINE:  { enabled: false, displayName: "", price: "", address: "" },
+  OFFLINE: { enabled: false, displayName: "", price: "", address: "" },
+};
+const emptyModeForms = () => JSON.parse(JSON.stringify(EMPTY_MODE_FORMS));
 
 export default function MyServicesPage() {
   const navigate = useNavigate();
@@ -51,8 +64,8 @@ export default function MyServicesPage() {
   const [error, setError] = useState(null);
 
   const [showForm, setShowForm] = useState(false);
-  // First delivery mode, captured alongside the service (see #43)
-  const [newMode, setNewMode] = useState(EMPTY_MODE_FORM);
+  // Delivery modes captured alongside the service (see #43) — one or both types
+  const [newModes, setNewModes] = useState(emptyModeForms);
   const [form, setForm] = useState(EMPTY_FORM);
   const [formLoading, setFormLoading] = useState(false);
   const [formError, setFormError] = useState(null);
@@ -118,19 +131,24 @@ export default function MyServicesPage() {
         duration: parseInt(form.duration, 10),
         isActive: form.isActive,
       };
-      const modePayload = {
-        modeType: newMode.modeType,
-        displayName: newMode.displayName.trim(),
-        address: newMode.modeType === "OFFLINE" ? newMode.address.trim() : null,
-        price: newMode.price === "" ? null : Number(newMode.price),
-        isActive: true,
-      };
-      // One transactional call — the service and its first mode commit together,
-      // so an unbookable mode-less service cannot be created.
-      await createServiceWithMode(servicePayload, modePayload);
+      const modesPayload = Object.entries(newModes)
+        .filter(([, m]) => m.enabled)
+        .map(([modeType, m]) => ({
+          modeType,
+          displayName: m.displayName.trim(),
+          address: modeType === "OFFLINE" ? m.address.trim() : null,
+          price: m.price === "" ? null : Number(m.price),
+          isActive: true,
+        }));
+      if (modesPayload.length === 0) {
+        throw new Error("Choose at least one way this service is delivered.");
+      }
+      // One transactional call — the service and every mode commit together, so
+      // an unbookable mode-less service cannot be created.
+      await createServiceWithMode(servicePayload, modesPayload);
       await fetchServices();
       setForm(EMPTY_FORM);
-      setNewMode(EMPTY_MODE_FORM);
+      setNewModes(emptyModeForms());
       setShowForm(false);
     } catch (err) {
       setFormError(err.message);
@@ -139,7 +157,7 @@ export default function MyServicesPage() {
     }
   };
 
-  const openForm = () => { setForm(EMPTY_FORM); setNewMode(EMPTY_MODE_FORM); setFormError(null); setShowForm(true); };
+  const openForm = () => { setForm(EMPTY_FORM); setNewModes(emptyModeForms()); setFormError(null); setShowForm(true); };
   const closeForm = () => { setShowForm(false); setFormError(null); };
 
   const openEdit = (s) => {
@@ -466,16 +484,20 @@ export default function MyServicesPage() {
               <span className={styles.modeSectionHint}>Required — a service needs at least one mode to be bookable</span>
             </div>
 
+            {/* Checkboxes, not radios — both can be offered. They keep the card
+                styling, so selecting one no longer clears the other. */}
             <div className={styles.typeOptions}>
               {Object.entries(MODE_TYPE_LABEL).map(([value, label]) => (
                 <label
                   key={value}
-                  className={`${styles.typeOption} ${newMode.modeType === value ? styles.typeOptionSelected : ""}`}
+                  className={`${styles.typeOption} ${newModes[value].enabled ? styles.typeOptionSelected : ""}`}
                 >
                   <input
-                    type="radio" name="newModeType" value={value} required
-                    checked={newMode.modeType === value}
-                    onChange={e => setNewMode(prev => ({ ...prev, modeType: e.target.value }))}
+                    type="checkbox" name="newModeType" value={value}
+                    checked={newModes[value].enabled}
+                    onChange={e => setNewModes(prev => ({
+                      ...prev, [value]: { ...prev[value], enabled: e.target.checked },
+                    }))}
                     className={styles.hiddenRadio}
                   />
                   <span className={styles.typeOptionIcon}><Icon name={MODE_TYPE_ICON[value] || "video"} size={20} /></span>
@@ -484,39 +506,56 @@ export default function MyServicesPage() {
               ))}
             </div>
 
-            <div className={styles.formRow}>
-              <div className={styles.field}>
-                <label className={styles.label} htmlFor="newModeName">Display name</label>
-                <input
-                  id="newModeName" type="text" required
-                  value={newMode.displayName}
-                  onChange={e => setNewMode(prev => ({ ...prev, displayName: e.target.value }))}
-                  className={styles.input}
-                  placeholder={newMode.modeType === "OFFLINE" ? "e.g. Indiranagar clinic" : "e.g. Google Meet"}
-                />
-              </div>
-              <div className={styles.field}>
-                <label className={styles.label} htmlFor="newModePrice">Price (₹)</label>
-                <input
-                  id="newModePrice" type="number" min="0" step="1" required
-                  value={newMode.price}
-                  onChange={e => setNewMode(prev => ({ ...prev, price: e.target.value }))}
-                  className={styles.input} placeholder="e.g. 1500"
-                />
-              </div>
-            </div>
-
-            {newMode.modeType === "OFFLINE" && (
-              <div className={styles.field}>
-                <label className={styles.label} htmlFor="newModeAddress">Address</label>
-                <input
-                  id="newModeAddress" type="text" required
-                  value={newMode.address}
-                  onChange={e => setNewMode(prev => ({ ...prev, address: e.target.value }))}
-                  className={styles.input} placeholder="Where the client should come"
-                />
-              </div>
-            )}
+            {/* One block of fields per selected mode. Price is per mode because an
+                in-person session commonly costs more than the same session online. */}
+            {Object.entries(MODE_TYPE_LABEL)
+              .filter(([value]) => newModes[value].enabled)
+              .map(([value, label]) => (
+                <div key={value} className={styles.modeDetailBlock}>
+                  <div className={styles.modeDetailHead}>
+                    <Icon name={MODE_TYPE_ICON[value] || "video"} size={14} />
+                    <span>{label} details</span>
+                  </div>
+                  <div className={styles.formRow}>
+                    <div className={styles.field}>
+                      <label className={styles.label} htmlFor={`newModeName-${value}`}>Display name</label>
+                      <input
+                        id={`newModeName-${value}`} type="text" required
+                        value={newModes[value].displayName}
+                        onChange={e => setNewModes(prev => ({
+                          ...prev, [value]: { ...prev[value], displayName: e.target.value },
+                        }))}
+                        className={styles.input}
+                        placeholder={value === "OFFLINE" ? "e.g. Indiranagar clinic" : "e.g. Google Meet"}
+                      />
+                    </div>
+                    <div className={styles.field}>
+                      <label className={styles.label} htmlFor={`newModePrice-${value}`}>Price (₹)</label>
+                      <input
+                        id={`newModePrice-${value}`} type="number" min="0" step="1" required
+                        value={newModes[value].price}
+                        onChange={e => setNewModes(prev => ({
+                          ...prev, [value]: { ...prev[value], price: e.target.value },
+                        }))}
+                        className={styles.input} placeholder="e.g. 1500"
+                      />
+                    </div>
+                  </div>
+                  {value === "OFFLINE" && (
+                    <div className={styles.field}>
+                      <label className={styles.label} htmlFor="newModeAddress">Address</label>
+                      <input
+                        id="newModeAddress" type="text" required
+                        value={newModes[value].address}
+                        onChange={e => setNewModes(prev => ({
+                          ...prev, [value]: { ...prev[value], address: e.target.value },
+                        }))}
+                        className={styles.input} placeholder="Where the client should come"
+                      />
+                    </div>
+                  )}
+                </div>
+              ))}
           </div>
 
           <div className={styles.field}>
