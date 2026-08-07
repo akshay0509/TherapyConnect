@@ -144,13 +144,15 @@
 }
 .revertBtn:hover { color: var(--text-1); }
 
-/* Fees — therapist-set, so no "they wrote / revert" affordance applies. */
-.checkRow {
-  display: flex; align-items: center; gap: 9px;
-  padding: 9px 12px; border: 1px solid var(--line); border-radius: 9px;
-  background: var(--surface-2); cursor: pointer;
-  font-size: 0.84rem; color: var(--text-2);
+/* Fees — therapist-set, so no "they wrote / revert" affordance applies.
+   Mirrors .toggleRow/.toggleText in ClientFormModal.module.css: the same
+   decision should not present differently in two places. */
+.toggleRow {
+  display: flex; align-items: center; gap: 16px;
+  margin-top: 14px; padding: 14px 16px;
+  background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px;
 }
-.checkRow input { width: 15px; height: 15px; accent-color: var(--brand); cursor: pointer; }
-.checkRow:hover { border-color: var(--line-strong, var(--line)); }
-.feeHint { margin: 9px 0 0; font-size: 0.74rem; color: var(--text-4); line-height: 1.5; }
+.toggleText { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.toggleText b { font-size: 0.88rem; color: var(--text-1); }
+.toggleText span { font-size: 0.76rem; color: var(--text-4); line-height: 1.45; }
+.feeHint { display: block; margin-top: 6px; font-size: 0.74rem; color: var(--text-4); line-height: 1.5; }

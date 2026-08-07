@@ -308,38 +308,48 @@ export default function ClientIntakesPage() {
                       ))}
 
                       {/* Not from the form: no intake item asks a client to price
-                          their own therapy. Asked here because approval is the
-                          one moment the therapist is already looking at this
-                          person — otherwise every migrated client needs a second
-                          pass through the edit form just to become bookable. */}
+                          their own therapy. Asked here because approval is the one
+                          moment the therapist is already looking at this person —
+                          otherwise every migrated client needs a second pass
+                          through the edit form just to become bookable.
+
+                          Deliberately the same control and wording as the billing
+                          section of the Add/Edit client form: it is the same
+                          decision about the same field, so it should not look or
+                          read like a different one. */}
                       <div>
                         <div className={styles.groupLabel}>Fees</div>
                         <div className={styles.fieldGrid}>
                           <div className={styles.half}>
-                            <label className={styles.label} htmlFor="sessionFee">Session fee (₹)</label>
+                            <label className={styles.label} htmlFor="sessionFee">
+                              Session fee (₹) <span className={styles.optional}>optional</span>
+                            </label>
                             <input
                               id="sessionFee" className="input"
                               type="number" min="1" step="1"
-                              placeholder={draft.dsf ? "Pro bono — no charge" : "Falls back to the service price"}
+                              placeholder="e.g. 1200"
                               value={draft.dsf ? "" : (draft.sessionFee ?? "")}
                               disabled={!!draft.dsf}
                               onChange={e => setField("sessionFee", e.target.value)}
                             />
-                          </div>
-                          <div className={styles.half}>
-                            <label className={styles.label}>Pro bono</label>
-                            <label className={styles.checkRow}>
-                              <input type="checkbox" checked={!!draft.dsf}
-                                onChange={e => setDsf(e.target.checked)} />
-                              <span>Discounted / free sessions</span>
-                            </label>
+                            <span className={styles.feeHint}>
+                              {draft.dsf
+                                ? "Pro bono overrides any rate set here."
+                                : "A negotiated rate for this client. Leave blank to charge the standard service price."}
+                            </span>
                           </div>
                         </div>
-                        <p className={styles.feeHint}>
-                          {draft.dsf
-                            ? "Sessions for this client are booked at zero and stay out of earnings."
-                            : "Leave blank to charge whatever the delivery mode costs at the time of booking."}
-                        </p>
+
+                        <div className={styles.toggleRow}>
+                          <div className={styles.toggleText}>
+                            <b>Pro bono (DSF)</b>
+                            <span>Sessions are provided free of charge, counted separately and excluded from earnings.</span>
+                          </div>
+                          <button type="button" role="switch" aria-checked={!!draft.dsf}
+                            aria-label="Pro bono, DSF student"
+                            className={`switch ${draft.dsf ? "on" : ""}`}
+                            onClick={() => setDsf(!draft.dsf)} />
+                        </div>
                       </div>
                     </div>
                   )}
