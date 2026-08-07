@@ -40,6 +40,27 @@ export async function getClientFeeHistory(clientId) {
   }
 }
 
+export async function getClientRisk(clientId) {
+  try {
+    const response = await api.get(`/therapist/clients/${clientId}/risk`);
+    return response.data;
+  } catch (err) {
+    const message = err.response?.data?.message || err.response?.data?.error || "Failed to load risk record.";
+    throw new Error(message);
+  }
+}
+
+// Saving is reviewing: the server stamps the review date and appends to the log.
+export async function saveClientRisk(clientId, risk) {
+  try {
+    const response = await api.put(`/therapist/clients/${clientId}/risk`, risk);
+    return response.data;
+  } catch (err) {
+    const message = err.response?.data?.message || err.response?.data?.error || "Failed to save risk record.";
+    throw new Error(message);
+  }
+}
+
 export async function getSessionDetails(clientId) {
   try {
     const response = await api.get(`/therapist/${clientId}/session-details`);

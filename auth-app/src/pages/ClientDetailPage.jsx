@@ -8,6 +8,7 @@ import { useModeMap, useAllModes } from "../context/DeliveryModesContext";
 import { splitList } from "../components/ChipSelect";
 import Icon from "../components/icons";
 import ClientFormModal from "../components/ClientFormModal";
+import ClientRiskCard from "../components/ClientRiskCard";
 import styles from "./ClientDetailPage.module.css";
 
 
@@ -88,10 +89,6 @@ function PreferenceRow({ label, value }) {
   );
 }
 
-/* Every field updateClient() writes must appear here. It assigns each one
-   unconditionally, so a key missing from the payload is written as null —
-   an edit that omitted them would silently wipe whatever the intake form
-   collected. */
 /* Every field updateClient() writes must be seeded into the edit form. It
    assigns each one unconditionally, so a key missing from the payload is
    written as null — an edit that omitted them would silently wipe whatever the
@@ -462,6 +459,11 @@ export default function ClientDetailPage() {
                       })}
                     </div>
                     <div className="col">
+                      {/* Risk leads the sidebar: it is the thing a therapist most
+                          needs to see before the session, not something to scroll
+                          past. Shown here only — never in the clients list. */}
+                      <ClientRiskCard clientId={clientId} clientName={fullName} />
+
                       <div className="card" style={{ padding: 20 }}>
                         <h2 style={{ margin: "0 0 12px", fontSize: "1rem" }}>Latest note</h2>
                         {latestNote ? (

@@ -1,5 +1,6 @@
 package com.org.therapistService.Controller;
 
+import com.org.therapistService.Dto.ClientRiskDto;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -206,6 +207,21 @@ public class TherapistController {
 	 * (duration and fee are resolved from the mode), so the two are created in
 	 * one transaction rather than two calls that can half-succeed.
 	 */
+	// ── Client risk ───────────────────────────────────────────────────────────
+	// Therapist scope comes from the JWT on both, never the path — the client id
+	// in the URL is not an authorisation boundary.
+
+	@GetMapping("/clients/{clientId}/risk")
+	public ClientRiskDto getClientRisk(@PathVariable String clientId) {
+		return therapistService.getClientRisk(SecurityUtils.getTherapistId(), clientId);
+	}
+
+	/** Saving is reviewing: this stamps the review date and appends to the log. */
+	@PutMapping("/clients/{clientId}/risk")
+	public ClientRiskDto saveClientRisk(@PathVariable String clientId, @RequestBody ClientRiskDto request) {
+		return therapistService.saveClientRisk(SecurityUtils.getTherapistId(), clientId, request);
+	}
+
 	@PostMapping("/create-service-with-mode")
 	public ResponseEntity<TherapistServicesDto> createServiceWithMode(
 			@RequestBody ServiceWithModeRequest request) throws JsonProcessingException {

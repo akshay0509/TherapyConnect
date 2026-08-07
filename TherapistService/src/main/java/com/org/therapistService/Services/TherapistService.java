@@ -1,5 +1,12 @@
 package com.org.therapistService.Services;
 
+import com.org.therapistService.Dto.ClientRiskDto;
+import com.org.therapistService.Dto.ClientRiskReviewDto;
+import com.org.therapistService.Entity.ClientRisk;
+import com.org.therapistService.Entity.ClientRiskReview;
+import com.org.therapistService.Entity.RiskLevel;
+import com.org.therapistService.Repository.ClientRiskRepository;
+import com.org.therapistService.Repository.ClientRiskReviewRepository;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
@@ -91,6 +98,12 @@ public class TherapistService {
 
 	@Autowired
 	private TherapistClientsRepository therapistClientsRepository;
+
+	@Autowired
+	private ClientRiskRepository clientRiskRepository;
+
+	@Autowired
+	private ClientRiskReviewRepository clientRiskReviewRepository;
 
 	@Autowired
 	private SessionNotesRepository sessionNotesRepository;
@@ -810,6 +823,134 @@ public class TherapistService {
 		dto.setSessionCount(enrichment.getSessionCount());
 		dto.setLastSeen(enrichment.getLastSeen());
 		dto.setPendingNotes(enrichment.getPendingNotes());
+	}
+
+	// ── Client risk ───────────────────────────────────────────────────────────
+	// Recorded clinical judgement, never derived. Nothing here reads attendance,
+	// cancellations or note content to infer a level, and nothing operational
+	// keys off the result — it is a record and a reminder, not a control.
+
+	public ClientRiskDto getClientRisk(String therapistId, String clientId) {
+		requireOwnedClient(therapistId, clientId);
+
+		ClientRisk risk = clientRiskRepository
+				.findByTherapistIdAndClientId(therapistId, clientId)
+				.orElse(null);
+
+		ClientRiskDto dto = new ClientRiskDto();
+		if (risk == null) {
+			// Distinct from an assessed level of NONE: nobody has looked yet.
+			dto.setNeverAssessed(true);
+			dto.setLevel(RiskLevel.NONE);
+		} else {
+			dto.setNeverAssessed(false);
+			dto.setLevel(risk.getLevel());
+			dto.setConcern(risk.getConcern());
+			dto.setSafetyPlan(risk.getSafetyPlan());
+			dto.setLastReviewedAt(risk.getLastReviewedAt());
+			dto.setLastReviewedBy(risk.getLastReviewedBy());
+			dto.setReviewIntervalDaysOverride(risk.getReviewIntervalDaysOverride());
+			dto.setEffectiveIntervalDays(risk.effectiveIntervalDays());
+			dto.setReviewDueAt(risk.reviewDueAt());
+			dto.setReviewDue(isReviewDue(therapistId, clientId, risk));
+		}
+
+		List<ClientRiskReviewDto> reviews = new ArrayList<>();
+		for (ClientRiskReview r : clientRiskReviewRepository
+				.findByTherapistIdAndClientIdOrderByReviewedAtDesc(therapistId, clientId)) {
+			ClientRiskReviewDto rd = new ClientRiskReviewDto();
+			rd.setReviewId(r.getReviewId());
+			rd.setPreviousLevel(r.getPreviousLevel());
+			rd.setLevel(r.getLevel());
+			rd.setReviewedAt(r.getReviewedAt());
+			rd.setReviewedBy(r.getReviewedBy());
+			rd.setUnchanged(r.isUnchanged());
+			reviews.add(rd);
+		}
+		dto.setReviews(reviews);
+		return dto;
+	}
+
+	/**
+	 * Saving IS reviewing. Every save stamps lastReviewedAt and appends a review
+	 * row, including one that confirms the level rather than moving it — a
+	 * review that changed nothing is still a review, and is the evidence that
+	 * matters if anyone later asks what was known and when.
+	 */
+	@Transactional
+	public ClientRiskDto saveClientRisk(String therapistId, String clientId, ClientRiskDto request) {
+		requireOwnedClient(therapistId, clientId);
+
+		if (request == null || request.getLevel() == null) {
+			throw new IllegalArgumentException("A risk level is required.");
+		}
+		Integer override = request.getReviewIntervalDaysOverride();
+		if (override != null && override < 1) {
+			throw new IllegalArgumentException("A review interval must be at least one day.");
+		}
+
+		ClientRisk risk = clientRiskRepository
+				.findByTherapistIdAndClientId(therapistId, clientId)
+				.orElseGet(() -> {
+					ClientRisk created = new ClientRisk();
+					created.setTherapistId(therapistId);
+					created.setClientId(clientId);
+					return created;
+				});
+
+		RiskLevel previous = risk.getRiskId() == null ? null : risk.getLevel();
+
+		risk.setLevel(request.getLevel());
+		risk.setConcern(trimToNull(request.getConcern()));
+		risk.setSafetyPlan(trimToNull(request.getSafetyPlan()));
+		risk.setReviewIntervalDaysOverride(override);
+		risk.setLastReviewedAt(LocalDateTime.now());
+		risk.setLastReviewedBy(therapistId);
+		risk.setUpdatedAt(LocalDateTime.now());
+		clientRiskRepository.save(risk);
+
+		ClientRiskReview review = new ClientRiskReview();
+		review.setTherapistId(therapistId);
+		review.setClientId(clientId);
+		review.setPreviousLevel(previous);
+		review.setLevel(request.getLevel());
+		review.setReviewedAt(risk.getLastReviewedAt());
+		review.setReviewedBy(therapistId);
+		clientRiskReviewRepository.save(review);
+
+		return getClientRisk(therapistId, clientId);
+	}
+
+	/**
+	 * A terminated client generates no review prompts — otherwise the reminder
+	 * fills with people the therapist is no longer seeing. The record itself is
+	 * kept and stays readable; only the nagging stops.
+	 */
+	private boolean isReviewDue(String therapistId, String clientId, ClientRisk risk) {
+		LocalDateTime due = risk.reviewDueAt();
+		if (due == null) {
+			return false;
+		}
+		boolean active = therapistClientsRepository
+				.findByTherapistIdAndClientId(therapistId, clientId)
+				.map(tc -> tc.getStatus() == null || tc.getStatus() == ClientStatus.ACTIVE)
+				.orElse(false);
+		return active && due.isBefore(LocalDateTime.now());
+	}
+
+	/** A client id from the URL is not proof of ownership. */
+	private void requireOwnedClient(String therapistId, String clientId) {
+		if (therapistClientsRepository.findByTherapistIdAndClientId(therapistId, clientId).isEmpty()) {
+			throw new IllegalArgumentException("Client not found.");
+		}
+	}
+
+	private String trimToNull(String value) {
+		if (value == null) {
+			return null;
+		}
+		String trimmed = value.trim();
+		return trimmed.isEmpty() ? null : trimmed;
 	}
 
 	public void addClient(String therapistId, String clientId, String clientName, boolean dsf) {
