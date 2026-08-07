@@ -3,3 +3,15 @@
 .wrap { display: flex; flex-wrap: wrap; gap: 7px; }
 .chip { cursor: pointer; font-family: var(--font-sans); transition: 0.15s; }
 .chip:hover { border-color: var(--line-2); }
+
+/* Free-text fallback for preference answers that are sentences rather than
+   lists — see looksLikeChipList in ChipSelect.jsx. */
+.freeText {
+  width: 100%; box-sizing: border-box;
+  background: var(--wash-2); border: 1px solid var(--wash-3); border-radius: 9px;
+  padding: 9px 12px; color: var(--text-1);
+  font-family: var(--font-sans); font-size: 0.86rem; line-height: 1.55;
+  resize: vertical;
+}
+.freeText:focus { outline: none; border-color: rgba(34,211,238,0.5); }
+.freeTextHint { display: block; margin-top: 5px; font-size: 0.72rem; color: var(--text-4); }

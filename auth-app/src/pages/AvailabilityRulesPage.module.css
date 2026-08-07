@@ -282,7 +282,32 @@
 
 /* ─── Modal ─── */
 .modalBackdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); z-index: 150; }
-.modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: min(500px, 92vw); background: var(--bg-elev); border: 1px solid var(--wash-3); border-radius: 16px; z-index: 200; box-shadow: 0 24px 64px rgba(0,0,0,0.6); animation: fadeUp 0.2s ease both; }
+/* Centred by LAYOUT (inset:0 + margin:auto), never by transform.
+   translate(-50%,-50%) offsets by half the box's own size, so at a non-integer
+   devicePixelRatio (125% Windows scaling = 1.25) a 1020x660 modal shifts by
+   -637.5 / -412.5 DEVICE pixels. transform promotes the box to its own
+   composited layer, which is then RESAMPLED at that half-pixel offset — every
+   glyph smears across two pixels and the whole modal reads as blurry. Layout
+   positions are pixel-snapped; transforms are not. The entry animation must
+   therefore also settle on `transform: none` rather than a translate. */
+/* fadeUp additionally ENDED on `transform: translateY(0)`, and an animation
+   with fill `both` wins over the base rule — so the -50%/-50% centring was
+   being discarded once the animation settled and the modal sat with its
+   top-left corner at the viewport centre. Layout centring removes that class
+   of bug entirely. */
+.modal {
+  position: fixed; inset: 0; margin: auto;
+  width: min(500px, 92vw);
+  height: fit-content; max-height: 90vh; overflow-y: auto;
+  background: var(--bg-elev); border: 1px solid var(--wash-3);
+  border-radius: 16px; z-index: 200;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.6);
+  animation: modalIn 0.2s ease both;
+}
+@keyframes modalIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: none; }
+}
 .modalHeader { display: flex; align-items: center; justify-content: space-between; padding: 20px 24px 0; }
 .modalTitle { font-family: var(--font-sans); font-size: 1rem; font-weight: 800; color: var(--text-1); }
 .modalBody { padding: 16px 24px 24px; }

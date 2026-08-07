@@ -34,14 +34,6 @@
 .reviewIdent span { font-size: 0.76rem; color: var(--text-4); }
 
 /* Decision switcher */
-.seg { display: inline-flex; background: var(--surface-2); border: 1px solid var(--line); border-radius: 11px; padding: 3px; }
-.seg button {
-  border: none; background: none; color: var(--text-2);
-  font-family: var(--font-sans); font-weight: 600; font-size: 0.8rem;
-  padding: 7px 14px; border-radius: 8px; cursor: pointer;
-}
-.segOn { background: var(--brand); color: var(--on-primary) !important; }
-
 .form { display: flex; flex-direction: column; gap: 16px; }
 .modeHint { font-size: 0.78rem; color: var(--text-4); margin: 0; line-height: 1.5; }
 .groupLabel {
@@ -84,9 +76,27 @@
 .decided { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; font-size: 0.8rem; color: var(--text-3); }
 .reasonText { margin: 0; color: var(--text-2); font-size: 0.84rem; }
 
-.actions { display: flex; justify-content: flex-end; gap: 10px; padding-top: 16px; border-top: 1px solid var(--line); }
+.actions { display: flex; align-items: center; gap: 10px; padding-top: 16px; border-top: 1px solid var(--line); }
 .dangerBtn { border-color: rgba(248,113,113,0.35); color: var(--danger-soft); }
 .dangerBtn:hover { border-color: rgba(248,113,113,0.55); background: rgba(248,113,113,0.08); }
+/* The committed reject. Solid, so the confirm step is unmistakably an action
+   and not another way of browsing the record. */
+.dangerSolid {
+  background: var(--danger-mid); border-color: var(--danger-mid); color: #fff;
+}
+.dangerSolid:hover:not(:disabled) { filter: brightness(1.08); }
+
+.actionsGap { flex: 1; }
+
+/* The reason step is visibly a different mode from reviewing the answers. */
+.rejectPanel {
+  border: 1px solid rgba(248,113,113,0.28); border-radius: 12px;
+  background: rgba(248,113,113,0.05); padding: 14px;
+}
+.rejectHint {
+  display: flex; align-items: center; gap: 7px; margin: 0;
+  font-size: 0.78rem; line-height: 1.5; color: var(--danger-soft);
+}
 
 /* States */
 .empty {

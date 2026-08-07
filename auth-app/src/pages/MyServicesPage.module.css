@@ -643,10 +643,19 @@
 }
 
 /* ─── Centered modal ─── */
+/* Centred by LAYOUT (inset:0 + margin:auto), never by transform.
+   translate(-50%,-50%) offsets by half the box's own size, so at a non-integer
+   devicePixelRatio (125% Windows scaling = 1.25) a 1020x660 modal shifts by
+   -637.5 / -412.5 DEVICE pixels. transform promotes the box to its own
+   composited layer, which is then RESAMPLED at that half-pixel offset — every
+   glyph smears across two pixels and the whole modal reads as blurry. Layout
+   positions are pixel-snapped; transforms are not. The entry animation must
+   therefore also settle on `transform: none` rather than a translate. */
+
 .modal {
-  position: fixed; top: 50%; left: 50%;
-  transform: translate(-50%, -50%);
+  position: fixed; inset: 0; margin: auto;
   width: min(520px, 92vw);
+  height: fit-content;
   background: var(--bg-elev);
   border: 1px solid var(--wash-3);
   border-radius: 16px;
@@ -662,8 +671,8 @@
   justify-content: space-between; margin-bottom: 20px;
 }
 @keyframes modalIn {
-  from { opacity: 0; transform: translate(-50%, calc(-50% + 12px)); }
-  to   { opacity: 1; transform: translate(-50%, -50%); }
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: none; }
 }
 
 /* ─── Delete warning ─── */

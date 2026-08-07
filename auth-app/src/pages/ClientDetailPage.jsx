@@ -5,7 +5,7 @@ import {
   updateClient, updateClientStatus, getClientNotes, upsertClientNote, getClientFeeHistory,
 } from "../api/therapistClients";
 import { useModeMap, useAllModes } from "../context/DeliveryModesContext";
-import { splitList } from "../components/ChipSelect";
+import { splitList, looksLikeChipList } from "../components/ChipSelect";
 import Icon from "../components/icons";
 import ClientFormModal from "../components/ClientFormModal";
 import ClientRiskCard from "../components/ClientRiskCard";
@@ -76,10 +76,24 @@ function DetailField({ label, value }) {
   );
 }
 
-/** Preferences are stored comma-joined, so they read better as chips than as
- *  one run-on string. */
+/** Preferences are stored comma-joined, so a short list reads better as chips
+ *  than as one run-on string.
+ *
+ *  Intake answers are not always a list, though. "Any day apart from Wednesday,
+ *  Thursday and Friday. Time either between 11am to 1pm or between 4pm to 8pm"
+ *  is a sentence, and chopping it at the commas produces a chip reading
+ *  "Thursday and Friday…" — the precise opposite of what the client asked for.
+ *  Prose is shown whole. */
 function PreferenceRow({ label, value }) {
   const items = splitList(value);
+  if (items.length > 0 && !looksLikeChipList(value)) {
+    return (
+      <div className={styles.prefRow}>
+        <span className={styles.fieldLabel}>{label}</span>
+        <span className={styles.prefText}>{value}</span>
+      </div>
+    );
+  }
   return (
     <div className={styles.prefRow}>
       <span className={styles.fieldLabel}>{label}</span>

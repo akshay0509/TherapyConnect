@@ -255,12 +255,7 @@ export default function ClientIntakesPage() {
 
               {selected.status === "PENDING" ? (
                 <>
-                  <div className={styles.seg}>
-                    <button className={mode === "create" ? styles.segOn : ""} onClick={() => setMode("create")}>New client</button>
-                    <button className={mode === "reject" ? styles.segOn : ""} onClick={() => setMode("reject")}>Reject</button>
-                  </div>
-
-                  {mode === "create" && draft && (
+                  {draft && (
                     <div className={styles.form}>
                       <p className={styles.modeHint}>
                         Correct anything the client mistyped. Changed fields show what they originally wrote; the full submission is kept verbatim below.
@@ -302,8 +297,9 @@ export default function ClientIntakesPage() {
                   )}
 
                   {mode === "reject" && (
-                    <div className={styles.form}>
-                      <p className={styles.modeHint}>
+                    <div className={`${styles.form} ${styles.rejectPanel}`}>
+                      <p className={styles.rejectHint}>
+                        <Icon name="alert" size={14} />
                         Rejecting keeps the submission for your records but creates no client.
                       </p>
                       <div className={styles.full}>
@@ -351,20 +347,38 @@ export default function ClientIntakesPage() {
                 </p>
               )}
 
+              {/* Approve and reject are two outcomes of one decision, so both are
+                 visible from the moment the submission opens. Reject used to be
+                 a tab you had to notice and switch to first, which read as a
+                 view of the record rather than an action on it. It stays a
+                 two-step — the reason panel opens before anything is sent — so
+                 visibility does not turn into an accidental click. */}
               {selected.status === "PENDING" && (
                 <div className={styles.actions}>
-                  <button className="btn" onClick={() => { setSelectedId(null); setDraft(null); }}>Cancel</button>
-                  {mode === "create" && (
-                    <button className="btn btn-primary" disabled={busy || missing.length > 0}
-                      onClick={() => run(() => approveClientIntake(selected.intakeId, { client: toClientPayload(draft) }))}>
-                      {busy ? <span className={styles.btnSpinner} /> : "Create client"}
-                    </button>
-                  )}
-                  {mode === "reject" && (
-                    <button className={`btn ${styles.dangerBtn}`} disabled={busy}
-                      onClick={() => run(() => rejectClientIntake(selected.intakeId, reason))}>
-                      {busy ? <span className={styles.btnSpinner} /> : "Reject submission"}
-                    </button>
+                  <button className="btn" onClick={() => { setSelectedId(null); setDraft(null); setMode("create"); setReason(""); }}>Cancel</button>
+                  <span className={styles.actionsGap} />
+                  {mode === "create" ? (
+                    <>
+                      <button className={`btn ${styles.dangerBtn}`} disabled={busy}
+                        onClick={() => setMode("reject")}>
+                        Reject
+                      </button>
+                      <button className="btn btn-primary" disabled={busy || missing.length > 0}
+                        onClick={() => run(() => approveClientIntake(selected.intakeId, { client: toClientPayload(draft) }))}>
+                        {busy ? <span className={styles.btnSpinner} /> : "Create client"}
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button className="btn" disabled={busy}
+                        onClick={() => { setMode("create"); setReason(""); }}>
+                        Back
+                      </button>
+                      <button className={`btn ${styles.dangerSolid}`} disabled={busy}
+                        onClick={() => run(() => rejectClientIntake(selected.intakeId, reason))}>
+                        {busy ? <span className={styles.btnSpinner} /> : "Confirm rejection"}
+                      </button>
+                    </>
                   )}
                 </div>
               )}
