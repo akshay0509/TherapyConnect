@@ -326,3 +326,20 @@
 .trendChips { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
 /* Marks a billed no-show row in the transactions table */
 .noShowChip { margin-left: 8px; font-size: 0.6rem; }
+
+/* Range presets — the ranges a therapist actually asks for, one click each. */
+.presetRow {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  margin-bottom: 16px; padding-bottom: 16px;
+  border-bottom: 1px solid var(--line);
+}
+.presetChip {
+  border: 1px solid var(--line); background: var(--surface-2); color: var(--text-3);
+  font-family: var(--font-sans); font-size: 0.78rem; font-weight: 600;
+  padding: 7px 13px; border-radius: 999px; cursor: pointer; transition: .15s;
+}
+.presetChip:hover:not(:disabled) { color: var(--text-1); border-color: var(--line-2); }
+.presetChip:disabled { opacity: 0.5; cursor: default; }
+.presetChipOn {
+  background: rgba(34,211,238,0.12); border-color: rgba(34,211,238,0.45); color: var(--brand);
+}

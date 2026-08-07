@@ -24,6 +24,43 @@ function today() {
   return toISODate(new Date());
 }
 
+function daysAgo(n) {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return toISODate(d);
+}
+
+/**
+ * The ranges a therapist actually asks for. Typing two dates to answer "how did
+ * last month go" is four interactions and a mental note of how many days
+ * September had; these are one click.
+ *
+ * Each returns [from, to] rather than mutating, so applying a preset and typing
+ * a custom date go through exactly the same setState path.
+ */
+const RANGE_PRESETS = [
+  { id: "7d",    label: "Last 7 days",  range: () => [daysAgo(6), today()] },
+  { id: "30d",   label: "Last 30 days", range: () => [daysAgo(29), today()] },
+  { id: "month", label: "This month",   range: () => [startOfMonth(), today()] },
+  {
+    id: "prev",
+    label: "Last month",
+    range: () => {
+      const d = new Date();
+      const first = new Date(d.getFullYear(), d.getMonth() - 1, 1);
+      // Day 0 of this month is the last day of the previous one, which keeps
+      // month lengths and leap years out of this entirely.
+      const last = new Date(d.getFullYear(), d.getMonth(), 0);
+      return [toISODate(first), toISODate(last)];
+    },
+  },
+  {
+    id: "year",
+    label: "This year",
+    range: () => [toISODate(new Date(new Date().getFullYear(), 0, 1)), today()],
+  },
+];
+
 function formatRangeLabel(from, to) {
   if (!from || !to) return "";
   const f = new Date(from), t = new Date(to);
@@ -102,16 +139,20 @@ export default function EarningsPage() {
     loadInitial();
     // Load the default range up-front so the revenue chart and table have data
     // on arrival (the prototype shows populated figures immediately).
-    handleLoadSessions();
+    loadSessions();
   }, []);
 
-  const handleLoadSessions = async () => {
-    if (!fromDate || !toDate) { setSessionsError("Please select both dates."); return; }
-    if (fromDate > toDate) { setSessionsError("From date must be before to date."); return; }
+  /* Takes the range explicitly. A preset calls this in the same tick as its
+     setFromDate/setToDate, and reading fromDate here would fetch the range the
+     user just navigated away from — the classic stale-closure fetch. The button
+     passes nothing and gets current state, which is what it wants. */
+  const loadSessions = async (rangeFrom = fromDate, rangeTo = toDate) => {
+    if (!rangeFrom || !rangeTo) { setSessionsError("Please select both dates."); return; }
+    if (rangeFrom > rangeTo) { setSessionsError("From date must be before to date."); return; }
     setSessionsLoading(true); setSessionsError(null); setSessionsLoaded(false);
     try {
       const sess = await getEarningsSessions(
-        fromDate, toDate,
+        rangeFrom, rangeTo,
         filterServiceId || null,
         filterModeId || null
       );
@@ -134,6 +175,22 @@ export default function EarningsPage() {
       setExporting(false);
     }
   };
+
+  /* Loading is the point of choosing a range, so a preset does it rather than
+     leaving a primed button and a stale table behind. */
+  const applyPreset = (preset) => {
+    const [from, to] = preset.range();
+    setFromDate(from);
+    setToDate(to);
+    setSessionsLoaded(false);
+    setSessionsError(null);
+    loadSessions(from, to);
+  };
+
+  const activePreset = RANGE_PRESETS.find(p => {
+    const [from, to] = p.range();
+    return from === fromDate && to === toDate;
+  });
 
   const handleSort = (field) => {
     if (sortField === field) {
@@ -230,11 +287,12 @@ export default function EarningsPage() {
             <h1>Earnings</h1>
             <div className="sub">{formatRangeLabel(fromDate, toDate)}</div>
           </div>
-          <div className="head-actions">
-            <button className="btn" onClick={handleExport} disabled={exporting}>
-              <Icon name="download" size={18} /> {exporting ? "Exporting…" : "Export CSV"}
-            </button>
-          </div>
+          {/* The export lives with the Session Detail filters, not here. Both
+              buttons used to call the same handler with the same arguments, but
+              sitting beside "This Week / This Month / All Time" this one read as
+              an export of the summary — so it quietly produced a different range
+              from the one its position implied. One export, next to the rows it
+              writes out. */}
         </div>
 
         {/* ── Summary KPIs ── */}
@@ -342,6 +400,21 @@ export default function EarningsPage() {
           <h2 className={styles.sectionTitle}>Session Detail</h2>
 
           <div className={styles.filterCard}>
+            <div className={styles.presetRow}>
+              {RANGE_PRESETS.map(preset => (
+                <button
+                  key={preset.id}
+                  type="button"
+                  className={`${styles.presetChip} ${activePreset?.id === preset.id ? styles.presetChipOn : ""}`}
+                  aria-pressed={activePreset?.id === preset.id}
+                  onClick={() => applyPreset(preset)}
+                  disabled={sessionsLoading}
+                >
+                  {preset.label}
+                </button>
+              ))}
+            </div>
+
             <div className={styles.dateRow}>
               <div className={styles.dateField}>
                 <label className={styles.dateLabel}>From</label>
@@ -398,7 +471,7 @@ export default function EarningsPage() {
                 </select>
               </div>
 
-              <button className="btn btn-primary" onClick={handleLoadSessions} disabled={sessionsLoading}>
+              <button className="btn btn-primary" onClick={() => loadSessions()} disabled={sessionsLoading}>
                 {sessionsLoading ? <span className={styles.btnSpinner} /> : "Load Sessions"}
               </button>
             </div>
