@@ -94,10 +94,12 @@ erDiagram
             <tr><td><code>THERAPY_DELIVERY_MODE</code></td><td>modeId, serviceId, modeType, address, price, isActive</td><td>Online/offline delivery options per service.</td></tr>
             <tr><td><code>THERAPIST_AVAILABILITY_RULES</code></td><td>dayOfWeek, startTime, endTime, isActive</td><td>Weekly recurring availability.</td></tr>
             <tr><td><code>THERAPIST_AVAILABILITY_OVERRIDES</code></td><td>startTime, endTime, available, reason</td><td>Date-specific add/remove of availability.</td></tr>
-            <tr><td><code>THERAPIST_AVAILABILITY</code></td><td><code>slotId</code> PK (SLT), startTime, endTime, serviceId</td><td>Concrete generated slots. Slots no longer carry a <code>sessionFee</code> — the fee is resolved from the delivery mode at booking time.</td></tr>
+            <tr><td><code>THERAPIST_AVAILABILITY</code></td><td><code>slotId</code> PK (SLT), therapistId, startTime, endTime</td><td>Generated <strong>generic 30-minute blocks</strong>, de-duplicated per therapist+window. Blocks carry neither a service nor a fee — both are resolved at booking time from the chosen delivery mode.</td></tr>
             <tr><td><code>SESSION_NOTES</code></td><td><code>noteId</code> PK, appointmentId (unique), <code>noteContent</code> 🔒</td><td>Clinical notes, AES-GCM encrypted at field level.</td></tr>
             <tr><td><code>CLIENT_NOTES</code></td><td>per therapist+client</td><td>Free-form per-client note.</td></tr>
             <tr><td><code>THERAPIST_CLIENTS</code> <span class="tag">projection</span></td><td>therapistId, clientId, clientName, status, dsf</td><td>Roster, kept current by <code>client-events</code>.</td></tr>
+            <tr><td><code>CLIENT_RISK</code></td><td><code>riskId</code> PK, therapistId, clientId, <code>level</code> (NONE/LOW/MODERATE/HIGH), <code>concern</code> 🔒, <code>safetyPlan</code> 🔒, lastReviewedAt/By, reviewIntervalDaysOverride</td><td>Therapist-recorded clinical risk assessment. Free-text fields use the same AES-GCM converter as session notes.</td></tr>
+            <tr><td><code>CLIENT_RISK_REVIEW</code></td><td><code>reviewId</code> PK, therapistId, clientId, previousLevel, level, reviewedAt, reviewedBy</td><td>Append-only audit of every risk-level change.</td></tr>
             <tr><td><code>AppointmentProjection</code> <span class="tag">projection</span></td><td>appointmentId, status, fee, times</td><td>From <code>therapist-appointment-events</code>; powers dashboards.</td></tr>
             <tr><td><code>OUTBOX_EVENT</code></td><td>see below</td><td>Outbound event staging.</td></tr>
           </tbody>
@@ -112,19 +114,36 @@ erDiagram
           <thead><tr><th>Table</th><th>Key fields</th><th>Purpose</th></tr></thead>
           <tbody>
             <tr><td><code>THERAPIST_APPOINTMENTS</code></td><td>appointmentId PK, slotId, clientId, modeId, sessionFee, status, statusReason, start/end</td><td>The booking system of record. <code>status</code> is <code>AppointmentStatus</code>.</td></tr>
-            <tr><td><code>THERAPIST_AVAILABILITY</code> <span class="tag">projection</span></td><td>slotId PK, status (AVAILABLE/BOOKED), serviceId, fee</td><td>Local copy of slots to book against.</td></tr>
+            <tr><td><code>THERAPIST_AVAILABILITY</code> <span class="tag">projection</span></td><td>slotId PK, therapistId, startTime, endTime, status (AVAILABLE/BOOKED), <code>appointmentId</code>; <strong>unique</strong> on (therapistId, startTime, endTime)</td><td>Generic 30-minute availability blocks. No serviceId or fee — a block isn't tied to a service. Every block occupied by a multi-block appointment carries that appointment's id as the reservation owner.</td></tr>
+            <tr><td><code>TherapistServiceProjection</code> <span class="tag">projection</span></td><td>serviceId PK, therapistId, durationMinutes, active</td><td>Service durations replicated from TherapistService — tells booking how many consecutive blocks to reserve.</td></tr>
             <tr><td><code>THERAPIST_AVAILABILITY_OVERRIDE</code> <span class="tag">projection</span></td><td>override window, available</td><td>Blocks bookings during unavailable windows.</td></tr>
             <tr><td><code>THERAPY_DELIVERY_MODE</code> <span class="tag">projection</span></td><td>modeId, price, modeType, address, isActive</td><td>Pricing &amp; mode validation at booking.</td></tr>
             <tr><td><code>APPOINTMENT_PAYMENT</code></td><td><code>paymentId</code> PK (PAY), appointmentId (unique), therapistId, amount, currency, <code>status</code>, razorpayLinkId, paymentLinkUrl, razorpayPaymentId, clientNotified, failureReason</td><td>Razorpay payment-link lifecycle per appointment. <code>status</code> is <code>PaymentStatus</code>.</td></tr>
             <tr><td><code>THERAPIST_PAYMENT_PROJECTION</code> <span class="tag">projection</span></td><td>therapistId PK, paymentEnabled</td><td>Whether the therapist collects payment; from <code>TherapistEvent</code>.</td></tr>
-            <tr><td><code>ClientContactProjection</code> <span class="tag">projection</span></td><td>clientId PK, firstName, lastName, email, phoneNumber</td><td>Contact for Razorpay SMS/email notify; from <code>client-events</code>.</td></tr>
+            <tr><td><code>ClientContactProjection</code> <span class="tag">projection</span></td><td>clientId PK, firstName, lastName, email, phoneNumber, <code>sessionFee</code>, <code>dsf</code> (boxed <code>Boolean</code>)</td><td>Contact for Razorpay notify <em>and</em> the client's rate/pro-bono flag for <a href="workflows.html#fee-resolution">fee resolution</a>. <code>dsf</code> is deliberately boxed: a primitive would make Hibernate emit <code>not null</code>, which Postgres rejects when adding a column to a non-empty table — <code>ddl-auto=update</code> logs that failure and carries on, so the column would silently not exist and every read would fail, taking booking down.</td></tr>
             <tr><td><code>OUTBOX_EVENT</code></td><td>see below</td><td>Outbound appointment events.</td></tr>
           </tbody>
         </table></div>
         <p>Appointment statuses: <code>SCHEDULED</code> → <code>CONFIRMED</code> → <code>COMPLETED</code>, with <code>RESCHEDULED</code>, and terminal <code>CANCELLED</code> / <code>ABANDONED</code>. See the <a href="workflows.html">state machine</a>. Payment statuses: <code>LINK_CREATED</code>, <code>LINK_FAILED</code>, <code>PAID</code>, <code>EXPIRED</code>, <code>CANCELLED</code> — a <code>payment_link.paid</code> webhook flips a <code>SCHEDULED</code>/<code>RESCHEDULED</code> appointment to <code>CONFIRMED</code> automatically.</p>
 
-        <h2 id="client-data">ClientService — <code>CLIENT</code></h2>
-        <p>Fields: <code>clientId</code> PK (CLT), therapistId, firstName, lastName, dob, age, phone numbers, email, pronouns, gender, createdAt, <code>status</code> (ACTIVE/TERMINATED), <code>dsf</code> (sliding-fee flag). Plus its own <code>OUTBOX_EVENT</code>.</p>
+        <h2 id="client-data">ClientService tables</h2>
+        <h3 id="t-client"><code>CLIENT</code></h3>
+        <p>Fields: <code>clientId</code> PK (CLT), therapistId, <code>fullName</code>, firstName, lastName, dob, age, phone numbers, email, pronouns, gender, <code>qualification</code>, <code>currentOccupation</code>, <code>preferredDays</code>/<code>preferredTimings</code>/<code>preferredModes</code>, <code>emergencyContactName</code>/<code>Age</code>/<code>Relationship</code>, emergencyPhoneNumber, createdAt, <code>status</code> (ACTIVE/TERMINATED — mapped <code>@Enumerated(STRING)</code>, never ORDINAL, so adding or reordering a constant can't silently re-label existing rows), <code>sessionFee</code> (negotiated flat rate; null ⇒ the delivery-mode price applies), <code>dsf</code> (pro-bono flag), and <code>source</code> (<code>MANUAL</code> by default, <code>GOOGLE_FORM</code> when created from an intake). Plus its own <code>OUTBOX_EVENT</code>.</p>
+
+        <h3 id="t-feehistory"><code>CLIENT_FEE_HISTORY</code></h3>
+        <p>Append-only log of changes to a client's negotiated rate: <code>feeHistoryId</code> PK, clientId, therapistId, <code>oldFee</code>, <code>newFee</code>, <code>changedAt</code>. Only written when the value actually changes, so no-op edits don't pad the history.</p>
+
+        <h3 id="t-intake"><code>CLIENT_INTAKE</code></h3>
+        <p>Staging table for Google Forms submissions awaiting therapist review (see the <a href="workflows.html#intake">intake workflow</a>). Unique on <code>(integrationId, responseId)</code> so a redelivered webhook can't create a duplicate.</p>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Column group</th><th>Fields</th></tr></thead>
+          <tbody>
+            <tr><td>Identity</td><td><code>intakeId</code> PK, <code>integrationId</code>, <code>responseId</code>, <code>therapistId</code></td></tr>
+            <tr><td>Lifecycle</td><td><code>status</code> (<code>PENDING</code>/<code>APPROVED</code>/<code>REJECTED</code>), submittedAt, receivedAt, reviewedAt, reviewedBy, rejectionReason, <code>clientId</code> (set on approval)</td></tr>
+            <tr><td>Submitted data</td><td>fullName, firstName, lastName, dob, pronouns, gender, qualification, occupation, phoneNumber, email, preferredDays/Timings/Modes, emergencyContact* , <code>consent</code></td></tr>
+            <tr><td>Audit</td><td><code>rawAnswers</code> (<code>jsonb</code> — the untouched form payload), <code>version</code> (optimistic locking)</td></tr>
+          </tbody>
+        </table></div>
 
         <h2 id="notification-data">NotificationService tables</h2>
         <div class="table-wrap"><table>

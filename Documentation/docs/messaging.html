@@ -28,7 +28,7 @@
             <tr><td><code>auth-login-success</code></td><td>Gateway</td><td>User</td><td>LoginSuccessEvent</td></tr>
             <tr><td><code>auth-login-failure</code></td><td>Gateway</td><td>User</td><td>LoginFailureEvent</td></tr>
             <tr><td><code>client-events</code></td><td>Client</td><td>Therapist, Notification, Analytics, Appointment</td><td>ClientEvent</td></tr>
-            <tr><td><code>therapist-availability-events</code></td><td>Therapist</td><td>Appointment, Notification</td><td>AvailabilityEvent, AvailabilitySlots*Event, CalendarBlockEvent, DeliveryModeEvent, <strong>TherapistEvent</strong></td></tr>
+            <tr><td><code>therapist-availability-events</code></td><td>Therapist</td><td>Appointment, Notification</td><td>AvailabilityEvent, AvailabilitySlots*Event, CalendarBlockEvent, DeliveryModeEvent, TherapistEvent, <strong>TherapistServiceDefinitionEvent</strong></td></tr>
             <tr><td><code>therapist-appointment-events</code></td><td>Appointment</td><td>Therapist, Notification, Analytics</td><td>AppointmentEvent</td></tr>
           </tbody>
         </table></div>
@@ -65,7 +65,7 @@ flowchart LR
           <tbody>
             <tr><td>User</td><td><code>user-service-login-events</code></td><td>auth-login-*</td></tr>
             <tr><td>Therapist</td><td><code>therapist-service-appointment-events</code></td><td>appointment + client events</td></tr>
-            <tr><td>Appointment</td><td><code>appointment-availability-slot-projection-group</code> (slots), <code>appointment-therapist-payment-projection-group</code> (payment settings), <code>appointment-client-contact-projection-group</code> (contact)</td><td>availability + client events</td></tr>
+            <tr><td>Appointment</td><td><code>appointment-availability-slot-projection-group</code> (blocks), <code>appointment-service-definition-projection-group</code> (service durations), <code>appointment-therapist-payment-projection-group</code> (payment settings), <code>appointment-client-contact-projection-group</code> (contact)</td><td>availability + client events</td></tr>
             <tr><td>Notification</td><td><code>notification-service-events</code></td><td>appointment + availability + client</td></tr>
             <tr><td>Analytics</td><td><code>analytics-service-events</code></td><td>appointment + client</td></tr>
           </tbody>
@@ -89,14 +89,23 @@ updatedAt, cancelledBy, reason</code></pre>
 
         <details class="collapse"><summary><code>AvailabilityEvent</code> &amp; batch events — topic <code>therapist-availability-events</code></summary>
           <div class="collapse-body">
-            <p>Single-slot <code>AvailabilityEvent</code> types: <code>AvailabilitySlotCreated</code>, <code>AvailabilitySlotRemoved</code> (fields: slotId, therapistId, serviceId, sessionFee, start/end, generationId). Batch variants: <code>AvailabilitySlotsGeneratedEvent</code> (range + list of <code>Slot</code>) and <code>AvailabilitySlotsDeletedEvent</code> (range). Also on this topic: <code>CalendarBlockEvent</code> (CalendarBlockCreated/Deleted, with <code>syncToGoogleCalendar</code>) and <code>DeliveryModeEvent</code>.</p>
-            <p><strong>Consumed by:</strong> Appointment (materializes/clears its slot projection; refuses to wipe BOOKED slots), Notification (Google Calendar block events).</p>
+            <p>Single-block <code>AvailabilityEvent</code> types: <code>AvailabilitySlotCreated</code>, <code>AvailabilitySlotRemoved</code>. Batch variants: <code>AvailabilitySlotsGeneratedEvent</code> (range + list of <code>Slot</code>) and <code>AvailabilitySlotsDeletedEvent</code> (range). Also on this topic: <code>CalendarBlockEvent</code> (CalendarBlockCreated/Deleted, with <code>syncToGoogleCalendar</code>) and <code>DeliveryModeEvent</code>.</p>
+            <p><strong>Note:</strong> availability now describes uniform <a href="workflows.html#slotgen">generic 30-minute blocks</a> — these events no longer carry a service or fee, since a block isn't tied to a service.</p>
+            <p><strong>Consumed by:</strong> Appointment (materializes/clears its block projection; refuses to wipe BOOKED blocks), Notification (Google Calendar block events).</p>
+          </div>
+        </details>
+
+        <details class="collapse"><summary><code>TherapistServiceDefinitionEvent</code> — topic <code>therapist-availability-events</code></summary>
+          <div class="collapse-body">
+            <p>Types: <code>TherapistServiceDefinitionUpserted</code>, <code>TherapistServiceDefinitionDeleted</code>. Fields: eventId, eventType, serviceId, therapistId, <code>durationMinutes</code>, <code>isActive</code>.</p>
+            <p>Replicates just the booking-relevant part of a therapist service. Since availability blocks are service-agnostic, AppointmentService needs its own copy of each service's <strong>duration</strong> to know how many consecutive blocks a booking must reserve.</p>
+            <p><strong>Consumed by:</strong> Appointment's <code>TherapistServiceDefinitionConsumer</code> (group <code>appointment-service-definition-projection-group</code>) → <code>TherapistServiceProjection</code>. Durations outside 1–480 minutes are rejected (the listener throws, so the record retries and then dead-letters). A one-shot <code>ServiceProjectionBackfillRunner</code> (enabled via <code>app.service-projection-backfill.enabled=true</code> for a single start) republishes all existing service definitions when rolling this out.</p>
           </div>
         </details>
 
         <details class="collapse"><summary><code>ClientEvent</code> — topic <code>client-events</code></summary>
           <div class="collapse-body">
-            <p>Types: <code>ClientCreated</code>, <code>ClientUpdated</code>, <code>ClientStatusUpdated</code>. Fields: eventId, eventType, occurredAt, clientId, therapistId, email, <code>phoneNumber</code>, firstName, lastName, <code>status</code> (ACTIVE/TERMINATED), <code>dsf</code>.</p>
+            <p>Types: <code>ClientCreated</code>, <code>ClientUpdated</code>, <code>ClientStatusUpdated</code>. Fields: eventId, eventType, occurredAt, clientId, therapistId, email, <code>phoneNumber</code>, <code>fullName</code>, firstName, lastName, <code>status</code> (ACTIVE/TERMINATED), <code>dsf</code>, <code>sessionFee</code> (negotiated per-client rate; null ⇒ the mode price applies).</p>
             <p><strong>Consumed by:</strong> Therapist (updates <code>THERAPIST_CLIENTS</code> name/status), Notification (<code>ClientProjection</code> email — now upserts on <code>ClientUpdated</code> too; previously only <code>ClientCreated</code> was consumed and contact edits never reached the invite email), Analytics (DSF projection), and Appointment (<code>ClientContactProjection</code> email/phone for Razorpay notify).</p>
           </div>
         </details>

@@ -32,7 +32,11 @@
             <li><strong>DLQ + retry pipeline implemented</strong> — every consumer retries with backoff then dead-letters to <code>&lt;topic&gt;.DLT</code>; the admin dashboard monitors DLT depth &amp; consumer lag and can peek/replay messages. Consumers now propagate failures instead of swallowing them.</li>
             <li><strong>Per-therapist calendar identity</strong> — invites use the therapist's own email from <code>THERAPIST_PROJECTION</code> (via <code>TherapistEvent</code>), not a single env-configured address; the dead email-reminder pipeline was deleted.</li>
             <li><strong>Outbox poison-event parking</strong> — a permanently unpublishable event no longer blocks the outbox queue forever; it's parked after fatal errors or 150 retries and only re-enters via explicit admin replay (<a href="messaging.html#outbox-parking">details</a>).</li>
-            <li><strong>Cross-service double-booking guard</strong> — booking/reschedule now reject windows that overlap an existing active appointment (parallel slots for other services made slot-marking alone insufficient), and fees are validated positive.</li>
+            <li><strong>Cross-service double-booking guard</strong> — booking/reschedule now reject windows that overlap an existing active appointment, and fees are validated positive.</li>
+            <li><strong>Availability decoupled from services</strong> — the per-service slot explosion (one row per service × time, with duplicate overlapping windows) was replaced by uniform 30-minute blocks plus a single locking reservation component, with a DB unique constraint preventing duplicate blocks.</li>
+            <li><strong>Unbookable services prevented</strong> — <code>/create-service-with-mode</code> commits a service and its first delivery mode together, closing the window where a service existed with no mode and failed at booking with a misleading error.</li>
+            <li><strong>Duplicate-profile login bug fixed</strong> — the gateway now distinguishes "user has no therapist profile" from "the lookup was unreachable", failing login with a retryable <code>503</code> rather than minting a token that asserted no profile and pushed an existing therapist into creating a second one.</li>
+            <li><strong>Retroactive earnings rewriting fixed</strong> — fees are resolved once and <a href="workflows.html#fee-resolution">stamped on the appointment</a>; earnings sum the stamped value instead of joining the client's <em>current</em> DSF flag, so moving a client to pro-bono no longer rewrites months of past income to zero.</li>
           </ul>
         </div>
 
@@ -110,6 +114,8 @@
           <li><strong>Read models grow unbounded</strong> — projections and audit/outbox tables need archival/retention policies.</li>
           <li><strong>Analytics recomputation</strong> is event-sourced into rollups; there's no rebuild/replay tool if a projection is corrupted (mitigated by <code>earliest</code> offset but not formalized).</li>
           <li><strong>Single-tenant Google account</strong> — invite <em>attendee</em> emails are now per-therapist (projection), but all calendar events are still created on one Google account (shared OAuth creds, <code>THERAPIST_EMAIL</code> remains as fallback attendee); true multi-therapist integration would need per-therapist OAuth.</li>
+          <li><strong>Single-form intake binding</strong> — the Google Forms integration is one id/secret/therapist triple from the environment, so exactly one form maps to one therapist. Supporting several forms (or several therapists) needs the integration config moved into a table keyed by integration id.</li>
+          <li><strong>Service-projection rollout is manual</strong> — AppointmentService only learns service durations from events, so an existing deployment needs the one-shot <code>app.service-projection-backfill.enabled=true</code> start to seed the projection. A service whose definition never arrived makes its bookings fail until backfilled.</li>
         </ul>
 
         <h2 id="manual">Areas needing manual verification</h2>

@@ -85,7 +85,8 @@
           <li><strong>Consumer stuck?</strong> <code>ErrorHandlingDeserializer</code> isolates poison messages; check logs for deserialization errors. <code>auto-offset-reset=earliest</code> means a fresh group replays everything.</li>
           <li><strong>403/401 on a backend call?</strong> The JWT may lack the expected claim (e.g. <code>therapistId</code> absent → <code>SecurityUtils</code> throws). Note <code>/*/internal/**</code> is denied at the gateway, and <code>/admin/**</code> needs the <code>ADMIN</code> authority.</li>
           <li><strong>Trace a request</strong> in therapist-service via the MDC trace id added by <code>MdcFilter</code>.</li>
-          <li><strong>Booking conflicts?</strong> Remember <code>markSlotAsBooked</code>/<code>markSlotAsAvailable</code> are conditional updates — a 0-row result is the signal a race or terminal state was hit.</li>
+          <li><strong>Booking conflicts?</strong> Availability is a grid of generic 30-minute blocks; a booking reserves a consecutive run of them under row locks (<code>GenericBlockReservationService</code>). <code>SlotAlreadyBookedException</code> means some block in the run was taken; <code>SlotNotAvailableException</code> means the interval was malformed, had a gap, or overlapped an existing appointment.</li>
+          <li><strong>"Service not available" on booking?</strong> AppointmentService resolves duration from its own <code>TherapistServiceProjection</code>. If the service was created before the projection existed, run TherapistService once with <code>app.service-projection-backfill.enabled=true</code> to republish all definitions.</li>
         </ul>
 
       </article>

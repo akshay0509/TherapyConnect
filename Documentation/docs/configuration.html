@@ -34,6 +34,10 @@
             <tr><td><code>THERAPIST_EMAIL</code></td><td>Notification</td><td><em>Fallback</em> attendee email only — invites normally use the therapist's own email from <code>THERAPIST_PROJECTION</code>.</td></tr>
             <tr><td><code>GMAIL_FROM</code></td><td>User</td><td>Sender address for reset/username emails.</td></tr>
             <tr><td><code>FRONTEND_URL</code></td><td>User, Gateway</td><td>Base URL in emails + CORS origin (default <code>http://localhost:5173</code>).</td></tr>
+            <tr><td><code>GOOGLE_FORMS_INTEGRATION_ID</code></td><td>Client</td><td>Public opaque id in the webhook path. Blank ⇒ intake disabled (fails closed).</td></tr>
+            <tr><td><code>GOOGLE_FORMS_THERAPIST_ID</code></td><td>Client</td><td>Therapist profile that owns submissions from this form.</td></tr>
+            <tr><td><code>GOOGLE_FORMS_HMAC_SECRET</code></td><td>Client</td><td>32+ random bytes; signs <code>&lt;timestamp&gt;.&lt;body&gt;</code>. Use a distinct secret per integration.</td></tr>
+            <tr><td><code>GOOGLE_FORMS_MAX_CLOCK_SKEW_SECONDS</code></td><td>Client</td><td>Replay window for the signature timestamp (default <code>300</code>).</td></tr>
           </tbody>
         </table></div>
 
@@ -92,6 +96,7 @@ routes[2] /therapist/**       → lb://THERAPIST-SERVICE
 routes[3] /user/**            → lb://USER-SERVICE
 routes[4] /appointment/**     → lb://APPOINTMENT-SERVICE
 routes[5] /analytics/**       → lb://ANALYTICS-SERVICE
+routes[6] /integrations/google-forms/** → lb://CLIENT-SERVICE   (public, HMAC-verified)
 
 # Login rate limiting — custom per-client-IP fixed window (LoginRateLimiter, Caffeine)
 security.login.rate-limit.per-ip=10

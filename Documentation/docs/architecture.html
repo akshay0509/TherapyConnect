@@ -146,7 +146,8 @@ sequenceDiagram
           <table>
             <thead><tr><th>Projection (owner)</th><th>Source of truth</th><th>Built from event</th><th>Used for</th></tr></thead>
             <tbody>
-              <tr><td><code>TherapistAvailability</code> (Appointment)</td><td>TherapistService slots</td><td><code>therapist-availability-events</code></td><td>Booking against valid, available slots.</td></tr>
+              <tr><td><code>TherapistAvailability</code> (Appointment)</td><td>TherapistService blocks</td><td><code>therapist-availability-events</code></td><td>Reserving runs of generic 30-minute blocks at booking.</td></tr>
+              <tr><td><code>TherapistServiceProjection</code> (Appointment)</td><td>TherapistService services</td><td><code>therapist-availability-events</code> (TherapistServiceDefinitionEvent)</td><td>Service duration → how many blocks a booking needs.</td></tr>
               <tr><td><code>TherapyDeliveryMode</code> (Appointment)</td><td>TherapistService modes</td><td><code>therapist-availability-events</code></td><td>Pricing &amp; mode validation at booking time.</td></tr>
               <tr><td><code>AppointmentProjection</code> (Therapist)</td><td>AppointmentService</td><td><code>therapist-appointment-events</code></td><td>Dashboards, earnings, session history, slot-conflict checks.</td></tr>
               <tr><td><code>TherapistClients</code> (Therapist)</td><td>ClientService</td><td><code>client-events</code></td><td>Therapist's client roster &amp; names/status.</td></tr>
@@ -188,7 +189,12 @@ flowchart LR
 
         <div class="callout info">
           <div class="callout-title">Beyond the therapist workflow</div>
-          <p>Two capabilities sit alongside the core domain: an <strong>admin console</strong> (separate credential-based login at the gateway, <code>ADMIN</code>-gated <code>/admin/**</code> endpoints for user management, login audit, service health and outbox replay) and <strong>Razorpay payments</strong> (AppointmentService owns the payment-link lifecycle; an HMAC-verified webhook auto-confirms paid appointments). Both are optional and fail closed when unconfigured. See <a href="workflows.html#payment">Workflows</a> and <a href="security.html#admin-auth">Security</a>.</p>
+          <p>Three capabilities sit alongside the core domain: an <strong>admin console</strong> (separate credential-based login, <code>ADMIN</code>-gated <code>/admin/**</code> endpoints for user management, login audit, service health, Kafka/DLQ monitoring and outbox replay), <strong>Razorpay payments</strong> (AppointmentService owns the payment-link lifecycle; a signed webhook auto-confirms paid appointments), and <strong>Google Forms client intake</strong> (ClientService stages signed public submissions for therapist review). All three are optional and fail closed when unconfigured. See <a href="workflows.html#payment">Workflows</a> and <a href="security.html#webhook-sec">Security</a>.</p>
+        </div>
+
+        <div class="callout success">
+          <div class="callout-title">Availability is service-agnostic</div>
+          <p>A notable modelling decision: availability is a stream of uniform <strong>30-minute blocks</strong> that carry no service and no price. Services (duration) and delivery modes (price) are resolved only at booking time, when a run of consecutive blocks is reserved under row locks. This keeps one row per real time window instead of one per (service × time), removes duplicate overlapping slots, and concentrates all concurrency in a single component (<code>GenericBlockReservationService</code>). See <a href="workflows.html#slotgen">the generation and booking flows</a>.</p>
         </div>
 
       </article>

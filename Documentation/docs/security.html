@@ -84,7 +84,8 @@ sequenceDiagram
             <tr><td>Gateway</td><td><code>/auth/**</code>, <code>/user/create-user</code>, <code>/user/forgot-username</code>, <code>/user/forgot-password</code>, <code>/user/reset-password</code></td><td><code>/admin/**</code> → <code>ADMIN</code>; <code>/*/internal/**</code> → <strong>denied</strong>; everything else authenticated (JWT)</td></tr>
             <tr><td>User</td><td><code>**/validate-user</code>, <code>/create-user</code>, <code>/forgot-username</code>, <code>/forgot-password</code>, <code>/reset-password</code></td><td>authenticated</td></tr>
             <tr><td>Appointment</td><td><code>/webhook/**</code> (Razorpay — HMAC-verified)</td><td>authenticated</td></tr>
-            <tr><td>Therapist / Client / Analytics</td><td>—</td><td>all authenticated</td></tr>
+            <tr><td>Client</td><td><code>/google-forms/*/submissions</code> (intake — HMAC-verified)</td><td>authenticated</td></tr>
+            <tr><td>Therapist / Analytics</td><td>—</td><td>all authenticated</td></tr>
           </tbody>
         </table></div>
         <p>The gateway explicitly <strong>denies <code>/*/internal/**</code></strong> so service-internal endpoints (e.g. <code>/therapist/internal/...</code>) can never be reached from the public edge — the gateway's own proxy calls them directly over the Docker network. CSRF is disabled across services (stateless API; tokens are bearer/JWT, refresh cookie is <code>SameSite=None; Secure</code>). CORS is configured at the gateway (<code>CorsConfig</code>) for the SPA origin.</p>
@@ -140,11 +141,20 @@ Wiring   : JPA @Convert(SessionNotesEncryptor) — transparent on read/write</co
             <tr><td>Notes key</td><td><code>APP_ENCRYPTION_SECRET</code> env</td><td>AES key (Base64).</td></tr>
             <tr><td>Google OAuth</td><td><code>GOOGLE_CLIENT_ID/SECRET/REFRESH_TOKEN</code> env</td><td>Calendar + Gmail.</td></tr>
             <tr><td>Razorpay</td><td><code>RAZORPAY_KEY_ID/SECRET/WEBHOOK_SECRET</code> env</td><td>Payment links + webhook HMAC. Blank ⇒ payments disabled.</td></tr>
+            <tr><td>Google Forms intake</td><td><code>GOOGLE_FORMS_HMAC_SECRET</code> (+ <code>_INTEGRATION_ID</code>) env</td><td>Signs intake submissions. Blank ⇒ intake disabled. Use a distinct secret per integration.</td></tr>
           </tbody>
         </table></div>
 
-        <h2 id="webhook-sec">Payment webhook verification</h2>
-        <p>The Razorpay webhook (<code>POST /webhook/razorpay</code>) is unauthenticated by JWT — authenticity comes from the <code>X-Razorpay-Signature</code> header, an HMAC-SHA256 of the <em>raw</em> request body keyed by <code>RAZORPAY_WEBHOOK_SECRET</code>, hex-encoded and compared in constant time. A missing/invalid signature is rejected with <code>401</code>; only after it passes is the body processed.</p>
+        <h2 id="webhook-sec">Signed inbound webhooks</h2>
+        <p>Two endpoints accept traffic from outside without a JWT. Both prove authenticity with an HMAC over the <em>raw</em> body, compared in constant time, and both reject with <code>401</code> before any processing.</p>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Endpoint</th><th>Signed value</th><th>Key</th><th>Extra checks</th></tr></thead>
+          <tbody>
+            <tr><td><code>POST /webhook/razorpay</code></td><td>raw body</td><td><code>RAZORPAY_WEBHOOK_SECRET</code></td><td>Header <code>X-Razorpay-Signature</code>; idempotent processing (a PAID payment never re-transitions).</td></tr>
+            <tr><td><code>POST /integrations/google-forms/{id}/submissions</code></td><td><code>&lt;timestamp&gt;.&lt;raw body&gt;</code></td><td><code>GOOGLE_FORMS_HMAC_SECRET</code></td><td>Headers <code>X-Integration-Timestamp</code> + <code>X-Integration-Signature</code>; timestamp must be within the skew window (default 300s), limiting replay; the integration id in the path must match the configured one.</td></tr>
+          </tbody>
+        </table></div>
+        <p>Both <strong>fail closed</strong>: if the relevant secret (or integration id) is blank, every request is rejected rather than accepted unauthenticated. Including the timestamp in the Google Forms signature is what makes captured requests expire — the Razorpay signature covers only the body, so its replay protection comes from idempotent processing instead.</p>
 
         <div class="callout success">
           <div class="callout-title">Resolved since the first review</div>

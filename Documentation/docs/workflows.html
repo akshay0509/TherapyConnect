@@ -42,9 +42,17 @@ sequenceDiagram
     K-->>US: login event consumed → audit + lockout/reset
         </div>
         <p><strong>Async aftermath:</strong> the User service's consumers write <code>USER_LOGIN_AUDIT</code>, update last-login fields on success (resetting <code>failedAttempts</code>), and on failure increment the counter — <strong>locking the account at 5</strong>.</p>
+        <div class="callout warn">
+          <div class="callout-title">Therapist lookup: unknown ≠ absent</div>
+          <p>The <code>therapistId</code> lookup is only performed for users whose roles include THERAPIST, so a client isn't held hostage by a TherapistService restart. More importantly, the lookup now distinguishes <em>"this user has no profile"</em> (a 200 with an empty body) from <em>"we couldn't ask"</em> (<code>TherapistLookupUnavailableException</code> from the circuit-breaker fallback). Previously both produced <code>null</code>, so a therapist logging in during a restart received a token asserting they had no profile — the SPA then routed them to create one, and <code>createTherapist</code> had no duplicate guard, writing a <strong>second profile for the same user</strong>. Login now fails with a retryable <code>503</code> instead: a momentary outage is a far smaller problem than a split identity.</p>
+        </div>
 
-        <h2 id="slotgen">2 · Availability → slot generation</h2>
-        <p>The therapist defines weekly rules and date overrides, then generates concrete bookable slots. Generation is the bridge between TherapistService (owner) and AppointmentService (booking engine).</p>
+        <h2 id="slotgen">2 · Availability → generic 30-minute blocks</h2>
+        <div class="callout success">
+          <div class="callout-title">⚡ Architecture change: slot generation is decoupled from services</div>
+          <p>Availability used to be generated <em>per service</em> — one slot per (service × time), each carrying a <code>serviceId</code> and fee. That created parallel overlapping slots at the same time and made double-booking prevention awkward. Availability is now a single stream of <strong>generic 30-minute blocks</strong> that know nothing about services. A booking reserves however many consecutive blocks the chosen service needs. Fewer rows, no duplicate times, and one obvious concurrency boundary.</p>
+        </div>
+        <p>The therapist defines weekly rules and date overrides, then generates blocks. Generation is the bridge between TherapistService (owner) and AppointmentService (booking engine).</p>
         <div class="mermaid">
 sequenceDiagram
     autonumber
@@ -55,18 +63,18 @@ sequenceDiagram
     participant AS as AppointmentService
     T->>TS: POST /generate-slots?start&end
     TS->>TS: reject if active appointments overlap
-    TS->>DB: delete existing slots in range
-    TS->>DB: expand active rules × services → slots<br/>(chop into service-duration blocks, 30-min step)
+    TS->>DB: delete existing blocks in range
+    TS->>DB: chop rules into uniform 30-min blocks<br/>(de-duplicated by therapist+start+end)
     TS->>DB: apply "available" overrides
-    TS->>DB: save slots + outbox(AvailabilitySlotsGenerated)
+    TS->>DB: save blocks + outbox(AvailabilitySlotsGenerated)
     Note over TS,DB: one transaction
     K-->>AS: AvailabilitySlotsGenerated
-    AS->>AS: refuse if BOOKED slots in range<br/>else replace AVAILABLE projection rows
+    AS->>AS: refuse if BOOKED blocks in range<br/>else replace AVAILABLE projection rows
         </div>
-        <div class="callout info"><p style="margin:0"><strong>Slot math:</strong> for each active service, the rule's time block is chopped into slots of the service's <code>duration</code> (validated &gt; 0), advancing in fixed <strong>30-minute</strong> steps; a slot that would run past the block end is dropped. Each slot carries its <code>serviceId</code> only — fees are not stored on slots; pricing is resolved from the delivery mode at booking time. Overrides are single-day windows.</p></div>
+        <div class="callout info"><p style="margin:0"><strong>Block math:</strong> each rule's time window is chopped into uniform <strong>30-minute</strong> blocks, independent of any service. Blocks are de-duplicated on <code>therapistId + startTime + endTime</code> (a DB unique constraint backs this in the AppointmentService projection), so overlapping rules can't produce duplicates. Blocks carry no <code>serviceId</code> and no fee — both are resolved at booking time from the chosen delivery mode. Overrides remain single-day windows.</p></div>
 
         <h2 id="booking">3 · Booking an appointment</h2>
-        <p>The most important transaction in the system. AppointmentService validates against its <em>local</em> availability and delivery-mode projections, then books atomically.</p>
+        <p>The most important transaction in the system. AppointmentService derives the session length from its <em>local</em> service projection, then reserves a contiguous run of availability blocks under row locks.</p>
         <div class="mermaid">
 sequenceDiagram
     autonumber
@@ -75,25 +83,56 @@ sequenceDiagram
     participant DB as AS DB
     participant K as Kafka
     participant TS as Therapist
-    participant NS as Notification
     participant AN as Analytics
     T->>AS: POST /create-appointment {slotId, modeId, client}
-    AS->>DB: find slot (else SlotNotAvailable)
-    AS->>DB: check no unavailable override covers it
-    AS->>DB: find active delivery mode → price (must be > 0)
+    AS->>DB: find starting block (else SlotNotAvailable)
+    AS->>DB: find active delivery mode → serviceId + price
+    AS->>DB: resolve fee: DSF → custom → client rate → mode price
+    AS->>DB: resolve service duration (TherapistServiceProjection)
+    AS->>AS: end = start + duration (rounded up to a 30-min boundary)
+    AS->>DB: reject if an unavailable override covers the window
     AS->>DB: reject if window overlaps an active appointment
-    AS->>DB: markSlotAsBooked(slotId) [affected rows]
-    alt rows == 0
-        AS-->>T: SlotAlreadyBooked
-    else booked
-        AS->>DB: insert appointment + outbox(AppointmentCreated)
-        AS-->>T: 200 appointmentId
+    AS->>DB: insert appointment (flush → appointmentId)
+    AS->>DB: reserve(): SELECT … FOR UPDATE the block run,<br/>validate exact sequence, stamp appointmentId
+    alt any block taken
+        AS-->>T: SlotAlreadyBooked (whole tx rolls back)
+    else reserved
+        AS->>DB: outbox(AppointmentCreated)
+        AS-->>T: 200 BookAppointmentResponse
         K-->>TS: AppointmentCreated → AppointmentProjection(SCHEDULED)
         K-->>AN: (ignored until Completed)
     end
         </div>
-        <p><strong>Race safety:</strong> <code>markSlotAsBooked</code> is a conditional UPDATE returning the affected-row count; a return of 0 means another booking won the slot, yielding <code>SlotAlreadyBookedException</code> instead of a double-book. Pricing comes from the delivery mode (<code>findByModeIdAndTherapistIdAndServiceIdAndIsActiveTrue</code>), not the slot, and must be positive.</p>
-        <p><strong>Cross-service overlap guard:</strong> because a therapist's slots for <em>different services</em> legitimately occupy the same times, marking one slot booked doesn't block the parallel slots. Booking (and rescheduling) therefore also checks <code>existsActiveAppointmentOverlap</code> — any SCHEDULED/CONFIRMED/RESCHEDULED appointment overlapping the requested window rejects the booking with <code>SlotNotAvailableException</code>.</p>
+
+        <h3 id="fee-resolution">Fee resolution &amp; the stamped-fee invariant</h3>
+        <p>The fee is resolved <em>once</em>, at booking, and stamped onto the appointment. Precedence, highest first:</p>
+        <div class="table-wrap"><table>
+          <thead><tr><th>#</th><th>Source</th><th>Effect</th></tr></thead>
+          <tbody>
+            <tr><td>0</td><td>Client is <strong>DSF</strong> (pro bono)</td><td>Always <code>0</code>. Nothing overrides it.</td></tr>
+            <tr><td>1</td><td><code>customPrice</code> typed at booking</td><td>One-off override for this appointment.</td></tr>
+            <tr><td>2</td><td>Client's negotiated <code>sessionFee</code></td><td>A standing flat rate for that client.</td></tr>
+            <tr><td>3</td><td>Delivery mode price</td><td>The standard rate.</td></tr>
+          </tbody>
+        </table></div>
+        <div class="callout success">
+          <div class="callout-title">Invariant: <code>sessionFee == 0</code> ⟺ the session was pro bono</div>
+          <p>This holds structurally — the DSF branch is the only one that can return zero, and every other branch is validated positive before returning. Resolution and validation are the same step, so there's no second pass that could re-derive a different answer.</p>
+          <p><strong>Why stamping matters:</strong> because the resolved amount is frozen on the appointment, later changes to a client's rate or DSF flag never rewrite historical bookings. Earnings sums the stamped fee instead of joining the client's <em>current</em> flag. Previously the DSF flag was read at display time, so a client who paid normally and later moved to DSF had every past session's earning silently rewritten to zero while the fee column still showed what they actually paid — the two columns contradicted each other and totals under-reported real income.</p>
+        </div>
+
+        <h3 id="block-reservation">Block reservation (<code>GenericBlockReservationService</code>)</h3>
+        <p>All multi-block state changes go through one service that owns the concurrency boundary. It locks the overlapping rows in stable chronological order (<code>lockOverlappingBlocks</code>), validates, then mutates — so a transaction either takes the <em>whole</em> interval or nothing.</p>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Operation</th><th>Behavior</th></tr></thead>
+          <tbody>
+            <tr><td><code>reserve</code></td><td>Every block in the run must be <code>AVAILABLE</code> with no owner; each is set <code>BOOKED</code> + stamped with the <code>appointmentId</code>. Any taken block ⇒ <code>SlotAlreadyBookedException</code>.</td></tr>
+            <tr><td><code>release</code></td><td>Requires every block to be owned by this appointment (ownership mismatch is an <code>IllegalStateException</code> — a data-integrity bug, not a user error), then returns them to <code>AVAILABLE</code>.</td></tr>
+            <tr><td><code>move</code></td><td>Reschedule without a release-then-reserve gap: locks the <strong>union</strong> of old and new intervals once, in one order, so partially overlapping moves can retain blocks this appointment already owns while claiming the new-only ones. Avoids both deadlocks and a window where someone else grabs the retained blocks.</td></tr>
+          </tbody>
+        </table></div>
+        <p><strong>Alignment:</strong> a session needn't fill whole blocks — a 50-minute appointment occupies a 60-minute footprint on the 30-minute grid, which preserves the changeover gap and keeps the next start on the clock. Rounding lives in <code>blockAlignedEnd</code> so <code>reserve</code>, <code>release</code> and <code>move</code> can never disagree about which blocks an appointment owns. Validation rejects intervals that aren't a positive multiple of 30 minutes, or where the locked rows don't form an exact gap-free sequence.</p>
+        <p><strong>Overlap guard:</strong> booking and rescheduling also check <code>existsActiveAppointmentOverlap</code> — any SCHEDULED/CONFIRMED/RESCHEDULED appointment overlapping the requested window is rejected with <code>SlotNotAvailableException</code>, independent of block state.</p>
 
         <h2 id="states">4 · Appointment state machine</h2>
         <p>Status transitions enforced by <code>AppointmentService</code>. Manual targets are limited to CONFIRMED/COMPLETED/CANCELLED/ABANDONED; terminal states cannot change.</p>
@@ -105,17 +144,18 @@ stateDiagram-v2
     CONFIRMED --> RESCHEDULED: reschedule
     RESCHEDULED --> CONFIRMED: confirm
     CONFIRMED --> COMPLETED: complete
-    SCHEDULED --> CANCELLED: cancel (releases slot)
-    CONFIRMED --> CANCELLED: cancel (releases slot)
-    SCHEDULED --> ABANDONED: abandon
-    CONFIRMED --> ABANDONED: abandon
+    SCHEDULED --> CANCELLED: cancel (releases blocks)
+    CONFIRMED --> CANCELLED: cancel (releases blocks)
+    SCHEDULED --> ABANDONED: abandon (no-show, still billable)
+    CONFIRMED --> ABANDONED: abandon (no-show, still billable)
     COMPLETED --> [*]
     CANCELLED --> [*]
     ABANDONED --> [*]
         </div>
         <ul>
-          <li><strong>CANCELLED</strong> releases the booked slot (<code>markSlotAsAvailable</code>); failing to release throws.</li>
-          <li><strong>RESCHEDULED</strong> books a new slot, releases the old, re-prices by mode, and emits <code>AppointmentRescheduled</code> with old/new slot + times.</li>
+          <li><strong>CANCELLED</strong> releases the reserved blocks via <code>GenericBlockReservationService.release</code>.</li>
+          <li><strong>RESCHEDULED</strong> uses <code>move</code> (union-locked, no release-then-reserve gap), re-prices by mode, and emits <code>AppointmentRescheduled</code> with old/new times.</li>
+          <li><strong>ABANDONED</strong> is a no-show: the blocks are released, but the session is <strong>still billable</strong> — it counts toward earnings at the full fee (see <a href="#analytics-flow">rollups</a>).</li>
           <li>Terminal states (COMPLETED/CANCELLED/ABANDONED) reject further transitions and reschedules.</li>
         </ul>
 
@@ -177,15 +217,75 @@ sequenceDiagram
         <div class="table-wrap"><table>
           <thead><tr><th>Event</th><th>Effect</th></tr></thead>
           <tbody>
-            <tr><td><code>AppointmentCompleted</code></td><td>+completed; earnings += fee (or 0 if client is DSF); paid/dsf &amp; online/offline counters; per-service rollup; bump client engagement (lastSession, totalSessions).</td></tr>
+            <tr><td><code>AppointmentCompleted</code></td><td>+completed; earnings += the <a href="#fee-resolution">stamped</a> <code>sessionFee</code> (already 0 for a pro-bono session, so no second DSF test); paid/dsf &amp; online/offline counters; per-service rollup; bump client engagement (lastSession, totalSessions).</td></tr>
             <tr><td><code>AppointmentCancelled</code></td><td>+cancelled on the session's day.</td></tr>
             <tr><td><code>AppointmentAbandoned</code></td><td>+abandoned.</td></tr>
             <tr><td><code>AppointmentRescheduled</code></td><td>+rescheduled (counted against the original date).</td></tr>
           </tbody>
         </table></div>
         <p>Retention queries derive retained (&gt;1 session), churned (no session in 30 days), retention rate, average sessions/client, and a session-frequency histogram (1, 2-3, 4-6, 7-10, 10+).</p>
+        <div class="callout warn">
+          <div class="callout-title">Billing model: a no-show still bills</div>
+          <p>The therapist's <strong>earnings</strong> view (TherapistService, computed from <code>AppointmentProjection</code>) treats <em>billable</em> as <code>COMPLETED</code> <strong>+</strong> <code>ABANDONED</code> — a client who doesn't show is charged the full fee. Abandoned counts are also broken out separately (<code>week/month/lifetimeAbandonedCount</code>) so the therapist can see what share of income came from sessions nobody attended. <strong>DSF</strong> (sliding-fee) sessions remain zero-money but are counted as delivered work, tracked in their own counters.</p>
+        </div>
 
-        <h2 id="client-create">9 · Creating a client (cross-service)</h2>
+        <h2 id="risk">9 · Clinical risk tracking</h2>
+        <p>The therapist records a risk assessment per client, and the system reminds them when it's due for review. TherapistService owns this; the encrypted fields use the same AES-GCM converter as session notes.</p>
+        <div class="callout info">
+          <div class="callout-title">Deliberately never derived</div>
+          <p>The risk level is <strong>recorded by the therapist, never computed by the app</strong> — not from attendance, cancellations, or note content. The stated rationale is that an algorithmic risk score is a clinical assessment made by software that has never met the client, and a therapist who either trusts it or is contradicted by it is worse off than with nothing. The app holds the assessment and reminds about it; the therapist makes it.</p>
+        </div>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Level</th><th>Review interval</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td><code>NONE</code></td><td>—</td><td>An assessed judgement of "no risk". No review ever falls due.</td></tr>
+            <tr><td><code>LOW</code></td><td>90 days</td><td></td></tr>
+            <tr><td><code>MODERATE</code></td><td>60 days</td><td></td></tr>
+            <tr><td><code>HIGH</code></td><td>15 days</td><td>15 rather than 14 so the prompt lands the day <em>before</em> a fortnightly session, leaving time to prepare rather than arriving as the client does.</td></tr>
+          </tbody>
+        </table></div>
+        <p>The interval lives on the level itself, so the cadence follows the judgement automatically — raising someone to HIGH brings their next review forward without reconfiguring anything. A per-client <code>reviewIntervalDaysOverride</code> can supersede it.</p>
+        <ul>
+          <li><strong>Never assessed vs. assessed NONE</strong> — the DTO exposes <code>neverAssessed</code> separately, because "nobody has looked at this yet" is materially different from "a clinician judged there is no risk".</li>
+          <li><strong>Derived server-side</strong> — <code>effectiveIntervalDays</code>, <code>reviewDueAt</code> and <code>reviewDue</code> are computed by TherapistService so the review rule lives in one place; the UI renders them rather than recomputing.</li>
+          <li><strong>Audit trail</strong> — every save appends a <code>CLIENT_RISK_REVIEW</code> row capturing previous level → new level, reviewer and timestamp.</li>
+          <li><strong>Encrypted at rest</strong> — the free-text <code>concern</code> and <code>safetyPlan</code> use the same field-level AES-GCM encryption as session notes.</li>
+        </ul>
+
+        <h2 id="intake">10 · Client intake via Google Forms</h2>
+        <p>Prospective clients fill in a public Google Form; an Apps Script posts each submission to ClientService, where it is <strong>staged for review</strong> rather than becoming a client directly. The therapist then approves (optionally editing the data first) or rejects it.</p>
+        <div class="mermaid">
+sequenceDiagram
+    autonumber
+    participant P as Prospective client
+    participant GF as Google Form + Apps Script
+    participant GW as Gateway
+    participant CS as ClientService
+    participant T as Therapist (UI)
+    P->>GF: submits intake form
+    GF->>GW: POST /integrations/google-forms/{id}/submissions<br/>X-Integration-Timestamp + X-Integration-Signature
+    GW->>CS: route (public — no JWT)
+    CS->>CS: verify HMAC-SHA256 over "timestamp.body"<br/>+ clock-skew window
+    CS->>CS: stage CLIENT_INTAKE (PENDING), idempotent on responseId
+    CS-->>GF: 202 Accepted
+    T->>CS: GET /client/intakes?status=PENDING
+    T->>CS: POST /client/intakes/{id}/approve (optionally edited)
+    CS->>CS: create Client (source=GOOGLE_FORM) + outbox(ClientCreated)
+    CS-->>T: { intakeId, status: APPROVED, clientId }
+        </div>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Concern</th><th>Handling</th></tr></thead>
+          <tbody>
+            <tr><td>Authenticity</td><td>HMAC-SHA256 of <code>&lt;timestamp&gt;.&lt;raw body&gt;</code> keyed by <code>GOOGLE_FORMS_HMAC_SECRET</code>, hex-encoded, constant-time compared. Unknown integration id, bad signature, or a timestamp outside the skew window (default 300s) ⇒ <code>401</code>.</td></tr>
+            <tr><td>Fail closed</td><td>If the integration id or secret is blank, every request is rejected — the feature is off by default.</td></tr>
+            <tr><td>Replay / duplicates</td><td>Staging is idempotent on <code>(integrationId, responseId)</code>; a resubmitted webhook returns the existing intake instead of creating a second one.</td></tr>
+            <tr><td>Consent</td><td>An intake cannot be staged unless consent was accepted, and it must <em>remain</em> accepted at approval time.</td></tr>
+            <tr><td>Review</td><td>Only <code>PENDING</code> intakes can be reviewed; approve is idempotent (re-approving returns the existing decision). Full name and DOB are required to create the client.</td></tr>
+            <tr><td>Audit</td><td>The raw form answers are kept in a <code>jsonb</code> column, plus <code>reviewedAt</code>/<code>reviewedBy</code> and a rejection reason.</td></tr>
+          </tbody>
+        </table></div>
+
+        <h2 id="client-create">11 · Creating a client directly (cross-service)</h2>
         <div class="mermaid">
 sequenceDiagram
     autonumber
@@ -207,7 +307,7 @@ sequenceDiagram
         </div>
         <p>The <code>ClientCreated</code> event now also carries the client's <code>phoneNumber</code>, which AppointmentService projects into <code>ClientContactProjection</code> so Razorpay can notify the client by SMS/email.</p>
 
-        <h2 id="password">10 · Password reset &amp; forgot username</h2>
+        <h2 id="password">12 · Password reset &amp; forgot username</h2>
         <p>Gateway → User. <strong>Forgot password:</strong> User issues a 30-minute token and emails a reset link via the Gmail API; reset consumes the token. <strong>Forgot username:</strong> User looks up the account by email and emails the username. Both always return a generic response to avoid account enumeration, and email-send failures are logged (not surfaced to the caller).</p>
 
       </article>

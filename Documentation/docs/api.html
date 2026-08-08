@@ -18,7 +18,7 @@
 
         <div class="callout info">
           <div class="callout-title">Conventions</div>
-          <p>Public paths: <code>/auth/**</code>, <code>/user/create-user</code>, <code>/user/forgot-username</code>, <code>/user/forgot-password</code>, <code>/user/reset-password</code>, and the Razorpay <code>/webhook/**</code>. <code>/admin/**</code> requires <strong>ADMIN</strong> authority; everything else needs a valid <code>Authorization: Bearer &lt;jwt&gt;</code>. Service-internal routes (<code>/*/internal/**</code>) are <strong>denied at the gateway</strong> and only reachable service-to-service. The <code>therapistId</code> / <code>userId</code> are read from JWT claims server-side via <code>SecurityUtils</code> — clients never send them in the body (a field marked <em>“from JWT”</em> is populated by the server). The gateway routes by prefix: <code>/therapist/*</code> → therapist-service, <code>/appointment/*</code> → appointment-service, <code>/client/*</code> → client-service, <code>/user/*</code> → user-service, <code>/analytics/*</code> → analytics-service.</p>
+          <p>Public paths: <code>/auth/**</code>, <code>/user/create-user</code>, <code>/user/forgot-username</code>, <code>/user/forgot-password</code>, <code>/user/reset-password</code>, the Razorpay <code>/webhook/**</code>, and the Google Forms intake webhook <code>/integrations/google-forms/*/submissions</code> (both signature-verified rather than JWT-authenticated). <code>/admin/**</code> requires <strong>ADMIN</strong> authority; everything else needs a valid <code>Authorization: Bearer &lt;jwt&gt;</code>. Service-internal routes (<code>/*/internal/**</code>) are <strong>denied at the gateway</strong> and only reachable service-to-service. The <code>therapistId</code> / <code>userId</code> are read from JWT claims server-side via <code>SecurityUtils</code> — clients never send them in the body (a field marked <em>“from JWT”</em> is populated by the server). The gateway routes by prefix: <code>/therapist/*</code> → therapist-service, <code>/appointment/*</code> → appointment-service, <code>/client/*</code> → client-service, <code>/user/*</code> → user-service, <code>/analytics/*</code> → analytics-service.</p>
         </div>
 
         <!-- ============================ AUTH ============================ -->
@@ -35,6 +35,7 @@
               <li><code>200</code> — <code>{ "token": "&lt;jwt&gt;" }</code> plus <code>Set-Cookie: refresh_token</code> (httpOnly, Secure, SameSite=None, path <code>/auth/refresh</code>, 7-day).</li>
               <li><code>401</code> — <code>{ "failureReason": "INVALID_CREDENTIALS | ACCOUNT_LOCKED | ACCOUNT_DISABLED | SERVICE_UNAVAILABLE" }</code></li>
               <li><code>429</code> — <code>{ "error": "Too many login attempts…" }</code></li>
+              <li><code>503</code> — <code>{ "message": "Cannot sign in right now — the therapist service is unavailable…" }</code>. Only for THERAPIST logins when the profile lookup can't be reached: issuing a token that asserts "no profile" would route an existing therapist into creating a duplicate one, so login fails retryably instead.</li>
             </ul>
             <p><strong>Flow &amp; side effects:</strong> validates via <code>UserServiceProxy.validateUser</code> (circuit-broken); publishes <code>auth-login-success</code>/<code>auth-login-failure</code> to Kafka; resolves <code>therapistId</code> from TherapistService; signs a 15-min RS256 JWT; persists a <code>REFRESH_TOKENS</code> row (deleting any prior tokens for the user).</p>
           </div>
@@ -177,6 +178,10 @@
           </div>
         </details>
         <details class="endpoint">
+          <summary><span class="badge put">PUT</span><span class="path">/therapist/update-therapist</span><span class="ep-desc">Update profile details</span></summary>
+          <div class="ep-body"><p><strong>Auth:</strong> JWT (<code>therapistId</code> from token) · <strong>Request:</strong> <code>TherapistDto</code> · <strong>Response:</strong> updated <code>TherapistDto</code>. Profile edits that affect downstream projections (email, timezone) emit a <code>TherapistUpdated</code> event.</p></div>
+        </details>
+        <details class="endpoint">
           <summary><span class="badge put">PUT</span><span class="path">/therapist/update-email</span><span class="ep-desc">Sync therapist email with account email</span></summary>
           <div class="ep-body">
             <p><strong>Auth:</strong> JWT · <strong>Request:</strong> <code>{ "email": "…" }</code> (validated, trimmed) · <strong>Response:</strong> updated <code>TherapistDto</code>.</p>
@@ -199,6 +204,13 @@
         <details class="endpoint">
           <summary><span class="badge get">GET</span><span class="path">/therapist/{therapistId}/therapist-services</span><span class="ep-desc">List a given therapist’s services</span></summary>
           <div class="ep-body"><p><strong>Auth:</strong> JWT · <strong>Path:</strong> <code>therapistId</code> · <strong>Response:</strong> <code>List&lt;TherapistServicesDto&gt;</code>.</p></div>
+        </details>
+        <details class="endpoint">
+          <summary><span class="badge post">POST</span><span class="path">/therapist/create-service-with-mode</span><span class="ep-desc">Create a service + its first delivery mode</span></summary>
+          <div class="ep-body">
+            <p><strong>Auth:</strong> JWT · <strong>Request:</strong> <code>ServiceWithModeRequest</code> — <code>{ "service": {…TherapistServicesDto}, "mode": {…TherapyDeliveryModeDto} }</code> · <strong>Response:</strong> the created <code>TherapistServicesDto</code>.</p>
+            <p><strong>Why one call:</strong> a service with no delivery mode is silently unbookable — AppointmentService derives both duration and fee from the selected mode, so booking would later fail with a misleading "service not available". Creating the two separately leaves a window in exactly that broken state, so they're committed in one transaction. Prefer this over <code>/create-service</code> for new services.</p>
+          </div>
         </details>
         <details class="endpoint">
           <summary><span class="badge post">POST</span><span class="path">/therapist/create-service</span><span class="ep-desc">Create a service</span></summary>
@@ -335,7 +347,8 @@
           <div class="ep-body">
             <p><strong>Auth:</strong> JWT · <strong>Response</strong></p>
             <pre><span class="pre-label">DashboardStatsDto</span><code>{ "sessionsToday", "activeClients", "completedThisWeek",
-  "dayEarnings", "weekEarnings", "monthEarnings", "lifetimeEarnings" }</code></pre>
+  "dayEarnings", "weekEarnings", "monthEarnings", "lifetimeEarnings",
+  "pendingNotes" }   // completed sessions across the practice still lacking notes</code></pre>
           </div>
         </details>
         <details class="endpoint">
@@ -343,9 +356,10 @@
           <div class="ep-body">
             <p><strong>Auth:</strong> JWT · <strong>Response</strong></p>
             <pre><span class="pre-label">EarningsSummaryDto</span><code>{ week/month/lifetime Earnings,
-  week/month/lifetime PaidCount,       // non-DSF completed
-  week/month/lifetime DsfCount }       // pro-bono completed</code></pre>
-            <p>DSF (sliding-fee) sessions count as zero earnings.</p>
+  week/month/lifetime PaidCount,        // billable: non-DSF COMPLETED + ABANDONED
+  week/month/lifetime DsfCount,         // pro-bono completed (delivered, zero money)
+  week/month/lifetime AbandonedCount }  // of the billable counts, how many were no-shows</code></pre>
+            <p><strong>Billable = COMPLETED + ABANDONED</strong> — a no-show bills the full fee, and the abandoned share is broken out so the therapist can see how much income came from unattended sessions. DSF (sliding-fee) sessions count as zero earnings.</p>
           </div>
         </details>
         <details class="endpoint">
@@ -372,7 +386,7 @@
             <pre><span class="pre-label">BookAppointmentRequest</span><code>{ "slotId": "SLT…", "clientId": "CLT…", "modeId": "…",
   "clientName": "Jane", "customPrice": 1500.00 }   // customPrice optional — overrides the mode's default fee</code></pre>
             <p><strong>Response:</strong> <code>200</code> <code>BookAppointmentResponse</code> — <code>{ appointmentId, paymentStatus, paymentLinkUrl, clientNotified }</code>. The payment fields are populated only when the therapist has payments enabled (otherwise null). <strong>Errors:</strong> <code>SlotNotAvailableException</code> (unknown/blocked slot or invalid mode), <code>SlotAlreadyBookedException</code> (lost the race).</p>
-            <p><strong>Flow:</strong> validates slot + unavailable overrides + active delivery mode (→ price, or <code>customPrice</code> override), requires a <strong>positive fee</strong> (a zero/null fee would corrupt earnings and produce an invalid Razorpay amount), rejects if the window <strong>overlaps an existing active appointment</strong> (slots for <em>other services</em> legitimately exist at the same times, so marking one slot booked isn't enough to prevent a double-booking), atomically <code>markSlotAsBooked</code> (0 rows ⇒ already booked), persists the appointment, emits <code>AppointmentCreated</code>. After commit it best-effort creates a Razorpay payment link (never fails the booking — worst case <code>paymentStatus=LINK_FAILED</code>, retry via <code>/payments/{id}/link</code>). Validation failures return <code>400 VALIDATION_ERROR</code> via the exception handler.</p>
+            <p><strong>Flow:</strong> <code>slotId</code> identifies the <em>starting</em> 30-minute block. The active delivery mode supplies the <code>serviceId</code> and price (must be positive — a zero/null fee would corrupt earnings and produce an invalid Razorpay amount); the service's duration comes from <code>TherapistServiceProjection</code> and determines the appointment end, rounded up to a 30-minute boundary. The request is rejected if an unavailable override covers the window or it <strong>overlaps an existing active appointment</strong>. The appointment row is inserted and flushed (to get its id), then <code>GenericBlockReservationService.reserve</code> locks the whole run of blocks and stamps each with the <code>appointmentId</code> — any block already taken raises <code>SlotAlreadyBookedException</code> and the entire transaction rolls back. Finally <code>AppointmentCreated</code> goes to the outbox, and a Razorpay link is created best-effort (never fails the booking — worst case <code>paymentStatus=LINK_FAILED</code>, retry via <code>/payments/{id}/link</code>). Validation failures return <code>400 VALIDATION_ERROR</code>. See the <a href="workflows.html#block-reservation">reservation model</a>.</p>
           </div>
         </details>
         <details class="endpoint">
@@ -388,7 +402,7 @@
           <div class="ep-body">
             <p><strong>Auth:</strong> JWT · <strong>Request</strong></p>
             <pre><span class="pre-label">RescheduleAppointmentRequest</span><code>{ "appointmentId": "…", "newSlotId": "SLT…", "modeId": "…"?, "reason": "…"? }</code></pre>
-            <p><strong>Response:</strong> <code>200</code> "Appointment rescheduled". Books the new slot, releases the old, re-prices by mode, sets status <code>RESCHEDULED</code>, emits <code>AppointmentRescheduled</code> (with old/new slot + times). Rejects reschedules of terminal appointments or to the same slot. <strong>Payments:</strong> since the fee may change, any unpaid link is cancelled and a fresh one issued at the new fee (a <code>PAID</code> payment is left untouched).</p>
+            <p><strong>Response:</strong> <code>200</code> "Appointment rescheduled". Uses <code>GenericBlockReservationService.move</code> — the union of the old and new block intervals is locked once so a partially overlapping reschedule can retain blocks it already owns instead of releasing and re-acquiring them. Re-prices by mode, re-derives the end time from the service duration, sets status <code>RESCHEDULED</code>, emits <code>AppointmentRescheduled</code> (with old/new slot + times). Rejects reschedules of terminal appointments or to the same slot. <strong>Payments:</strong> since the fee may change, any unpaid link is cancelled and a fresh one issued at the new fee (a <code>PAID</code> payment is left untouched).</p>
           </div>
         </details>
         <details class="endpoint">
@@ -497,6 +511,63 @@
           <div class="ep-body">
             <p><strong>Auth:</strong> JWT · <strong>Request:</strong> <code>{ "status": "ACTIVE" | "TERMINATED" }</code> · <strong>Response:</strong> updated <code>ClientDto</code>. Emits <code>ClientStatusUpdated</code>.</p>
           </div>
+        </details>
+
+        <details class="endpoint">
+          <summary><span class="badge get">GET</span><span class="path">/client/{clientId}/fee-history</span><span class="ep-desc">Negotiated-rate change log</span></summary>
+          <div class="ep-body"><p><strong>Auth:</strong> JWT · <strong>Response:</strong> <code>List&lt;ClientFeeHistoryDto&gt;</code> — <code>{ feeHistoryId, clientId, therapistId, oldFee, newFee, changedAt }</code>. Written whenever the client's standing <code>sessionFee</code> actually changes; no-op edits don't pad the history.</p></div>
+        </details>
+
+        <h3 id="risk-api">Client risk (therapist-service)</h3>
+        <p>Therapist-recorded clinical risk assessment with review reminders — never derived by the app. See the <a href="workflows.html#risk">risk workflow</a>.</p>
+        <details class="endpoint">
+          <summary><span class="badge get">GET</span><span class="path">/therapist/clients/{clientId}/risk</span><span class="ep-desc">Current assessment + review history</span></summary>
+          <div class="ep-body">
+            <p><strong>Auth:</strong> JWT (scoped to <code>therapistId</code>) · <strong>Response</strong></p>
+            <pre><span class="pre-label">ClientRiskDto</span><code>{ "level": "NONE|LOW|MODERATE|HIGH",
+  "concern": "…", "safetyPlan": "…",          // encrypted at rest
+  "lastReviewedAt", "lastReviewedBy",
+  "reviewIntervalDaysOverride",
+  "effectiveIntervalDays", "reviewDueAt", "reviewDue",   // derived server-side
+  "neverAssessed": false,                     // distinct from an assessed NONE
+  "reviews": [ { reviewId, previousLevel, level, reviewedAt, reviewedBy } ] }</code></pre>
+          </div>
+        </details>
+        <details class="endpoint">
+          <summary><span class="badge put">PUT</span><span class="path">/therapist/clients/{clientId}/risk</span><span class="ep-desc">Record / update the assessment</span></summary>
+          <div class="ep-body"><p><strong>Auth:</strong> JWT · <strong>Request:</strong> <code>{ level, concern?, safetyPlan?, reviewIntervalDaysOverride? }</code> · <strong>Response:</strong> the updated <code>ClientRiskDto</code>. Appends a <code>CLIENT_RISK_REVIEW</code> audit row (previous level → new level, reviewer, timestamp) and resets the review clock. Default intervals: LOW 90d, MODERATE 60d, HIGH 15d; NONE never falls due.</p></div>
+        </details>
+
+        <h3 id="intake-api">Client intake (Google Forms)</h3>
+        <p>Prospective clients submit a Google Form; submissions are staged for therapist review before becoming clients. See the <a href="workflows.html#intake">intake workflow</a>.</p>
+        <details class="endpoint">
+          <summary><span class="badge post">POST</span><span class="path">/integrations/google-forms/{integrationId}/submissions</span><span class="ep-desc">Google Forms webhook (public)</span></summary>
+          <div class="ep-body">
+            <p><strong>Auth:</strong> <em>no JWT</em> — authenticity is an HMAC-SHA256 over <code>&lt;timestamp&gt;.&lt;raw body&gt;</code> keyed by <code>GOOGLE_FORMS_HMAC_SECRET</code>, sent hex-encoded. Required headers: <code>X-Integration-Timestamp</code> (epoch seconds) and <code>X-Integration-Signature</code>.</p>
+            <p><strong>Request:</strong> <code>GoogleFormSubmission</code> — <code>{ responseId, submittedAt, answers: { fullName, firstName, lastName, dob, pronouns, gender, qualification, occupation, phoneNumber, email, preferredDays, preferredTimings, preferredModes, emergencyContact*, consent } }</code>.</p>
+            <p><strong>Lenient parsing:</strong> respondents' locales vary, so a date may arrive as <code>29/03/1983</code> rather than ISO. Ambiguity is resolved deliberately, not guessed — if either component exceeds 12 the order is certain; only when both could be a month does it fall back to day-first (en-IN convention). Rejecting these previously returned <code>400</code>, Apps Script marked the row FAILED, and the prospective client was never seen. First/last name are also derived from <code>fullName</code> at <em>staging</em> (not approval), so the therapist can correct an odd split in the review form; anything the form actually collected wins.</p>
+            <p><strong>Responses:</strong> <code>202 Accepted</code> with the staged <code>ClientIntakeDto</code> · <code>401</code> unknown integration, bad/absent signature, or timestamp outside the skew window (default 300s) · <code>400</code> missing <code>responseId</code>, unparseable date/number, or consent not accepted.</p>
+            <p><strong>Idempotent</strong> on <code>(integrationId, responseId)</code> — a redelivered submission returns the existing intake. Fails closed when the integration is unconfigured.</p>
+          </div>
+        </details>
+        <details class="endpoint">
+          <summary><span class="badge get">GET</span><span class="path">/client/intakes</span><span class="ep-desc">List staged intakes</span></summary>
+          <div class="ep-body"><p><strong>Auth:</strong> JWT (scoped to <code>therapistId</code>) · <strong>Query:</strong> <code>?status=PENDING|APPROVED|REJECTED</code> (default <code>PENDING</code>) · <strong>Response:</strong> <code>List&lt;ClientIntakeDto&gt;</code>, newest submission first.</p></div>
+        </details>
+        <details class="endpoint">
+          <summary><span class="badge get">GET</span><span class="path">/client/intakes/{intakeId}</span><span class="ep-desc">Get one intake</span></summary>
+          <div class="ep-body"><p><strong>Auth:</strong> JWT · <strong>Response:</strong> <code>ClientIntakeDto</code> — the submitted fields plus status, review metadata, and the raw form answers. <code>400</code> if not found under this therapist.</p></div>
+        </details>
+        <details class="endpoint">
+          <summary><span class="badge post">POST</span><span class="path">/client/intakes/{intakeId}/approve</span><span class="ep-desc">Approve → create client</span></summary>
+          <div class="ep-body">
+            <p><strong>Auth:</strong> JWT · <strong>Request:</strong> <code>{ "client": { …IntakeClientData } }</code> — optional; omit to accept the submission as-is, or supply corrected values (the intake row is updated to match what was approved).</p>
+            <p><strong>Response:</strong> <code>IntakeDecisionResponse</code> <code>{ intakeId, status, clientId }</code>. Creates the Client with <code>source=GOOGLE_FORM</code> and emits <code>ClientCreated</code>. The approval payload may also set the client's negotiated <code>sessionFee</code> and <code>dsf</code> flag — a negative fee is rejected and zero collapses to null; for a DSF client the fee is left null, since pro-bono is decided at booking time rather than stored twice. Requires full name + DOB and consent still accepted; only <code>PENDING</code> intakes are reviewable, and re-approving is a no-op that returns the existing decision.</p>
+          </div>
+        </details>
+        <details class="endpoint">
+          <summary><span class="badge post">POST</span><span class="path">/client/intakes/{intakeId}/reject</span><span class="ep-desc">Reject an intake</span></summary>
+          <div class="ep-body"><p><strong>Auth:</strong> JWT · <strong>Request:</strong> <code>{ "reason": "…" }</code> (optional) · <strong>Response:</strong> <code>IntakeDecisionResponse</code>. Records the reason and reviewer; no client is created.</p></div>
         </details>
 
         <!-- ============================ ANALYTICS ============================ -->
