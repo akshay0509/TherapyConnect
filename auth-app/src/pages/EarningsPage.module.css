@@ -341,7 +341,7 @@
 .presetChip:hover:not(:disabled) { color: var(--text-1); border-color: var(--line-2); }
 .presetChip:disabled { opacity: 0.5; cursor: default; }
 .presetChipOn {
-  background: rgba(34,211,238,0.12); border-color: rgba(34,211,238,0.45); color: var(--brand);
+  background: rgba(34,211,238,0.12); border-color: rgba(34,211,238,0.45); color: var(--primary);
 }
 
 /* Secondary note in the session summary line — present but not competing with

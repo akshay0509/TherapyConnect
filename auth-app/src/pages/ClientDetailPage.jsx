@@ -67,12 +67,49 @@ function avatarGradient(id) {
   return AVATAR_COLORS[id.charCodeAt(id.length - 1) % AVATAR_COLORS.length];
 }
 
-function DetailField({ label, value }) {
+/**
+ * A field renders an em-dash for "not recorded", which looks identical to a
+ * value at a glance — you have to read it to learn there is nothing there.
+ * Saying so plainly, in a muted tone, lets the eye skip it.
+ *
+ * `href` turns contact details into what they are: an email you can start and a
+ * number you can dial. On a page whose whole purpose is looking someone up,
+ * making the lookup terminal rather than a thing to copy by hand is the point.
+ */
+function DetailField({ label, value, href, wide }) {
+  const empty = value === null || value === undefined || value === "";
   return (
-    <div className={styles.field}>
+    <div className={`${styles.field} ${wide ? styles.fieldWide : ""}`}>
       <span className={styles.fieldLabel}>{label}</span>
-      <span className={styles.fieldValue}>{value || "—"}</span>
+      {empty ? (
+        <span className={styles.fieldEmpty}>Not provided</span>
+      ) : href ? (
+        <a className={styles.fieldLink} href={href}>{value}</a>
+      ) : (
+        <span className={styles.fieldValue}>{value}</span>
+      )}
     </div>
+  );
+}
+
+/**
+ * Sections were an uppercase caption above an undivided run of rows, so the page
+ * read as one long list and nothing was findable by shape. Giving each a titled,
+ * bounded block means the eye can jump to "Emergency contact" without reading
+ * the labels on the way.
+ *
+ * `tone` exists for exactly one of them: in a crisis you are not scanning, and
+ * the emergency contact should be the thing you land on.
+ */
+function DetailSection({ icon, title, tone, children }) {
+  return (
+    <section className={`${styles.dSection} ${tone === "urgent" ? styles.dSectionUrgent : ""}`}>
+      <div className={styles.dSectionHead}>
+        <span className={styles.dSectionIcon}><Icon name={icon} size={14} /></span>
+        <h3 className={styles.dSectionTitle}>{title}</h3>
+      </div>
+      <div className={styles.dGrid}>{children}</div>
+    </section>
   );
 }
 
@@ -578,8 +615,7 @@ export default function ClientDetailPage() {
                   </div>
                 </div>
 
-                <div className={styles.detailGroup}>Identity</div>
-                <div className={styles.grid}>
+                <DetailSection icon="users" title="Identity">
                   <DetailField label="First name"    value={client.firstName} />
                   <DetailField label="Last name"     value={client.lastName} />
                   <DetailField label="Date of birth" value={formatDate(client.dob)} />
@@ -589,33 +625,33 @@ export default function ClientDetailPage() {
                   <DetailField label="Age"           value={ageFromDob(client.dob)} />
                   <DetailField label="Gender"        value={client.gender} />
                   <DetailField label="Pronouns"      value={client.pronouns} />
-                </div>
+                </DetailSection>
 
-                <div className={styles.detailGroup}>Contact</div>
-                <div className={styles.grid}>
-                  <DetailField label="Email"        value={client.email} />
-                  <DetailField label="Phone number" value={client.phoneNumber} />
-                </div>
+                <DetailSection icon="mail" title="Contact">
+                  <DetailField label="Email" value={client.email}
+                    href={client.email ? `mailto:${client.email}` : undefined} />
+                  <DetailField label="Phone number" value={client.phoneNumber}
+                    href={client.phoneNumber ? `tel:${String(client.phoneNumber).replace(/[^\d+]/g, "")}` : undefined} />
+                </DetailSection>
 
-                <div className={styles.detailGroup}>Background</div>
-                <div className={styles.grid}>
+                <DetailSection icon="clipboard" title="Background">
                   <DetailField label="Qualification" value={client.qualification} />
                   <DetailField label="Occupation"    value={client.currentOccupation} />
-                </div>
+                </DetailSection>
 
-                <div className={styles.detailGroup}>Billing</div>
-                <div className={styles.grid}>
+                <DetailSection icon="dollar" title="Billing">
                   {/* DSF wins over any negotiated rate — a pro-bono client is
                       never charged, whatever fee is stored. */}
                   <DetailField
                     label="Session fee"
+                    wide
                     value={client.dsf
                       ? "Pro bono (DSF)"
                       : client.sessionFee != null
                         ? `₹${Number(client.sessionFee).toLocaleString("en-IN")} (negotiated)`
                         : "Standard service price"}
                   />
-                </div>
+                </DetailSection>
                 {feeHistory.length > 0 && (
                   /* Past appointments keep the fee they were booked at, so this
                      explains a rate that no longer matches the current one. */
@@ -636,20 +672,25 @@ export default function ClientDetailPage() {
                   </div>
                 )}
 
-                <div className={styles.detailGroup}>Scheduling preferences</div>
-                <div className={styles.prefRows}>
-                  <PreferenceRow label="Preferred days"    value={client.preferredDays} />
-                  <PreferenceRow label="Preferred timings" value={client.preferredTimings} />
-                  <PreferenceRow label="Preferred modes"   value={client.preferredModes} />
-                </div>
+                <section className={styles.dSection}>
+                  <div className={styles.dSectionHead}>
+                    <span className={styles.dSectionIcon}><Icon name="calendar" size={14} /></span>
+                    <h3 className={styles.dSectionTitle}>Scheduling preferences</h3>
+                  </div>
+                  <div className={styles.prefRows}>
+                    <PreferenceRow label="Preferred days"    value={client.preferredDays} />
+                    <PreferenceRow label="Preferred timings" value={client.preferredTimings} />
+                    <PreferenceRow label="Preferred modes"   value={client.preferredModes} />
+                  </div>
+                </section>
 
-                <div className={styles.detailGroup}>Emergency contact</div>
-                <div className={styles.grid}>
+                <DetailSection icon="shield" title="Emergency contact" tone="urgent">
                   <DetailField label="Name"         value={client.emergencyContactName} />
                   <DetailField label="Relationship" value={client.emergencyContactRelationship} />
                   <DetailField label="Age"          value={client.emergencyContactAge} />
-                  <DetailField label="Phone"        value={client.emergencyPhoneNumber} />
-                </div>
+                  <DetailField label="Phone"        value={client.emergencyPhoneNumber}
+                    href={client.emergencyPhoneNumber ? `tel:${String(client.emergencyPhoneNumber).replace(/[^\d+]/g, "")}` : undefined} />
+                </DetailSection>
               </div>
             )}
 

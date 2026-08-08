@@ -114,13 +114,6 @@
   flex-wrap: wrap; margin-bottom: 20px;
 }
 .detailsTags { display: flex; gap: 7px; flex-wrap: wrap; margin-left: auto; }
-.detailGroup {
-  font-size: 0.66rem; font-weight: 800; letter-spacing: 0.12em;
-  text-transform: uppercase; color: var(--text-4);
-  padding-top: 18px; margin-bottom: 6px;
-  border-top: 1px solid var(--wash-3);
-}
-.detailGroup:first-of-type { padding-top: 0; border-top: none; }
 
 .prefRows { display: flex; flex-direction: column; }
 .prefRow {
@@ -145,14 +138,21 @@
 
 .field {
   display: flex; flex-direction: column; gap: 6px;
-  padding: 16px 20px;
+  padding: 13px 16px;
+  /* No fill. .card behind is a gradient from --surface to --bg-2, and --bg-elev
+     is exactly --surface — so an opaque fill matched the card at the top and
+     drifted lighter with every section down the page, each one reading as a
+     solid slab pasted over the card. Transparent lets the gradient run through
+     and the tab settles back to the weight of every other page. */
   border-bottom: 1px solid var(--wash-2);
+}
+/* Column rule, skipped on a field that is last (nothing sits beside it, so the
+   line would end in mid-air) or that spans both columns. */
+.field:nth-child(odd):not(:last-child):not(.fieldWide) {
   border-right: 1px solid var(--wash-2);
 }
+.fieldWide { grid-column: 1 / -1; }
 /* Remove border from last row */
-.field:nth-last-child(-n+2) { border-bottom: none; }
-/* Remove right border from even items */
-.field:nth-child(even) { border-right: none; }
 
 .fieldLabel {
   font-size: 0.7rem; color: var(--text-4);
@@ -655,3 +655,61 @@
   .editModalWrap { padding: 0; }
   .editModal { width: 100%; max-height: 100vh; height: 100vh; border-radius: 0; border: none; }
 }
+
+/* ── Personal details sections ───────────────────────────────────────────────
+   Was an uppercase caption over an undivided run of rows: one long list where
+   nothing was findable by shape. Each group is now a bounded block with a title
+   and an icon, so the eye can jump to a section without reading its way there.
+
+   No outline on the section: this whole tab already sits inside .card, which
+   has its own 1px border, so a second border at nearly the same weight produced
+   six boxes inside a box and nothing read as subordinate. The header band and
+   the field separators carry the structure instead.
+
+   Separators come from a 1px grid gap over a tinted backing rather than
+   per-cell borders. The old scheme used :nth-child(even) to strip the right
+   border, which silently left a stray edge on any section with an odd number of
+   fields — Billing has one. Layout-independent by construction now. */
+.dSection {
+  margin-top: 18px;
+  border-radius: 12px; overflow: hidden;
+}
+.dSection:first-of-type { margin-top: 0; }
+
+.dSectionHead {
+  display: flex; align-items: center; gap: 9px;
+  padding: 11px 16px;
+  background: var(--wash-1);
+}
+/* Glyph only. The filled tile read as another solid block, and since every
+   section used the same cyan it differentiated nothing — the label beside it
+   already says which section this is. */
+.dSectionIcon {
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--text-4);
+}
+.dSectionTitle {
+  margin: 0; font-size: 0.72rem; font-weight: 800;
+  letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-3);
+}
+
+.dGrid {
+  display: grid; grid-template-columns: 1fr 1fr;
+}
+@media (max-width: 560px) { .dGrid { grid-template-columns: 1fr; } }
+
+/* The one section you reach for when something is wrong. */
+.dSectionUrgent .dSectionHead { background: rgba(251,191,36,0.09); }
+.dSectionUrgent .dSectionIcon { color: var(--warn-mid); }
+
+/* Absent data should read as absent, not as an em-dash you have to decode. */
+.fieldEmpty { font-size: 0.88rem; color: var(--text-4); font-style: italic; }
+
+.fieldLink {
+  font-size: 0.88rem; color: var(--primary); text-decoration: none;
+  overflow-wrap: anywhere;         /* long addresses must not widen the grid */
+}
+.fieldLink:hover { text-decoration: underline; }
+
+/* Preferences keep their stacked rows, inside the same block chrome. */
+.dSection .prefRows { padding: 2px 16px 6px; }

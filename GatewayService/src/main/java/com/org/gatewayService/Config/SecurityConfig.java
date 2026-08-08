@@ -1,5 +1,6 @@
 package com.org.gatewayService.Config;
 
+import jakarta.servlet.DispatcherType;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -18,6 +19,17 @@ public class SecurityConfig {
 				// service-internal endpoints (e.g. /therapist/internal/...) must never
 				// be reachable through the public gateway; the gateway's own proxy
 				// calls them directly over the docker network, not through routes
+				/* When a handler throws, Boot FORWARDS to /error, and that forward
+				   re-enters this filter chain. On a permitAll endpoint the forwarded
+				   request carries no authentication, so it is denied and the caller
+				   gets an opaque 401 in place of the real status — a 400 for a bad
+				   payload and a 500 for a genuine fault come back identical and
+				   undebuggable from outside. Diagnosed the hard way on the Google
+				   Forms webhook (ClientService).
+
+				   This does not widen access: the original request was already
+				   authorized before the handler ran. */
+				.dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
 				.requestMatchers("/*/internal/**").denyAll()
 				.requestMatchers("/auth/**").permitAll()
 				.requestMatchers("/user/create-user").permitAll()

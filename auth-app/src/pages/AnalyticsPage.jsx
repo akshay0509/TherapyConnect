@@ -89,6 +89,8 @@ const PRESET_RANGES = [
   { label: "Last 7 days", from: () => toISODate(new Date(Date.now() - 6 * 86400000)), to: today },
   { label: "Last 30 days", from: () => toISODate(new Date(Date.now() - 29 * 86400000)), to: today },
   { label: "Last 90 days", from: () => toISODate(new Date(Date.now() - 89 * 86400000)), to: today },
+  /* Same floor as Earnings, so "All time" means the same thing on both pages. */
+  { label: "All time", from: () => "2000-01-01", to: today },
 ];
 
 export default function AnalyticsPage() {

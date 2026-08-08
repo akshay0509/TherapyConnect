@@ -24,6 +24,8 @@ function today() {
   return toISODate(new Date());
 }
 
+const ALL_TIME_START = "2000-01-01";
+
 function daysAgo(n) {
   const d = new Date();
   d.setDate(d.getDate() - n);
@@ -59,6 +61,11 @@ const RANGE_PRESETS = [
     label: "This year",
     range: () => [toISODate(new Date(new Date().getFullYear(), 0, 1)), today()],
   },
+  /* A fixed floor rather than a real earliest-session lookup: the query filters
+     on startTime, and no appointment predates the platform, so anything
+     comfortably early is equivalent to "everything" without a round trip to
+     find out when the practice started. */
+  { id: "everything", label: "All time", range: () => [ALL_TIME_START, today()] },
 ];
 
 function formatRangeLabel(from, to) {
@@ -143,19 +150,25 @@ export default function EarningsPage() {
     loadSessions();
   }, []);
 
-  /* Takes the range explicitly. A preset calls this in the same tick as its
-     setFromDate/setToDate, and reading fromDate here would fetch the range the
-     user just navigated away from — the classic stale-closure fetch. The button
-     passes nothing and gets current state, which is what it wants. */
-  const loadSessions = async (rangeFrom = fromDate, rangeTo = toDate) => {
+  /* Every filter is passed explicitly rather than read from state.
+     A control calls this in the same tick as its own setState, and state is not
+     updated yet in that tick — reading filterServiceId here would fetch using
+     the value the user just changed away from. The button passes nothing and
+     gets current state, which is what it wants. */
+  const loadSessions = async (overrides = {}) => {
+    const rangeFrom = overrides.from ?? fromDate;
+    const rangeTo = overrides.to ?? toDate;
+    const svc = overrides.serviceId !== undefined ? overrides.serviceId : filterServiceId;
+    const mode = overrides.modeId !== undefined ? overrides.modeId : filterModeId;
+
     if (!rangeFrom || !rangeTo) { setSessionsError("Please select both dates."); return; }
     if (rangeFrom > rangeTo) { setSessionsError("From date must be before to date."); return; }
     setSessionsLoading(true); setSessionsError(null); setSessionsLoaded(false);
     try {
       const sess = await getEarningsSessions(
         rangeFrom, rangeTo,
-        filterServiceId || null,
-        filterModeId || null
+        svc || null,
+        mode || null
       );
       setSessions(sess);
       setSessionsLoaded(true);
@@ -185,7 +198,7 @@ export default function EarningsPage() {
     setToDate(to);
     setSessionsLoaded(false);
     setSessionsError(null);
-    loadSessions(from, to);
+    loadSessions({ from, to });
   };
 
   const activePreset = RANGE_PRESETS.find(p => {
@@ -221,8 +234,16 @@ export default function EarningsPage() {
   const proBonoVisible = visibleSessions.length - paidVisible.length;
   const visibleTotal = visibleSessions.reduce((acc, s) => acc + Number(s.sessionFee ?? 0), 0);
   /* Divided by PAID sessions, matching the summary card: a pro-bono session in
-     the denominator would drag the average below anything actually charged. */
-  const avgPerPaid = paidVisible.length > 0 ? visibleTotal / paidVisible.length : 0;
+     the denominator would drag the average below anything actually charged.
+     null, not 0 — "nothing to average" and "averaged out at zero" are different
+     facts and the KPI renders them differently.
+
+     This drives the KPI card too. It was previously pinned to the calendar month
+     while everything below it answered the filter, so "This year" showed 3 paid
+     sessions worth Rs 4,500 beside an average of Rs 0.00 — correct for August,
+     and useless. An average that cannot move while its inputs do reads as
+     broken, and effectively was. */
+  const avgPerPaid = paidVisible.length > 0 ? visibleTotal / paidVisible.length : null;
 
   const handleSort = (field) => {
     if (sortField === field) {
@@ -257,18 +278,19 @@ export default function EarningsPage() {
   const allModes = Object.values(modeMap);
 
 
-  // Average earning per paid session this month (derived from the summary)
-  const avgPerSession = summary && summary.monthPaidCount > 0
-    ? Number(summary.monthEarnings) / summary.monthPaidCount
-    : 0;
+
 
   // Daily totals for the chart. DSF sessions carry earningAmount 0, so revenue
   // alone renders pro-bono work as nothing at all — it gets its own series
   // (a count, not money) so delivered work stays visible beside income.
   const dailyTotals = (() => {
-    if (!sessions.length) return [];
+    /* visibleSessions, not sessions. Selecting "Pro bono" left the chart drawing
+       a full earnings bar beside a table of zero-fee rows — the picture and the
+       numbers under it describing different data. Anything derived from the
+       result set has to come from the same rows the table shows. */
+    if (!visibleSessions.length) return [];
     const byDay = {};
-    sessions.forEach((s) => {
+    visibleSessions.forEach((s) => {
       if (!s.startTime) return;
       const key = String(s.startTime).slice(0, 10); // YYYY-MM-DD
       const row = byDay[key] || (byDay[key] = { total: 0, dsfSessions: 0 });
@@ -288,7 +310,7 @@ export default function EarningsPage() {
   const rangeTotal = dailyTotals.reduce((sum, d) => sum + d.total, 0);
   const rangeDsfSessions = dailyTotals.reduce((sum, d) => sum + d.dsfSessions, 0);
   // No-shows still bill (owner decision) — counted so the page can say so.
-  const rangeAbandoned = sessions.filter((s) => s.status === "ABANDONED").length;
+  const rangeAbandoned = visibleSessions.filter((s) => s.status === "ABANDONED").length;
 
   const summaryPeriods = summary ? [
     {
@@ -359,74 +381,14 @@ export default function EarningsPage() {
                   <span className="kpi-ic ic-a"><Icon name="trend" size={20} /></span>
                   <span className="kpi-trend flat">avg</span>
                 </div>
-                <div className="kpi-val">{formatCurrency(avgPerSession)}</div>
-                <div className="kpi-lbl">Per session (month)</div>
+                {/* Rs 0.00 claims you earned nothing per session; a dash says
+                    there is nothing to average. Different facts. */}
+                <div className="kpi-val">{avgPerPaid === null ? "—" : formatCurrency(avgPerPaid)}</div>
+                <div className="kpi-lbl">Per paid session · selected range</div>
               </div>
             </div>
           )}
         </section>
-
-        {/* ── Revenue trend ── */}
-        {sessionsLoaded && dailyTotals.length > 0 && (
-          <div className="card" style={{ padding: "20px 24px 24px", marginBottom: 22 }}>
-            <div className="panel-h" style={{ padding: "0 0 10px" }}>
-              <div>
-                <h2>Revenue trend</h2>
-                <p>Daily collections · {formatRangeLabel(fromDate, toDate)}</p>
-              </div>
-              <div className={styles.trendChips}>
-                {rangeAbandoned > 0 && (
-                  <span className="chip chip-warn" title="No-shows bill the full session fee">
-                    {rangeAbandoned} no-show{rangeAbandoned === 1 ? "" : "s"} billed
-                  </span>
-                )}
-                {rangeDsfSessions > 0 && (
-                  <span className="chip chip-info" title="Pro bono — delivered work, no income">
-                    {rangeDsfSessions} DSF session{rangeDsfSessions === 1 ? "" : "s"}
-                  </span>
-                )}
-                <span className="chip chip-ok">{formatCurrency(rangeTotal)} total</span>
-              </div>
-            </div>
-            <div style={{ width: "100%", height: 220 }}>
-              <ResponsiveContainer>
-                <BarChart data={dailyTotals} margin={{ top: 4, right: 8, left: 4, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} vertical={false} />
-                  <XAxis dataKey="label" tick={AXIS_TICK} tickLine={false} axisLine={false} />
-                  <YAxis
-                    yAxisId="money"
-                    tick={AXIS_TICK} tickLine={false} axisLine={false} width={62}
-                    tickFormatter={(v) => `₹${Number(v).toLocaleString("en-IN")}`}
-                  />
-                  {/* DSF is a session count, not money — it needs its own scale,
-                      otherwise a handful of pro-bono sessions vanish against
-                      four-figure revenue bars. */}
-                  {rangeDsfSessions > 0 && (
-                    <YAxis
-                      yAxisId="dsf" orientation="right" allowDecimals={false}
-                      tick={AXIS_TICK} tickLine={false} axisLine={false} width={34}
-                    />
-                  )}
-                  <Tooltip
-                    {...TOOLTIP}
-                    cursor={BAR_CURSOR}
-                    formatter={(v, name) =>
-                      name === "DSF sessions" ? [v, name] : [formatCurrency(v), name]
-                    }
-                  />
-                  {rangeDsfSessions > 0 && <Legend wrapperStyle={{ fontSize: "0.75rem" }} />}
-                  <Bar yAxisId="money" dataKey="total" name="Earnings" fill="#22d3ee" radius={[6, 6, 0, 0]} maxBarSize={54} />
-                  {rangeDsfSessions > 0 && (
-                    /* Green from the declared chart palette — DSF is delivered
-                       work, not a warning. Avatar/identity hues are not valid
-                       data-series colours (see the chart audit). */
-                    <Bar yAxisId="dsf" dataKey="dsfSessions" name="DSF sessions" fill="#34d399" radius={[6, 6, 0, 0]} maxBarSize={54} />
-                  )}
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        )}
 
         {/* ── Session detail section ── */}
         <section className={styles.sessionSection}>
@@ -477,7 +439,13 @@ export default function EarningsPage() {
                 <select
                   className={styles.filterSelect}
                   value={filterServiceId}
-                  onChange={e => { setFilterServiceId(e.target.value); setSessionsLoaded(false); }}
+                  /* Picking from a list applies immediately, like the presets.
+                     Previously this only armed the Load Sessions button while the
+                     Sessions dropdown beside it applied instantly — three
+                     adjacent controls, two behaviours, no way to tell which was
+                     which. Typed dates still need the button, because a
+                     half-entered date must not fire a request. */
+                  onChange={e => { setFilterServiceId(e.target.value); loadSessions({ serviceId: e.target.value }); }}
                 >
                   <option value="">All services</option>
                   {services.map(svc => (
@@ -493,7 +461,7 @@ export default function EarningsPage() {
                 <select
                   className={styles.filterSelect}
                   value={filterModeId}
-                  onChange={e => { setFilterModeId(e.target.value); setSessionsLoaded(false); }}
+                  onChange={e => { setFilterModeId(e.target.value); loadSessions({ modeId: e.target.value }); }}
                 >
                   <option value="">All modes</option>
                   {allModes.map(mode => (
@@ -517,8 +485,9 @@ export default function EarningsPage() {
                 </select>
               </div>
 
-              <button className="btn btn-primary" onClick={() => loadSessions()} disabled={sessionsLoading}>
-                {sessionsLoading ? <span className={styles.btnSpinner} /> : "Load Sessions"}
+              <button className="btn btn-primary" onClick={() => loadSessions()} disabled={sessionsLoading}
+                title="Apply the dates typed above">
+                {sessionsLoading ? <span className={styles.btnSpinner} /> : "Apply dates"}
               </button>
             </div>
 
@@ -528,6 +497,71 @@ export default function EarningsPage() {
               </div>
             )}
           </div>
+
+        {/* Lives inside Session Detail because it is drawn from exactly those rows.
+              Sitting above the KPI cards, it appeared out of nowhere on the first
+              load and shoved the summary down the page, while looking like part
+              of the summary rather than a view of the filtered result. */}
+          {sessionsLoaded && dailyTotals.length > 0 && (
+            <div className="card" style={{ padding: "20px 24px 24px", marginTop: 16 }}>
+              <div className="panel-h" style={{ padding: "0 0 10px" }}>
+                <div>
+                  <h2>Revenue trend</h2>
+                  <p>Daily collections · {formatRangeLabel(fromDate, toDate)}</p>
+                </div>
+                <div className={styles.trendChips}>
+                  {rangeAbandoned > 0 && (
+                    <span className="chip chip-warn" title="No-shows bill the full session fee">
+                      {rangeAbandoned} no-show{rangeAbandoned === 1 ? "" : "s"} billed
+                    </span>
+                  )}
+                  {rangeDsfSessions > 0 && (
+                    <span className="chip chip-info" title="Pro bono — delivered work, no income">
+                      {rangeDsfSessions} DSF session{rangeDsfSessions === 1 ? "" : "s"}
+                    </span>
+                  )}
+                  <span className="chip chip-ok">{formatCurrency(rangeTotal)} total</span>
+                </div>
+              </div>
+              <div style={{ width: "100%", height: 220 }}>
+                <ResponsiveContainer>
+                  <BarChart data={dailyTotals} margin={{ top: 4, right: 8, left: 4, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} vertical={false} />
+                    <XAxis dataKey="label" tick={AXIS_TICK} tickLine={false} axisLine={false} />
+                    <YAxis
+                      yAxisId="money"
+                      tick={AXIS_TICK} tickLine={false} axisLine={false} width={62}
+                      tickFormatter={(v) => `₹${Number(v).toLocaleString("en-IN")}`}
+                    />
+                    {/* DSF is a session count, not money — it needs its own scale,
+                        otherwise a handful of pro-bono sessions vanish against
+                        four-figure revenue bars. */}
+                    {rangeDsfSessions > 0 && (
+                      <YAxis
+                        yAxisId="dsf" orientation="right" allowDecimals={false}
+                        tick={AXIS_TICK} tickLine={false} axisLine={false} width={34}
+                      />
+                    )}
+                    <Tooltip
+                      {...TOOLTIP}
+                      cursor={BAR_CURSOR}
+                      formatter={(v, name) =>
+                        name === "DSF sessions" ? [v, name] : [formatCurrency(v), name]
+                      }
+                    />
+                    {rangeDsfSessions > 0 && <Legend wrapperStyle={{ fontSize: "0.75rem" }} />}
+                    <Bar yAxisId="money" dataKey="total" name="Earnings" fill="#22d3ee" radius={[6, 6, 0, 0]} maxBarSize={54} />
+                    {rangeDsfSessions > 0 && (
+                      /* Green from the declared chart palette — DSF is delivered
+                         work, not a warning. Avatar/identity hues are not valid
+                         data-series colours (see the chart audit). */
+                      <Bar yAxisId="dsf" dataKey="dsfSessions" name="DSF sessions" fill="#34d399" radius={[6, 6, 0, 0]} maxBarSize={54} />
+                    )}
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
 
           {sessionsLoaded && (
             <div className={styles.tableSection}>
@@ -569,9 +603,12 @@ export default function EarningsPage() {
                 </div>
               </div>
 
-              {sessions.length === 0 ? (
+              {visibleSessions.length === 0 ? (
+                /* Filtered to nothing still rendered a full table head with no
+                   rows under it. The empty state has to answer the filter, not
+                   the fetch. */
                 <div className={styles.emptyState}>
-                  <p className={styles.emptyText}>No completed sessions match the selected filters.</p>
+                  <p className={styles.emptyText}>No sessions match the selected filters.</p>
                 </div>
               ) : (
                 <div className="table-wrap">
@@ -635,6 +672,10 @@ export default function EarningsPage() {
                       })}
                     </tbody>
                     <tfoot>
+                      {/* A Total row over an empty table reported a figure with no
+                          rows behind it, which read as a bug even once the sums
+                          were right. */}
+                      {visibleSessions.length > 0 && (
                       <tr className={styles.tfootRow}>
                         <td className={styles.td} colSpan={4}><strong>Total</strong></td>
                         <td className={styles.td}>
@@ -645,10 +686,11 @@ export default function EarningsPage() {
                         <td className={styles.td} />
                         <td className={styles.td}>
                           <span className={`${styles.earningCell} ${styles.earningCellPositive}`}>
-                            <strong>{formatCurrency(sessions.reduce((acc, s) => acc + Number(s.earningAmount ?? 0), 0))}</strong>
+                            <strong>{formatCurrency(visibleSessions.reduce((acc, s) => acc + Number(s.earningAmount ?? 0), 0))}</strong>
                           </span>
                         </td>
                       </tr>
+                      )}
                     </tfoot>
                   </table>
                 </div>
@@ -658,7 +700,7 @@ export default function EarningsPage() {
 
           {!sessionsLoaded && !sessionsLoading && (
             <div className={styles.emptyState}>
-              <p className={styles.emptyText}>Select a date range and click <strong>Load Sessions</strong> to view session detail.</p>
+              <p className={styles.emptyText}>Pick a range above to view session detail.</p>
             </div>
           )}
         </section>
