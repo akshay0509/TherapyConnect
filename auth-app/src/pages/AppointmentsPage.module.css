@@ -342,3 +342,29 @@ to { opacity:1; transform:translateY(0); }
    it and scrolls its 06:00-22:00 canvas inside. Overrides theme.css's
    align-items:start, which would otherwise let the two cards differ in height. */
 .scheduleGrid { align-items: start; }
+
+/* Phone-only presentation. Desktop timeline and panel geometry stay unchanged. */
+@media (max-width: 640px) {
+  .responsivePage { padding: 16px; width: 100%; }
+  .desktopOnly { display: none !important; }
+  .scheduleGrid { display: block; }
+  .panel { display: none; }
+  .panelOpen { display: flex; position: fixed; inset: 0; z-index: 100; width: 100%; height: 100dvh; max-height: 100dvh; border-radius: 0; overflow-y: auto; overscroll-behavior: contain; background: var(--bg-page); padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom); }
+  .panelBody { min-width: 0; }
+  .panelHeader { padding: 16px; align-items: flex-start; }
+  .panelHeader > div { min-width: 0; overflow-wrap: anywhere; }
+  .panelForm { padding: 16px; }
+  .panelOpen input:not([type="checkbox"]), .panelOpen select, .panelOpen textarea { width: 100%; min-width: 0; max-width: 100%; font-size: 16px; min-height: 44px; }
+  .panelOpen select, .panelOpen input[type="date"] { padding: 10px; background: var(--surface); color: var(--text-1); border: 1px solid var(--line); border-radius: 8px; }
+  .panelOpen button { min-height: 44px; }
+  .panelOpen .customFeeLabel { min-height: 44px; }
+  .closeBtn { min-width: 44px; flex-shrink: 0; }
+  .formActions { flex-wrap: wrap; }
+  .formActions > button { flex: 1; min-width: 100px; white-space: normal; }
+  .summaryRow { flex-wrap: wrap; gap: 8px; }
+  .summaryValue { min-width: 0; overflow-wrap: anywhere; }
+  .statusOptions { flex-wrap: wrap; }
+  .reschedSlotList { max-height: none; }
+  .reschedSlotBtn { white-space: normal; }
+  .panelOpen :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+}

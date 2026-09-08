@@ -1,0 +1,23 @@
+.agenda { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.heading h1 { margin: 3px 0 0; font-size: 1.7rem; }
+.eyebrow { color: var(--text-3); font-size: .8rem; }
+.agenda h2 { font-size: 1.05rem; margin: 24px 0 12px; }
+.agenda button { min-height: 44px; cursor: pointer; }
+.tabs { display: flex; gap: 8px; }
+.tabs button, .dateNav button, .slots button, .today { border: 1px solid var(--line); background: var(--surface); color: var(--text-1); border-radius: 10px; padding: 10px; font: inherit; }
+.tabs button { flex: 1; min-width: 0; font-size: .9rem; }
+.tabs button[aria-pressed="true"] { border-color: var(--primary); background: var(--wash-2); font-weight: 700; }
+.tabs button:disabled { opacity: .45; cursor: default; }
+.dateNav { display: grid; grid-template-columns: 44px minmax(0,1fr) 44px; align-items: end; gap: 8px; }
+.dateNav label { min-width: 0; color: var(--text-3); font-size: .8rem; }
+.dateNav input { display: block; width: 100%; min-width: 0; min-height: 44px; font: inherit; font-size: 16px; border: 1px solid var(--line); border-radius: 10px; padding: 8px; background: var(--surface); color: var(--text-1); }
+.today { align-self: flex-start; }
+.range p, .empty { color: var(--text-3); font-size: .9rem; line-height: 1.5; }
+.list { display: grid; gap: 12px; }
+.appointment { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; width: 100%; text-align: left; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); padding: 16px; color: var(--text-1); font: inherit; overflow-wrap: anywhere; }
+.appointment strong { font-size: 1.05rem; }
+.date { font-size: .8rem; color: var(--text-3); }
+.status { text-transform: capitalize; font-size: .8rem; background: var(--wash-2); border-radius: 6px; padding: 4px 8px; }
+.link { color: var(--text-2); font-size: .85rem; font-weight: 600; }
+.slots { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 8px; }
+.agenda button:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }

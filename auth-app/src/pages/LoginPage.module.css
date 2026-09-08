@@ -413,3 +413,12 @@
 /* ─── Forgot password link ─── */
 .forgotLink { background: none; border: none; color: var(--text-3); font-family: var(--font-sans); font-size: 0.82rem; cursor: pointer; text-align: center; width: 100%; margin-top: 4px; transition: color 0.15s; display: block; }
 .forgotLink:hover { color: var(--primary); }
+
+@media (max-width: 640px) {
+  .page { min-height: 100dvh; overflow: visible; }
+  .bg { overflow: hidden; }
+  .page > .card { padding: 24px 16px; margin: auto; min-width: 0; }
+  .formSide { padding: 24px 16px; min-width: 0; }
+  .page input { font-size: 16px; min-height: 44px; }
+  .page button { min-height: 44px; }
+}

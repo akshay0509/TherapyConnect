@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { DeliveryModesProvider } from "./context/DeliveryModesContext";
@@ -24,7 +24,8 @@ import AdminLoginPage from "./pages/AdminLoginPage";
 import AdminPage from "./pages/AdminPage";
 
 function RoleRedirect() {
-  const { token, role, therapistId } = useAuth();
+  const { token, role, therapistId, loading } = useAuth();
+  if (loading) return <p role="status">Loading session…</p>;
   if (!token) return <Navigate to="/login" replace />;
   if (role === "THERAPIST") {
     if (!therapistId) return <Navigate to="/therapist/setup" replace />;
@@ -34,10 +35,17 @@ function RoleRedirect() {
 }
 
 function ProtectedRoute({ children, allowedRole }) {
-  const { token, role } = useAuth();
+  const { token, role, loading } = useAuth();
+  if (loading) return <p role="status">Loading session…</p>;
   if (!token) return <Navigate to="/login" replace />;
   if (allowedRole && role !== allowedRole) return <RoleRedirect />;
   return children;
+}
+
+function TherapistHomeRoute() {
+  // Decide only on route entry: rotating a device must not navigate away.
+  const [phoneEntry] = useState(() => window.matchMedia("(max-width: 640px)").matches);
+  return phoneEntry ? <Navigate to="/therapist/appointments" replace /> : <TherapistHomePage />;
 }
 
 // Account Settings is reachable by BOTH therapists and clients. Therapists get
@@ -99,7 +107,7 @@ export default function App() {
 
             {/* ── THERAPIST workspace — wrapped in the persistent sidebar shell ── */}
             <Route element={<ProtectedRoute allowedRole="THERAPIST"><TherapistShell /></ProtectedRoute>}>
-              <Route path="/therapist-home" element={<TherapistHomePage />} />
+              <Route path="/therapist-home" element={<TherapistHomeRoute />} />
               <Route path="/therapist/profile" element={<TherapistProfilePage />} />
               <Route path="/therapist/services" element={<MyServicesPage />} />
               <Route path="/therapist/availability-rules" element={<AvailabilityRulesPage />} />

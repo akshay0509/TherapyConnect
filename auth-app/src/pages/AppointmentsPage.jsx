@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo, useRef, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { getAvailability, createAppointment, generateSlots, updateAppointmentStatus, rescheduleAppointment, createAvailabilityOverride, deleteAvailabilityOverride, bulkAvailabilityOverrides, getPaymentInfo, ensurePaymentLink } from "../api/appointments";
 import { getTherapistClients, createSessionNotes, getClientById } from "../api/therapistClients";
 import api from "../api/client";
@@ -7,6 +7,10 @@ import { useModeMap, useAllModes } from "../context/DeliveryModesContext";
 import SessionTimer from "../components/SessionTimer";
 import Icon from "../components/icons";
 import styles from "./AppointmentsPage.module.css";
+import MobileAgenda, { dateValue, dayLabel } from "../components/MobileAgenda";
+import useMediaQuery from "../hooks/useMediaQuery";
+import useMobileDialog from "../hooks/useMobileDialog";
+import { fittingRescheduleStarts } from "../utils/rescheduleAvailability.mjs";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const DAY_SHORT = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
@@ -96,6 +100,7 @@ function snapToSlot(minutes) { return Math.round(minutes / 30) * 30; }
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 function ClientDropdown({ clients, value, onChange }) {
+  const phone = useMediaQuery("(max-width: 640px)");
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const ref = useRef(null);
@@ -105,6 +110,7 @@ function ClientDropdown({ clients, value, onChange }) {
     const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
     document.addEventListener("mousedown", h); return () => document.removeEventListener("mousedown", h);
   }, []);
+  if (phone) return <select aria-label="Client" value={value} onChange={e=>{const c=clients.find(x=>x.clientId===e.target.value);onChange(e.target.value,c?.clientName || "");}}><option value="">Select a client</option>{clients.map(c=><option key={c.clientId} value={c.clientId}>{c.clientName}</option>)}</select>;
   return (
     <div className={styles.customDropdown} ref={ref}>
       <button type="button" className={`${styles.dropdownTrigger} ${open ? styles.dropdownTriggerOpen : ""}`} onClick={() => setOpen(o => !o)}>
@@ -140,6 +146,7 @@ function serviceLabel(svc) {
 }
 
 function ServiceDropdown({ services, value, onChange }) {
+  const phone = useMediaQuery("(max-width: 640px)");
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   const selected = services.find(s => s.serviceId === value);
@@ -147,6 +154,7 @@ function ServiceDropdown({ services, value, onChange }) {
     const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
     document.addEventListener("mousedown", h); return () => document.removeEventListener("mousedown", h);
   }, []);
+  if (phone) return <select aria-label="Service" value={value} onChange={e=>onChange(e.target.value)}><option value="">Select a service</option>{services.map(s=><option key={s.serviceId} value={s.serviceId}>{serviceLabel(s)} · {s.duration} min</option>)}</select>;
   return (
     <div className={styles.customDropdown} ref={ref}>
       <button type="button" className={`${styles.dropdownTrigger} ${open ? styles.dropdownTriggerOpen : ""}`} onClick={() => setOpen(o => !o)}>
@@ -175,6 +183,7 @@ function ServiceDropdown({ services, value, onChange }) {
 }
 
 function ModeDropdown({ modes, value, onChange }) {
+  const phone = useMediaQuery("(max-width: 640px)");
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   const selected = modes.find(m => m.modeId === value);
@@ -183,6 +192,7 @@ function ModeDropdown({ modes, value, onChange }) {
     document.addEventListener("mousedown", h); return () => document.removeEventListener("mousedown", h);
   }, []);
   const modeIcon = { ONLINE: "video", OFFLINE_AT_HALUSURU: "pin", OFFLINE_AT_SESHADRIPURAM: "pin" };
+  if (phone) return <select aria-label="Delivery mode" value={value} onChange={e=>onChange(e.target.value)}><option value="">Select delivery mode</option>{modes.map(m=><option key={m.modeId} value={m.modeId}>{m.displayName}{m.price != null ? ` · ₹${m.price}` : ""}</option>)}</select>;
   return (
     <div className={styles.customDropdown} ref={ref}>
       <button type="button" className={`${styles.dropdownTrigger} ${open ? styles.dropdownTriggerOpen : ""}`} onClick={() => setOpen(o => !o)}>
@@ -213,7 +223,13 @@ function ModeDropdown({ modes, value, onChange }) {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function AppointmentsPage() {
+  const isPhone = useMediaQuery("(max-width: 640px)");
+  const [mobileBooking, setMobileBooking] = useState(false);
+  const [agendaRevision, setAgendaRevision] = useState(0);
+  const [mobileReschedule, setMobileReschedule] = useState({ slots: [], appointments: [], loading: false, error: null });
+  const [rescheduleRetry, setRescheduleRetry] = useState(0);
   const navigate = useNavigate();
+  const location = useLocation();
   const now = new Date();
   const canvasRef = useRef(null);
   const timelineRef = useRef(null);
@@ -262,6 +278,8 @@ export default function AppointmentsPage() {
 
   const [panel, setPanel] = useState(null);
   const [panelSlot, setPanelSlot] = useState(null);
+  const closePanel = useCallback(() => setPanel(null), []);
+  useMobileDialog(panelRef, isPhone && !!panel, closePanel);
 
   // Booking form
   const [booking, setBooking] = useState({ clientId: "", clientName: "", serviceId: "", modeId: "", useCustomPrice: false, customPrice: "" });
@@ -298,6 +316,16 @@ export default function AppointmentsPage() {
   const [reschedLoading, setReschedLoading] = useState(false);
   const [reschedError, setReschedError] = useState(null);
 
+  useEffect(() => {
+    if (!isPhone || panel !== "reschedule") return;
+    let current = true;
+    setMobileReschedule({ slots: [], appointments: [], loading: true, error: null });
+    getAvailability(toISODate(reschedWeekStart), toISODate(addDays(reschedWeekStart, 6)))
+      .then(data => { if (current) setMobileReschedule({ slots: data.slots || [], appointments: data.appointments || [], loading: false, error: null }); })
+      .catch(e => { if (current) setMobileReschedule({ slots: [], appointments: [], loading: false, error: e.message }); });
+    return () => { current = false; };
+  }, [isPhone, panel, reschedWeekStart, rescheduleRetry]);
+
   // Override (drag result)
   const [overrideRange, setOverrideRange] = useState(null);
   const [overrideNote, setOverrideNote] = useState("");
@@ -325,19 +353,22 @@ export default function AppointmentsPage() {
 
   // Search / filter
 
+  const weekRequest = useRef(0);
   const fetchWeekData = useCallback((wStart) => {
+    const request = ++weekRequest.current;
     const fromDate = toISODate(wStart);
     const toDate = toISODate(addDays(wStart, 6));
     setLoadingSlots(true);
     setSlotsError(null);
     getAvailability(fromDate, toDate)
       .then(data => {
+        if (request !== weekRequest.current) return;
         setSlots(data.slots || []);
         setAppointments(data.appointments || []);
         setOverrides(data.overrides || []);
       })
-      .catch(e => setSlotsError(e.message))
-      .finally(() => setLoadingSlots(false));
+      .catch(e => { if (request === weekRequest.current) setSlotsError(e.message); })
+      .finally(() => { if (request === weekRequest.current) setLoadingSlots(false); });
   }, []);
 
   useEffect(() => {
@@ -392,6 +423,12 @@ export default function AppointmentsPage() {
   const getSlotsForDate = (date) => slotsByDay[toDateKey(date)] || [];
   const getAppointmentsForDate = (date) => appointmentsByDay[toDateKey(date)] || [];
   const getOverridesForDate = (date) => overridesByDay[toDateKey(date)] || [];
+  const getRescheduleSlots = date => isPhone ? mobileReschedule.slots.filter(s => toDateKey(s.startTime) === toDateKey(date)) : getSlotsForDate(date);
+  const getRescheduleAppointments = date => isPhone ? mobileReschedule.appointments.filter(a => toDateKey(a.startTime) === toDateKey(date)) : getAppointmentsForDate(date);
+  const selectMobileDate = date => {
+    setSelectedDate(date);
+    if (toISODate(getWeekStart(date)) !== toISODate(weekStart)) setWeekStart(getWeekStart(date));
+  };
 
   const daySlots = useMemo(() => getSlotsForDate(selectedDate), [selectedDate, slotsByDay]);
   const dayAppointments = useMemo(() => getAppointmentsForDate(selectedDate), [selectedDate, appointmentsByDay]);
@@ -635,11 +672,13 @@ export default function AppointmentsPage() {
       endTime: appt.endTime,
       appointmentStatus: appt.status,
       modeId: appt.modeId,
+      ...(isPhone ? { serviceId: appt.serviceId, reason: appt.reason } : {}),
       slotId: slot?.slotId,
     };
-  }, [slots]);
+  }, [slots, isPhone]);
 
-  const openBook = (slot) => {
+  const openBook = (slot, mobile = false) => {
+    setMobileBooking(mobile);
     setPanelSlot(slot);
     // Blocks are service-agnostic now, so the service is picked here and the
     // mode list follows from it. With a single active service there's nothing
@@ -652,6 +691,24 @@ export default function AppointmentsPage() {
     setBookingPayment(null); setLinkCopied(false);
     setPanel("book");
   };
+
+  const openMobileBook = slot => {
+    openBook(slot || {}, true);
+    if (!slot && selectedDate < new Date(new Date().setHours(0,0,0,0))) selectMobileDate(new Date());
+  };
+
+  useEffect(() => {
+    const handle = () => openMobileBook();
+    window.addEventListener("therapy:book-appointment", handle);
+    return () => window.removeEventListener("therapy:book-appointment", handle);
+  });
+
+  useEffect(() => {
+    if (isPhone && new URLSearchParams(location.search).get("book") === "1") {
+      openMobileBook();
+      navigate(location.pathname, { replace: true });
+    }
+  }, [location.search, isPhone]);
 
   const openUpdate = (slot) => {
     setPanelSlot(slot);
@@ -709,6 +766,7 @@ export default function AppointmentsPage() {
 
   const handleBook = async (e) => {
     e.preventDefault();
+    if (mobileBooking && (!panelSlot?.slotId || loadingSlots || slotsError || !availableSlots.some(s => s.slotId === panelSlot.slotId))) { setBookingError("Please select an available time."); return; }
     if (!booking.clientId) { setBookingError("Please select a client."); return; }
     if (!booking.modeId) { setBookingError("Please select a delivery mode."); return; }
     if (booking.useCustomPrice && (!booking.customPrice || parseFloat(booking.customPrice) <= 0)) {
@@ -729,7 +787,14 @@ export default function AppointmentsPage() {
       // actually ends — patching local state from the clicked block drew a
       // 30-minute appointment and left the following blocks looking free.
       // The server is authoritative: refetch instead of guessing.
-      await reloadAll();
+      let refreshFailed = false;
+      try { await reloadAll(); }
+      catch (refreshError) {
+        if (!mobileBooking) throw refreshError;
+        refreshFailed = true;
+        setSlotsError(refreshError.message);
+        setBookingError("The booking was saved, but the schedule could not refresh. Close this panel and retry loading the schedule.");
+      }
       setBookingSuccess(true);
       if (result?.paymentStatus) {
         // keep the panel open so the therapist can copy/share the payment link
@@ -739,10 +804,13 @@ export default function AppointmentsPage() {
           url: result.paymentLinkUrl,
           clientNotified: result.clientNotified,
         });
-      } else {
+      } else if (!refreshFailed) {
         setTimeout(() => setPanel(null), 1200);
       }
-    } catch (err) { setBookingError(friendlyError(err.message)); }
+    } catch (err) {
+      setBookingError(friendlyError(err.message));
+      if (mobileBooking) { setPanelSlot({}); fetchWeekData(weekStart); }
+    }
     finally { setBookingLoading(false); }
   };
 
@@ -782,24 +850,28 @@ export default function AppointmentsPage() {
         }
       }
       setPanel(null);
+      setAgendaRevision(n => n + 1);
     } catch (err) { setUpdateError(friendlyError(err.message)); }
     finally { setUpdateLoading(false); }
   };
 
   const reschedDaySlots = useMemo(() => {
     if (!reschedSelectedDate) return [];
-    const allDay = getSlotsForDate(reschedSelectedDate);
-    const apptOnDay = getAppointmentsForDate(reschedSelectedDate)
+    const allDay = getRescheduleSlots(reschedSelectedDate);
+    const apptOnDay = getRescheduleAppointments(reschedSelectedDate)
       .filter(a => a.appointmentId !== panelSlot?.appointmentId &&
         a.status !== "CANCELLED" && a.status !== "ABANDONED"
       );
-    return allDay.filter(s => {
+    const candidates = allDay.filter(s => {
       if (s.slotStatus !== "AVAILABLE") return false;
       if (new Date(s.startTime) <= now) return false;
       const ss = new Date(s.startTime).getTime(), se = new Date(s.endTime).getTime();
       return !apptOnDay.some(a => ss < new Date(a.endTime).getTime() && se > new Date(a.startTime).getTime());
     }).sort((a,b) => new Date(a.startTime) - new Date(b.startTime));
-  }, [reschedSelectedDate, slotsByDay, appointmentsByDay, panelSlot]);
+    return isPhone
+      ? fittingRescheduleStarts(candidates, panelSlot?.startTime, panelSlot?.endTime)
+      : candidates;
+  }, [reschedSelectedDate, slotsByDay, appointmentsByDay, panelSlot, isPhone, mobileReschedule]);
 
   const modesForSlot = (slot) => slot?.serviceId
     ? allModes.filter(m => m.serviceId === slot.serviceId && m.isActive)
@@ -862,6 +934,7 @@ export default function AppointmentsPage() {
     setAppointments(data.appointments || []);
     setOverrides(data.overrides || []);
     refreshToday();
+    setAgendaRevision(n => n + 1);
   };
 
   const handleReschedule = async () => {
@@ -872,7 +945,10 @@ export default function AppointmentsPage() {
       await rescheduleAppointment({ appointmentId: panelSlot.appointmentId, therapistId: panelSlot.therapistId, newSlotId: reschedNewSlot.slotId, modeId: reschedModeId, reason: reschedReason || undefined });
       await reloadAll();
       setPanel(null);
-    } catch (err) { setReschedError(err.message); }
+    } catch (err) {
+      setReschedError(err.message);
+      if (isPhone) { setReschedNewSlot(null); setRescheduleRetry(n => n + 1); }
+    }
     finally { setReschedLoading(false); }
   };
 
@@ -933,8 +1009,13 @@ export default function AppointmentsPage() {
     ? now.getHours() * 60 + now.getMinutes() : null;
 
   return (
-    <div className="page-wrap">
-      <div className="page-head">
+    <div className={`page-wrap ${styles.responsivePage}`}>
+      {isPhone && <MobileAgenda selectedDate={selectedDate} onDate={selectMobileDate}
+        appointments={dayAppointments} slots={availableSlots} overrides={dayOverrides}
+        loading={loadingSlots} error={slotsError} onRetry={()=>fetchWeekData(weekStart)}
+        onBook={openMobileBook} onOpen={a=>openUpdate(toApptSlot(a))}
+        revision={agendaRevision} modeMap={modeMap} services={services} />}
+      <div className={`page-head ${styles.desktopOnly}`}>
         <div>
           <div className="eyebrow">Calendar</div>
           <h1>Schedule</h1>
@@ -953,11 +1034,11 @@ export default function AppointmentsPage() {
       <SessionTimer
         appointments={todayAppointments}
         onOpen={(appt) => openUpdate(toApptSlot(appt))}
-        sticky
+        sticky={!isPhone}
       />
 
       {/* Week navigation — prototype puts this on one row above the strip */}
-      <div className={styles.weekNavRow}>
+      <div className={`${styles.weekNavRow} ${styles.desktopOnly}`}>
         <div className={styles.legend}>
           <span className={styles.legendItem}><span className={styles.legendDot} style={{ background: "var(--primary)" }} />Booked</span>
           <span className={styles.legendItem}><span className={styles.legendDot} style={{ background: "var(--ok-mid)" }} />Available</span>
@@ -974,7 +1055,7 @@ export default function AppointmentsPage() {
       {slotsError && <div className={styles.errorBox}><span className={styles.errorIcon}>!</span>{slotsError}</div>}
 
       {/* Week strip */}
-      <div className="weekstrip">
+      <div className={`weekstrip ${styles.desktopOnly}`}>
         {weekDays.map((date, i) => {
           const isToday = date.toDateString() === new Date().toDateString();
           const isSel = date.toDateString() === selectedDate.toDateString();
@@ -997,7 +1078,7 @@ export default function AppointmentsPage() {
         })}
       </div>
 
-          <div className={styles.dayLabel}>
+          <div className={`${styles.dayLabel} ${styles.desktopOnly}`}>
             <h2 className={styles.dayLabelText}>
               {DAY_SHORT[selectedDate.getDay()]}, {selectedDate.getDate()} {MONTHS[selectedDate.getMonth()]} {selectedDate.getFullYear()}
             </h2>
@@ -1016,7 +1097,7 @@ export default function AppointmentsPage() {
 
       <div className={`grid-2 ${styles.scheduleGrid}`}>
         {/* ── Left: timeline canvas ── */}
-        <div className={styles.canvasArea}>
+        <div className={`${styles.canvasArea} ${styles.desktopOnly}`}>
 
 
 
@@ -1215,7 +1296,9 @@ export default function AppointmentsPage() {
         </div>
 
         {/* ── Right: action panel ── */}
-        <div className={`card ${styles.panel} ${panel ? styles.panelOpen : ""}`} ref={panelRef}>
+        <div className={`card ${styles.panel} ${panel ? styles.panelOpen : ""}`} ref={panelRef}
+          role={isPhone && panel ? "dialog" : undefined} aria-modal={isPhone && panel ? true : undefined}
+          aria-label={isPhone && panel ? "Appointment actions" : undefined} tabIndex={isPhone && panel ? -1 : undefined}>
           {!panel && (
             <div className={styles.panelEmpty}>
               <span className={styles.panelEmptyIcon}><Icon name="cursor" size={26} /></span>
@@ -1233,7 +1316,7 @@ export default function AppointmentsPage() {
                   {/* The clicked block is only where the session starts — showing its
                       30-minute span here contradicted the real time below it. */}
                   <p className={styles.panelSub}>
-                    {formatTime(panelSlot.startTime)} – {bookingFit ? bookingFit.endLabel : formatTime(panelSlot.endTime)}
+                    {panelSlot.startTime ? <>{mobileBooking && `${dayLabel(panelSlot.startTime)} · `}{formatTime(panelSlot.startTime)} – {bookingFit ? bookingFit.endLabel : formatTime(panelSlot.endTime)}</> : "Choose a client, service and time"}
                   </p>
                 </div>
                 <button className={styles.closeBtn} onClick={() => setPanel(null)} title="Close"><Icon name="x" size={16} /></button>
@@ -1308,6 +1391,21 @@ export default function AppointmentsPage() {
                   <div className={styles.field}><label className={styles.label}>Delivery Mode</label>
                     <ModeDropdown modes={bookingModes} value={booking.modeId} onChange={v => setBooking(p => ({...p, modeId:v, useCustomPrice: false, customPrice: ""}))} />
                   </div>
+                  {mobileBooking && <>
+                    <label className={styles.field}>Appointment date
+                      <input aria-label="Appointment date" type="date" min={dateValue(new Date())} value={dateValue(selectedDate)}
+                        onChange={e=>{if(e.target.value){selectMobileDate(new Date(`${e.target.value}T12:00:00`));setPanelSlot({});}}} />
+                    </label>
+                    <label className={styles.field}>Available time
+                      <select aria-label="Available time" value={panelSlot.slotId || ""} disabled={loadingSlots || !!slotsError}
+                        onChange={e=>setPanelSlot(availableSlots.find(s=>s.slotId===e.target.value) || {})}>
+                        <option value="">{loadingSlots ? "Loading times…" : "Select a time"}</option>
+                        {availableSlots.map(s=><option key={s.slotId} value={s.slotId}>{formatTime(s.startTime)}</option>)}
+                      </select>
+                    </label>
+                    {slotsError && <div role="alert">{slotsError} <button type="button" onClick={()=>fetchWeekData(weekStart)}>Retry</button></div>}
+                    {!loadingSlots && !slotsError && !availableSlots.length && <p>No bookable availability. Choose another date.</p>}
+                  </>}
                   {booking.modeId && (() => {
                     const selectedMode = bookingModes.find(m => m.modeId === booking.modeId);
                     if (!selectedMode || selectedMode.price == null) return null;
@@ -1365,7 +1463,7 @@ export default function AppointmentsPage() {
                         {bookingFit && <span className={styles.durationNote}> · {bookingFit.minutes} min</span>}
                       </span>
                     </div>
-                    <div className={styles.summaryRow}><span className={styles.summaryLabel}>Slot</span><span className={styles.summaryValue}>{panelSlot.slotId}</span></div>
+                    {!mobileBooking && <div className={styles.summaryRow}><span className={styles.summaryLabel}>Slot</span><span className={styles.summaryValue}>{panelSlot.slotId}</span></div>}
                   </div>
                   {bookingFit && !bookingFit.fits && (
                     <div className={styles.errorBox}>
@@ -1376,7 +1474,7 @@ export default function AppointmentsPage() {
                   {bookingError && <div className={styles.errorBox}><span className={styles.errorIcon}>!</span>{bookingError}</div>}
                   <div className={styles.formActions}>
                     <button type="button" className={styles.cancelBtn} onClick={() => setPanel(null)}>Cancel</button>
-                    <button type="submit" className={styles.submitBtn} disabled={bookingLoading || (bookingFit && !bookingFit.fits)}>{bookingLoading ? <span className={styles.btnSpinner}/> : "Confirm"}</button>
+                    <button type="submit" className={styles.submitBtn} disabled={bookingLoading || (bookingFit && !bookingFit.fits) || (mobileBooking && (!panelSlot.slotId || loadingSlots || !!slotsError))}>{bookingLoading ? <span className={styles.btnSpinner}/> : "Confirm"}</button>
                   </div>
                 </form>
               )}
@@ -1388,7 +1486,8 @@ export default function AppointmentsPage() {
             <div className={styles.panelBody}>
               <div className={styles.panelHeader}>
                 <div>
-                  <h2 className={styles.panelTitle}>Update Appointment</h2>
+                  <h2 className={styles.panelTitle}>{isPhone ? "Appointment details" : "Update Appointment"}</h2>
+                  {isPhone && <p>{dayLabel(panelSlot.startTime)} · {formatTime(panelSlot.startTime)}–{formatTime(panelSlot.endTime)}</p>}
                   <p className={styles.panelSub}>
                     <span className={styles.clientLink} onClick={() => navigate(`/therapist/clients/${panelSlot.clientId}`)}>{panelSlot.clientName}</span>
                     {" · "}{formatTime(panelSlot.startTime)} – {formatTime(panelSlot.endTime)}
@@ -1411,6 +1510,10 @@ export default function AppointmentsPage() {
                       <span className={styles.summaryValue}>{modeMap[panelSlot.modeId].displayName}</span>
                     </div>
                   )}
+                  {isPhone && services.some(s=>s.serviceId===panelSlot.serviceId) && <div className={styles.summaryRow}>
+                    <span className={styles.summaryLabel}>Service</span>
+                    <span className={styles.summaryValue}>{serviceLabel(services.find(s=>s.serviceId===panelSlot.serviceId))}</span>
+                  </div>}
                   {panelSlot.reason && (
                     <div className={styles.summaryRow}>
                       <span className={styles.summaryLabel}>Reason</span>
@@ -1450,6 +1553,7 @@ export default function AppointmentsPage() {
                   <div className={styles.statusGrid}>
                     {["CONFIRMED", "COMPLETED", "CANCELLED", "ABANDONED"].map(s => (
                       <button key={s} type="button"
+                        disabled={isPhone && (["COMPLETED", "CANCELLED", "ABANDONED"].includes(panelSlot.appointmentStatus) || (s === "CONFIRMED" && !["SCHEDULED", "RESCHEDULED"].includes(panelSlot.appointmentStatus)))}
                         className={`${styles.statusOption} ${updateStatus === s ? styles.statusOptionActive : ""} ${styles[`statusOption_${s}`] || ""}`}
                         onClick={() => setUpdateStatus(s)}>
                         <Icon name={STATUS_ICON[s]} size={15} /> {titleCase(s)}
@@ -1486,7 +1590,7 @@ export default function AppointmentsPage() {
                   <button className={styles.submitBtn} onClick={handleUpdateStatus}
                     disabled={updateLoading || !updateStatus ||
                       (updateStatus === panelSlot.appointmentStatus && !sessionNotes.trim())}>
-                    {updateLoading ? <span className={styles.btnSpinner}/> : "Save"}
+                    {updateLoading ? <span className={styles.btnSpinner}/> : isPhone && updateStatus === "CANCELLED" && updateStatus !== panelSlot.appointmentStatus ? "Confirm cancellation" : "Save"}
                   </button>
                 </div>
               </div>
@@ -1508,7 +1612,13 @@ export default function AppointmentsPage() {
               </div>
               <div className={styles.panelForm}>
                 <div className={styles.field}><label className={styles.label}>Select New Date</label>
-                  <div className={styles.reschedWeekCard}>
+                  {isPhone ? <>
+                    <input type="date" aria-label="Reschedule date" min={dateValue(new Date())}
+                      value={reschedSelectedDate ? dateValue(reschedSelectedDate) : ""}
+                      onChange={e=>{if(e.target.value){const d=new Date(`${e.target.value}T12:00:00`);setReschedSelectedDate(d);setReschedWeekStart(getWeekStart(d));setReschedNewSlot(null);}}}/>
+                    {mobileReschedule.loading && <p role="status">Loading available times…</p>}
+                    {mobileReschedule.error && <div role="alert">{mobileReschedule.error}<button onClick={()=>setRescheduleRetry(n=>n+1)}>Retry</button></div>}
+                  </> : <div className={styles.reschedWeekCard}>
                     <div className={styles.reschedWeekNav}>
                       <button className="iconbtn" onClick={() => { setReschedWeekStart(d => addDays(d,-7)); setReschedSelectedDate(null); setReschedNewSlot(null); }} title="Previous week"><Icon name="back" size={16} /></button>
                       <span className={styles.reschedWeekLabel}>{(() => { const e = addDays(reschedWeekStart,6); return reschedWeekStart.getMonth()===e.getMonth()?`${reschedWeekStart.getDate()}–${e.getDate()} ${MONTHS_SHORT[reschedWeekStart.getMonth()]}`: `${reschedWeekStart.getDate()} ${MONTHS_SHORT[reschedWeekStart.getMonth()]} – ${e.getDate()} ${MONTHS_SHORT[e.getMonth()]}`; })()}</span>
@@ -1528,9 +1638,9 @@ export default function AppointmentsPage() {
                         </div>);
                       })}
                     </div>
-                  </div>
+                  </div>}
                 </div>
-                {reschedSelectedDate && (
+                {reschedSelectedDate && !(isPhone && (mobileReschedule.loading || mobileReschedule.error)) && (
                   <div className={styles.field}><label className={styles.label}>Available Slots · {reschedSelectedDate.getDate()} {MONTHS_SHORT[reschedSelectedDate.getMonth()]}</label>
                     {reschedDaySlots.length===0 ? <p className={styles.reschedNoSlots}>No available slots.</p> : (
                       <div className={styles.reschedSlotList}>

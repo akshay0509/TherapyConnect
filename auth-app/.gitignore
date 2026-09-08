@@ -4,3 +4,4 @@ dist
 .env.local
 .env.production
 .env.example
+e2e/artifacts/

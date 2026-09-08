@@ -7,6 +7,8 @@ import { getClientIntakes } from "../api/clientIntakes";
 import { getDashboardStats } from "../api/appointments";
 import Icon from "./icons";
 import styles from "./TherapistShell.module.css";
+import useMediaQuery from "../hooks/useMediaQuery";
+import useMobileDialog from "../hooks/useMobileDialog";
 
 // Persistent sidebar + topbar layout for the therapist workspace.
 // Pure chrome: it renders navigation and an <Outlet/> for the active page.
@@ -57,8 +59,14 @@ function TherapistShellInner({ children }) {
   const navigate = useNavigate();
   const { logout } = useAuth();
   const [drawer, setDrawer] = useState(false);
+  const compact = useMediaQuery("(max-width: 900px)");
+  const sidebarRef = useRef(null);
+  const closeDrawer = useCallback(() => setDrawer(false), []);
+  useMobileDialog(sidebarRef, compact && drawer, closeDrawer);
   // Address the therapist by name, not by login username.
   const location = useLocation();
+  useEffect(() => { setDrawer(false); setBellOpen(false); }, [location.pathname, location.search]);
+  useEffect(() => { if (!compact) setDrawer(false); }, [compact]);
   const { displayName } = useTherapistProfile();
   const name = displayName;
 
@@ -153,13 +161,20 @@ function TherapistShellInner({ children }) {
   return (
     <div className={styles.shell}>
       <div className={styles.mobbar}>
-        <button className={styles.burger} onClick={() => setDrawer(d => !d)} aria-label="Menu"><Icon name="grid" size={20} /></button>
+        <button className={styles.burger} onClick={() => setDrawer(d => !d)} aria-label="Menu" aria-expanded={drawer} aria-controls="therapist-navigation"><Icon name="grid" size={20} /></button>
         <span className={styles.mobbrand}>TherapyConnect</span>
+        <button className={styles.mobileBook} onClick={()=>{
+          if (location.pathname === "/therapist/appointments") window.dispatchEvent(new Event("therapy:book-appointment"));
+          else navigate("/therapist/appointments?book=1");
+        }}>Book</button>
       </div>
 
       {drawer && <div className={styles.scrim} onClick={() => setDrawer(false)} />}
 
-      <aside className={`${styles.sidebar} ${drawer ? styles.sidebarOpen : ""}`}>
+      <aside id="therapist-navigation" ref={sidebarRef} className={`${styles.sidebar} ${drawer ? styles.sidebarOpen : ""}`}
+        inert={compact && !drawer ? "" : undefined} tabIndex={compact && drawer ? -1 : undefined}
+        role={compact && drawer ? "dialog" : undefined} aria-modal={compact && drawer ? true : undefined} aria-label="Workspace navigation">
+        {compact && drawer && <button className={styles.drawerClose} onClick={closeDrawer}>Close menu</button>}
         <div className={styles.brand}>
           <span className={styles.mark}><Icon name="heart" size={22} strokeWidth={2.1} /></span>
           <span><b>TherapyConnect</b><span className={styles.brandSub}>Therapist workspace</span></span>
