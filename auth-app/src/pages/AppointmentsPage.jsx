@@ -4,6 +4,8 @@ import { getAvailability, createAppointment, generateSlots, updateAppointmentSta
 import { getTherapistClients, createSessionNotes, getClientById } from "../api/therapistClients";
 import api from "../api/client";
 import { useModeMap, useAllModes } from "../context/DeliveryModesContext";
+import SessionNoteEditor from "../components/SessionNoteEditor";
+import { hasNoteText } from "../utils/sessionNotes.mjs";
 import SessionTimer from "../components/SessionTimer";
 import Icon from "../components/icons";
 import styles from "./AppointmentsPage.module.css";
@@ -817,7 +819,7 @@ export default function AppointmentsPage() {
   const handleUpdateStatus = async () => {
     if (!updateStatus) { setUpdateError("Please select a status."); return; }
     setUpdateLoading(true); setUpdateError(null); setNotesWarning(null);
-    const notes = sessionNotes.trim();
+    const notes = hasNoteText(sessionNotes) ? sessionNotes : "";
     // Re-sending the current status would be rejected as an invalid transition,
     // so a notes-only save (adding notes to an already-completed session) skips
     // the status call entirely.
@@ -1566,9 +1568,10 @@ export default function AppointmentsPage() {
                     <label className={styles.label}>
                       Session notes <span className={styles.optionalTag}>(optional)</span>
                     </label>
-                    <textarea className={styles.reasonTextarea} rows={5}
+                    <SessionNoteEditor key={panelSlot.appointmentId}
                       placeholder="What came up, what to pick up next time…"
-                      value={sessionNotes} onChange={e => setSessionNotes(e.target.value)}/>
+                      disabled={updateLoading}
+                      value={sessionNotes} onChange={setSessionNotes}/>
                     <span className={styles.notesHint}>
                       Saved against this session and visible on{" "}
                       <span className={styles.clientLink} onClick={() => navigate(`/therapist/clients/${panelSlot.clientId}`)}>
@@ -1589,7 +1592,7 @@ export default function AppointmentsPage() {
                   )}
                   <button className={styles.submitBtn} onClick={handleUpdateStatus}
                     disabled={updateLoading || !updateStatus ||
-                      (updateStatus === panelSlot.appointmentStatus && !sessionNotes.trim())}>
+                      (updateStatus === panelSlot.appointmentStatus && !hasNoteText(sessionNotes))}>
                     {updateLoading ? <span className={styles.btnSpinner}/> : isPhone && updateStatus === "CANCELLED" && updateStatus !== panelSlot.appointmentStatus ? "Confirm cancellation" : "Save"}
                   </button>
                 </div>

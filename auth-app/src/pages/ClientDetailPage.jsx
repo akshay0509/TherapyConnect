@@ -8,6 +8,8 @@ import { useModeMap, useAllModes } from "../context/DeliveryModesContext";
 import { splitList, looksLikeChipList } from "../components/ChipSelect";
 import Icon from "../components/icons";
 import ClientFormModal from "../components/ClientFormModal";
+import SessionNoteEditor, { SessionNoteView } from "../components/SessionNoteEditor";
+import { hasNoteText, noteText } from "../utils/sessionNotes.mjs";
 import ClientRiskCard from "../components/ClientRiskCard";
 import styles from "./ClientDetailPage.module.css";
 
@@ -31,7 +33,7 @@ function ageFromDob(dob) {
 }
 
 function wordCount(text) {
-  const t = (text ?? "").trim();
+  const t = noteText(text);
   return t ? t.split(/\s+/).length : 0;
 }
 
@@ -419,7 +421,7 @@ export default function ClientDetailPage() {
   // the sessions this page already loads — SessionDetailsDto carries sessionNotes,
   // so no extra request is needed just to count them.
   const pendingNotes = useMemo(
-    () => sessions.filter(s => s.status === "COMPLETED" && !s.sessionNotes?.trim()).length,
+    () => sessions.filter(s => s.status === "COMPLETED" && !hasNoteText(s.sessionNotes)).length,
     [sessions]
   );
 
@@ -523,7 +525,7 @@ export default function ClientDetailPage() {
             {/* ── Overview tab ── */}
             {activeTab === "overview" && (() => {
               const recent = sessions.slice().sort((a, b) => new Date(b.startTime) - new Date(a.startTime));
-              const latestNote = recent.find(s => s.sessionNotes);
+              const latestNote = recent.find(s => hasNoteText(s.sessionNotes));
               return (
                 <>
                   <div className="grid-2" style={{ marginBottom: 22 }}>
@@ -566,7 +568,7 @@ export default function ClientDetailPage() {
                         <h2 style={{ margin: "0 0 12px", fontSize: "1rem" }}>Latest note</h2>
                         {latestNote ? (
                           <>
-                            <p style={{ color: "var(--text-2)", fontSize: ".88rem", lineHeight: 1.6, margin: 0 }}>{latestNote.sessionNotes}</p>
+                            <SessionNoteView value={latestNote.sessionNotes} />
                             <div style={{ color: "var(--text-4)", fontSize: ".76rem", marginTop: 12 }}>{formatDate2(latestNote.startTime)} · encrypted</div>
                           </>
                         ) : (
@@ -731,10 +733,10 @@ export default function ClientDetailPage() {
                           </div>
                           <div className={styles.sessionDivider}/>
                           <div className={styles.notesSection}>
-                            {s.sessionNotes ? (
+                            {hasNoteText(s.sessionNotes) ? (
                               <>
                                 <p className={styles.notesLabel}>Session Notes</p>
-                                <p className={styles.notesText}>{s.sessionNotes}</p>
+                                <SessionNoteView className={styles.notesText} value={s.sessionNotes} />
                                 <button className={styles.notesModifyBtn} onClick={() => startEdit(s.appointmentId, s.sessionNotes)}><Icon name="edit" size={14} /> Modify</button>
                               </>
                             ) : (
@@ -822,7 +824,7 @@ export default function ClientDetailPage() {
           ? sessions
               .filter(x =>
                 x.appointmentId !== apptId &&
-                (x.sessionNotes ?? "").trim() &&
+                hasNoteText(x.sessionNotes) &&
                 new Date(x.startTime) < new Date(session.startTime))
               .sort((a, b) => new Date(b.startTime) - new Date(a.startTime))
           : [];
@@ -852,17 +854,12 @@ export default function ClientDetailPage() {
 
             <div className={styles.notesModalBody}>
               <div className={styles.notesEditorCol}>
-              <textarea
-                className={styles.notesTextarea}
+              <SessionNoteEditor
+                key={apptId}
                 value={ns.draft}
-                onChange={e => updateDraft(apptId, e.target.value)}
-                // Save without leaving the keyboard — the hands are already there.
-                onKeyDown={e => {
-                  if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && ns.draft?.trim() && !ns.saving) {
-                    e.preventDefault();
-                    saveNotes(apptId, notesPopup.hasExisting);
-                  }
-                }}
+                onChange={value => updateDraft(apptId, value)}
+                onSave={() => { if (hasNoteText(ns.draft) && !ns.saving) saveNotes(apptId, notesPopup.hasExisting); }}
+                disabled={ns.saving}
                 placeholder="Presentation, what was worked on, interventions, risk, plan for next time…"
                 autoFocus
               />
@@ -908,11 +905,11 @@ export default function ClientDetailPage() {
                               /* A first-line preview so a collapsed row still says
                                  something — a column of bare dates is not scannable. */
                               <span className={styles.prevNoteItemPeek}>
-                                {n.sessionNotes.trim().split(/\s+/).slice(0, 7).join(" ")}…
+                                {noteText(n.sessionNotes).split(/\s+/).slice(0, 7).join(" ")}…
                               </span>
                             )}
                           </button>
-                          {open && <div className={styles.prevNoteItemBody}>{n.sessionNotes}</div>}
+                          {open && <SessionNoteView className={styles.prevNoteItemBody} value={n.sessionNotes} />}
                         </div>
                       );
                     })}
@@ -933,7 +930,7 @@ export default function ClientDetailPage() {
               </span>
               <span className={styles.notesFooterBtns}>
                 <button className="btn" onClick={() => requestCloseNotes(apptId)} disabled={ns.saving}>Cancel</button>
-                <button className="btn btn-primary" onClick={() => saveNotes(apptId, notesPopup.hasExisting)} disabled={ns.saving || !ns.draft?.trim()}>
+                <button className="btn btn-primary" onClick={() => saveNotes(apptId, notesPopup.hasExisting)} disabled={ns.saving || !hasNoteText(ns.draft)}>
                   {ns.saving ? <span className={styles.btnSpinner}/> : "Save"}
                 </button>
               </span>
