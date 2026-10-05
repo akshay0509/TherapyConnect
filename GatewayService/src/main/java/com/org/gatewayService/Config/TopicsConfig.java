@@ -28,6 +28,15 @@ public class TopicsConfig {
 		return TopicBuilder.name("therapist-appointment-events").partitions(3).replicas(1).build();
 	}
 	
+    @Bean
+    NewTopic appointmentMeetingTopic() {
+        return TopicBuilder.name("appointment-meeting-events").partitions(3).replicas(1).build();
+    }
+    @Bean
+    NewTopic appointmentMeetingDeadLetterTopic() {
+        return TopicBuilder.name("appointment-meeting-events.DLT").partitions(3).replicas(1).build();
+    }
+
 	@Bean
 	NewTopic clientTopic() {
 		return TopicBuilder.name("client-events").partitions(3).replicas(1).build();

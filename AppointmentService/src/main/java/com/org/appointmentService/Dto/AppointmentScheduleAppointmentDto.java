@@ -13,6 +13,8 @@ public class AppointmentScheduleAppointmentDto {
     private String appointmentId;
     private String clientId;
     private String clientName;
+    private String meetingUrl;
+    private String meetingStatus;
     private LocalDateTime startTime;
     private LocalDateTime endTime;
     private AppointmentStatus status;

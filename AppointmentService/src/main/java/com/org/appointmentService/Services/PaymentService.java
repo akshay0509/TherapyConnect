@@ -343,7 +343,7 @@ public class PaymentService {
 	private void confirmAppointmentAfterPayment(AppointmentPayment payment) {
 
 		TherapistAppointments appointment = therapistAppointmentsRepository
-				.findByAppointmentIdAndTherapistId(payment.getAppointmentId(), payment.getTherapistId())
+				.lockForCalendarUpdate(payment.getAppointmentId(), payment.getTherapistId())
 				.orElse(null);
 
 		if (appointment == null) {
@@ -358,7 +358,10 @@ public class PaymentService {
 			return;
 		}
 
-		appointment.setStatus(AppointmentStatus.CONFIRMED);
+		String modeType = therapyDeliveryModeRepository.findById(appointment.getModeId())
+                .map(mode -> mode.getModeType().name()).orElse(null);
+        appointment.advanceCalendarRevision(true, modeType);
+        appointment.setStatus(AppointmentStatus.CONFIRMED);
 		appointment.setStatusReason("Auto-confirmed on payment");
 		therapistAppointmentsRepository.save(appointment);
 
@@ -366,6 +369,8 @@ public class PaymentService {
 			AppointmentEvent event = new AppointmentEvent();
 			event.setEventType("AppointmentConfirmed");
 			event.setAppointmentId(appointment.getAppointmentId());
+            event.setCalendarRevision(appointment.getCalendarRevision());
+            event.setCalendarEligible(true);
 			event.setSlotId(appointment.getSlotId());
 			event.setTherapistId(appointment.getTherapistId());
 			event.setClientId(appointment.getClientId());

@@ -38,7 +38,11 @@ public class GoogleCalendarConfig {
                 .setRefreshToken(refreshToken)
                 .build();
 
-        return new Calendar.Builder(httpTransport, JSON_FACTORY, new HttpCredentialsAdapter(credentials))
+        return new Calendar.Builder(httpTransport, JSON_FACTORY, request -> {
+                    new HttpCredentialsAdapter(credentials).initialize(request);
+                    request.setConnectTimeout(5000);
+                    request.setReadTimeout(15000);
+                })
                 .setApplicationName(applicationName)
                 .build();
     }

@@ -29,7 +29,7 @@ public class GoogleCalendarService {
 		this.calendar = calendar;
 	}
 
-	public String createAppointmentEvent(
+	public Event createAppointmentEvent(
 			String clientEmail,
 			String therapistEmail,
 			String summary,
@@ -40,11 +40,24 @@ public class GoogleCalendarService {
 			String address,
 			ZoneId zone) throws Exception {
 
+// Stable ID makes a Google-success / database-rollback retry retrieve the same invite.
+        String stableId = "a" + UUID.nameUUIDFromBytes(description.getBytes(java.nio.charset.StandardCharsets.UTF_8))
+                .toString().replace("-", "");
+        try {
+            calendar.events().get("primary", stableId).execute();
+            // Retry after a committed Google insert but rolled-back DB mapping: reconcile this same ID.
+            return updateAppointmentEvent(stableId, clientEmail, therapistEmail, summary, description,
+                    startTime, endTime, modeType, address, zone);
+        }
+        catch (com.google.api.client.googleapis.json.GoogleJsonResponseException ex) {
+            if (ex.getStatusCode() != 404) throw ex;
+        }
 		logger.info("inside createAppointmentEvent..");
 
 		Event event = new Event();
 
 		event.setSummary(summary);
+        event.setId(stableId);
 		event.setDescription(description);
 
 		event.setStart(buildEventDateTime(startTime, zone));
@@ -68,10 +81,10 @@ public class GoogleCalendarService {
 
 		logger.info("exiting 1..");
 		logger.info("calendar event created. eventId={}", createdEvent.getId());
-		return createdEvent.getId();
+		return createdEvent;
 	}
 
-	public void updateAppointmentEvent(
+	public Event updateAppointmentEvent(
 			String googleCalendarEventId,
 			String clientEmail,
 			String therapistEmail,
@@ -105,14 +118,19 @@ public class GoogleCalendarService {
 
 		// conferenceDataVersion=1 is required or the API silently ignores all
 		// conferenceData changes (both adding and removing a Meet link)
-		calendar.events()
+		Event updatedEvent = calendar.events()
 		.update("primary", googleCalendarEventId, existingEvent)
 		.setConferenceDataVersion(1)
 		.setSendUpdates("all")
 		.execute();
 
 		logger.info("calendar event updated. eventId={}", googleCalendarEventId);
+        return updatedEvent;
 	}
+
+    public Event getAppointmentEvent(String eventId) throws Exception {
+        return calendar.events().get("primary", eventId).execute();
+    }
 
 	public void cancelAppointmentEvent(String googleCalendarEventId) throws Exception {
 		deleteCalendarEvent(googleCalendarEventId, true);

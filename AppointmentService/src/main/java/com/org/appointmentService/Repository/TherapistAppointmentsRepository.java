@@ -15,6 +15,28 @@ import com.org.events.TherapistAppointment.AppointmentStatus;
 @Repository
 public interface TherapistAppointmentsRepository extends JpaRepository<TherapistAppointments, String>{
 
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT a FROM TherapistAppointments a WHERE a.appointmentId = :appointmentId AND a.therapistId = :therapistId")
+    Optional<TherapistAppointments> lockForCalendarUpdate(String appointmentId, String therapistId);
+
+    @org.springframework.data.jpa.repository.Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+        UPDATE TherapistAppointments a SET a.meetingUrl = :url,
+        a.meetingStatus = :meetingStatus, a.meetingSequence = :sequence,
+        a.calendarEligible = CASE WHEN :eligible = true THEN true ELSE a.calendarEligible END
+        WHERE a.appointmentId = :appointmentId AND a.therapistId = :therapistId
+        AND COALESCE(a.calendarRevision, 0) = :revision
+        AND COALESCE(a.meetingSequence, 0) < :sequence
+        AND (:meetingStatus <> 'READY' OR EXISTS (SELECT m FROM TherapyDeliveryMode m
+             WHERE m.modeId = a.modeId AND m.therapistId = a.therapistId
+             AND m.modeType = com.org.appointmentService.Enums.DeliveryModeType.ONLINE))
+        AND a.status IN (com.org.events.TherapistAppointment.AppointmentStatus.CONFIRMED,
+                         com.org.events.TherapistAppointment.AppointmentStatus.RESCHEDULED)
+        AND (a.calendarEligible = true OR a.calendarEligible IS NULL OR (COALESCE(a.calendarRevision, 0) = 0))
+        """)
+    int applyMeetingUpdate(String appointmentId, String therapistId, long revision,
+                          long sequence, String meetingStatus, String url, boolean eligible);
+
 	List<TherapistAppointments> findByTherapistIdAndStatusInAndStartTimeBetweenOrderByStartTimeAsc(
 			String therapistId,
 			Collection<AppointmentStatus> statuses,

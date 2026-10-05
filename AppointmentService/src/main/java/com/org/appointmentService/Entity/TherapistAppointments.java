@@ -63,6 +63,24 @@ public class TherapistAppointments {
     private Creator createdBy = Creator.THERAPIST;
 
 	private boolean reminderSent = false;
+
+    // Additive columns: nullable for old rows and deployments during migration.
+    @Column(columnDefinition = "bigint default 0")
+    private Long calendarRevision = 0L;
+    private Boolean calendarEligible;
+    @Column(length = 2048)
+    private String meetingUrl;
+    private String meetingStatus;
+    @Column(columnDefinition = "bigint default 0")
+    private Long meetingSequence = 0L;
+
+    public void advanceCalendarRevision(boolean eligible, String modeType) {
+        calendarRevision = (calendarRevision == null ? 0 : calendarRevision) + 1;
+        calendarEligible = eligible;
+        meetingSequence = 0L;
+        meetingUrl = null;
+        meetingStatus = eligible && "ONLINE".equals(modeType) ? "PENDING" : "NOT_APPLICABLE";
+    }
 	
 	@PrePersist
     public void generateId() {

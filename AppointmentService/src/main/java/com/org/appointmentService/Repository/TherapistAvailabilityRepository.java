@@ -89,7 +89,9 @@ public interface TherapistAvailabilityRepository extends JpaRepository<Therapist
 			a.status,
 			a.appointmentId,
 			a.clientId,
-			a.clientName
+			a.clientName,
+            a.meetingUrl,
+            a.meetingStatus
 			)
 			FROM TherapistAvailability s
 			LEFT JOIN TherapistAppointments a
@@ -126,7 +128,9 @@ public interface TherapistAvailabilityRepository extends JpaRepository<Therapist
             a.status,
             a.appointmentId,
             a.clientId,
-            a.clientName
+            a.clientName,
+            a.meetingUrl,
+            a.meetingStatus
             )
             FROM TherapistAvailability s
             LEFT JOIN TherapistAppointments a

@@ -223,7 +223,7 @@ public class AppointmentService {
 		String appointmentId = updateAppointmentStatusRequest.getAppointmentId();
 		String therapistId = updateAppointmentStatusRequest.getTherapistId();
 
-		TherapistAppointments therapistAppointment = therapistAppointmentsRepository.findByAppointmentIdAndTherapistId(appointmentId, therapistId)
+		TherapistAppointments therapistAppointment = therapistAppointmentsRepository.lockForCalendarUpdate(appointmentId, therapistId)
 				.orElseThrow(() -> new AppointmentNotFoundException(appointmentId));
 
 		AppointmentStatus currentStatus = therapistAppointment.getStatus();
@@ -241,7 +241,11 @@ public class AppointmentService {
 
 		validateStatusTransition(currentStatus, targetStatus);
 
-		therapistAppointment.setStatus(targetStatus);
+		String modeType = therapyDeliveryModeRepository.findById(therapistAppointment.getModeId())
+                .map(mode -> mode.getModeType().name()).orElse(null);
+        boolean eligible = targetStatus == AppointmentStatus.CONFIRMED;
+        therapistAppointment.advanceCalendarRevision(eligible, modeType);
+        therapistAppointment.setStatus(targetStatus);
 		therapistAppointment.setStatusReason(updateAppointmentStatusRequest.getReason());
 		therapistAppointmentsRepository.save(therapistAppointment);
 
@@ -268,7 +272,7 @@ public class AppointmentService {
 		String therapistId = rescheduleAppointmentRequest.getTherapistId();
 		String newSlotId = rescheduleAppointmentRequest.getNewSlotId();
 
-		TherapistAppointments therapistAppointment = therapistAppointmentsRepository.findByAppointmentIdAndTherapistId(appointmentId, therapistId)
+		TherapistAppointments therapistAppointment = therapistAppointmentsRepository.lockForCalendarUpdate(appointmentId, therapistId)
 				.orElseThrow(() -> new AppointmentNotFoundException(appointmentId));
 
 		if (TERMINAL_STATUSES.contains(therapistAppointment.getStatus())) {
@@ -341,7 +345,19 @@ public class AppointmentService {
 		therapistAppointment.setServiceId(service.getServiceId());
 		therapistAppointment.setStartTime(newSlot.getStartTime());
 		therapistAppointment.setEndTime(newEndTime);
-		therapistAppointment.setStatus(AppointmentStatus.RESCHEDULED);
+		// CONFIRMED is authoritative; legacy RESCHEDULED eligibility is reconciled by backfill.
+        boolean unknownLegacyEligibility = therapistAppointment.getStatus() == AppointmentStatus.RESCHEDULED
+                && therapistAppointment.getCalendarEligible() == null;
+        boolean eligible = therapistAppointment.getStatus() == AppointmentStatus.CONFIRMED
+                || Boolean.TRUE.equals(therapistAppointment.getCalendarEligible());
+        therapistAppointment.advanceCalendarRevision(eligible, deliveryMode.getModeType().name());
+        // Preserve unknown history: Notification may resolve it from an EXISTING mapping,
+        // but must not create an invite solely from RESCHEDULED status.
+        if (unknownLegacyEligibility) {
+            therapistAppointment.setCalendarEligible(null);
+            therapistAppointment.setMeetingStatus("ONLINE".equals(deliveryMode.getModeType().name()) ? "PENDING" : "NOT_APPLICABLE");
+        }
+        therapistAppointment.setStatus(AppointmentStatus.RESCHEDULED);
 		therapistAppointment.setStatusReason(rescheduleAppointmentRequest.getReason());
 
 		therapistAppointmentsRepository.save(therapistAppointment);
@@ -437,6 +453,8 @@ public class AppointmentService {
 		dto.setModeId(appointment.getModeId());
 		dto.setServiceId(appointment.getServiceId());
 		dto.setReason(appointment.getStatusReason());
+        dto.setMeetingStatus(appointment.getMeetingStatus());
+        dto.setMeetingUrl(appointment.getMeetingUrl());
 		return dto;
 	}
 
@@ -488,6 +506,8 @@ public class AppointmentService {
 	private AppointmentEvent baseEventFromAppointment(TherapistAppointments appointment) {
 		AppointmentEvent event = new AppointmentEvent();
 		event.setAppointmentId(appointment.getAppointmentId());
+        event.setCalendarRevision(appointment.getCalendarRevision());
+        event.setCalendarEligible(appointment.getCalendarEligible());
 		event.setSlotId(appointment.getSlotId());
 		event.setTherapistId(appointment.getTherapistId());
 		event.setClientId(appointment.getClientId());

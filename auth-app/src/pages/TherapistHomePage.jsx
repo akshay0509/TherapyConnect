@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTherapistProfile } from "../context/therapistProfileStore";
 import { useNavigate } from "react-router-dom";
 import { getAvailability, getDashboardStats } from "../api/appointments";
@@ -6,6 +6,7 @@ import { useModeMap } from "../context/DeliveryModesContext";
 import SessionTimer from "../components/SessionTimer";
 import OnboardingChecklist from "../components/OnboardingChecklist";
 import Icon from "../components/icons";
+import MeetingJoin from "../components/MeetingJoin";
 import styles from "./TherapistHomePage.module.css";
 
 function toISODate(date) {
@@ -88,6 +89,36 @@ export default function TherapistHomePage() {
   const [apptError, setApptError] = useState(null);
   const [stats, setStats] = useState(null);
   const [statsLoading, setStatsLoading] = useState(true);
+  const scheduleRequest = useRef(0);
+  const refreshSchedule = useCallback(async () => {
+    const request = ++scheduleRequest.current;
+    const data = await getAvailability(toISODate(startOfWeek()), toISODate(addDays(new Date(), 30)));
+    if (request === scheduleRequest.current) {
+      setAppointments(data.appointments || []);
+      setApptError(null);
+    }
+  }, []);
+  // Today's row drives the join button and can change while the page sits open:
+  // a cancellation, a payment landing, or a Meet link finishing resolution. Poll just
+  // today and splice it over today's slice — refreshSchedule pulls ~37 days and is far
+  // too heavy to repeat every minute, and nextUp/SessionTimer still need that range.
+  const refreshToday = useCallback(async () => {
+    const request = ++scheduleRequest.current;
+    const today = toISODate(new Date());
+    const data = await getAvailability(today, today);
+    if (request !== scheduleRequest.current) return;
+    setAppointments((current) => [
+      ...current.filter((a) => !isSameDay(a.startTime, new Date())),
+      ...(data.appointments || []),
+    ]);
+    setApptError(null);
+  }, []);
+
+  useEffect(() => {
+    // Starts at 60s; the mount fetch already loaded the range.
+    const id = setInterval(() => { refreshToday().catch(() => {}); }, 60000);
+    return () => { scheduleRequest.current += 1; clearInterval(id); };
+  }, [refreshToday]);
 
   // Greet by first name rather than login username — the shell already
   // fetched the profile, so this reuses it instead of refetching.
@@ -100,10 +131,7 @@ export default function TherapistHomePage() {
       .finally(() => setStatsLoading(false));
 
     // fetch from the start of this week so the weekly chart has real past data
-    const from = toISODate(startOfWeek());
-    const next30 = toISODate(addDays(new Date(), 30));
-    getAvailability(from, next30)
-      .then((data) => setAppointments(data.appointments || []))
+    refreshSchedule()
       .catch((e) => setApptError(e.message))
       .finally(() => setApptLoading(false));
   }, []);
@@ -216,6 +244,7 @@ export default function TherapistHomePage() {
                 <div className="info">
                   <b>{a.clientName || "—"}</b>
                   <div className="s"><Icon name={isOnline ? "video" : "pin"} size={13} /> {mode?.displayName ?? "—"}</div>
+                  <MeetingJoin appointment={a} modeType={mode?.modeType} onRefresh={refreshToday} />
                 </div>
                 <span className={`chip ${isOnline ? "chip-online" : "chip-clinic"}`}>{isOnline ? "Online" : "Clinic"}</span>
               </div>

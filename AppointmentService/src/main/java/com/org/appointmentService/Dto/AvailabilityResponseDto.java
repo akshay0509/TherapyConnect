@@ -23,4 +23,6 @@ public class AvailabilityResponseDto {
 	private String appointmentId;
 	private String clientId;
 	private String clientName;
+    private String meetingUrl;
+    private String meetingStatus;
 }

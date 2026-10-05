@@ -46,6 +46,9 @@ public class AppointmentEventConsumer {
 	@Value("${google.calendar.therapist-email:}")
 	private String fallbackTherapistEmail;
 
+    @Autowired
+    private com.org.notificationService.Services.MeetingStateService meetingStateService;
+
 	private static final String topic = "therapist-appointment-events";
 	private static final ZoneId FALLBACK_ZONE = ZoneId.of("Asia/Kolkata");
 
@@ -56,7 +59,7 @@ public class AppointmentEventConsumer {
 	// can see and replay them. A catch-and-log here loses the event forever
 	// (this is how expired-Google-token failures went unnoticed for days).
 	@KafkaListener(topics = topic, groupId = "${spring.kafka.consumer.group-id}")
-	@Transactional
+	@Transactional(rollbackOn = Exception.class)
 	public void listen(JsonNode payload) throws Exception {
 
 		logger.info("inside process of therapist-appointment-events..");
@@ -64,11 +67,16 @@ public class AppointmentEventConsumer {
 		String eventType = payload.get("eventType").asText();
 		AppointmentEvent appointmentEvent = objectMapper.convertValue(payload, AppointmentEvent.class);
 
+        if (!java.util.Set.of("AppointmentConfirmed", "AppointmentRescheduled", "AppointmentCancelled",
+                "AppointmentCompleted", "AppointmentAbandoned").contains(eventType)) return;
+        var meeting = meetingStateService.begin(appointmentEvent);
+        if (meeting == null) return;
 		switch (eventType) {
 
-		case "AppointmentConfirmed" -> createInvite(appointmentEvent);
-		case "AppointmentRescheduled" -> rescheduleInvite(appointmentEvent);
-		case "AppointmentCancelled" -> cancelInvite(appointmentEvent);
+		case "AppointmentConfirmed" -> createInvite(appointmentEvent, meeting);
+		case "AppointmentRescheduled" -> rescheduleInvite(appointmentEvent, meeting);
+		case "AppointmentCancelled" -> cancelInvite(appointmentEvent, meeting);
+		case "AppointmentCompleted", "AppointmentAbandoned" -> meetingStateService.clear(meeting);
 		default -> logger.debug("Skipping unsupported appointment eventType={}", eventType);
 
 		}
@@ -99,13 +107,26 @@ public class AppointmentEventConsumer {
 		return fallbackTherapistEmail;
 	}
 
-	private void createInvite(AppointmentEvent appointmentEvent) throws Exception {
+	private String appointmentTitle(ClientProjection clientProjection) {
+		String firstName = clientProjection.getFirstName() == null ? "" : clientProjection.getFirstName().trim();
+		String lastName = clientProjection.getLastName() == null ? "" : clientProjection.getLastName().trim();
+		String fullName = (firstName + " " + lastName).trim();
+		return fullName.isEmpty() ? "Therapy Session" : "Therapy Session with " + fullName;
+	}
+	private void createInvite(AppointmentEvent appointmentEvent, com.org.notificationService.Entity.AppointmentMeetingState meeting) throws Exception {
 
 		Optional<AppointmentCalendarEvent> existingCalendarEvent = appointmentCalendarEventRepository.findById(appointmentEvent.getAppointmentId());
 
 		if (existingCalendarEvent.isPresent()) {
-			logger.info("Calendar invite already exists for appointmentId={}", appointmentEvent.getAppointmentId());
-			return;
+			// Preserve legacy duplicate-confirmation behavior: read the link without sending another invite update.
+            if (appointmentEvent.getCalendarRevision() == null) {
+                meetingStateService.capture(meeting, googleCalendarService.getAppointmentEvent(
+                        existingCalendarEvent.get().getGoogleCalendarEventId()), appointmentEvent.getModeType());
+                return;
+            }
+            // Versioned reconfirmation reconciles the current appointment.
+            rescheduleInvite(appointmentEvent, meeting);
+            return;
 		}
 
 		ClientProjection clientProjection = clientProjectionRepository.findById(appointmentEvent.getClientId())
@@ -114,9 +135,9 @@ public class AppointmentEventConsumer {
 
 		ZoneId zone = resolveZone(appointmentEvent.getTherapistId());
 
-		String title = "Therapy Session with " + clientProjection.getFirstName() + " " + clientProjection.getLastName();
+		String title = appointmentTitle(clientProjection);
 
-		String googleCalendarEventId = googleCalendarService.createAppointmentEvent(
+		var googleEvent = googleCalendarService.createAppointmentEvent(
 				clientProjection.getEmail(),
 				resolveTherapistEmail(appointmentEvent.getTherapistId()),
 				title,
@@ -130,17 +151,26 @@ public class AppointmentEventConsumer {
 
 		AppointmentCalendarEvent appointmentCalendarEvent = new AppointmentCalendarEvent();
 		appointmentCalendarEvent.setAppointmentId(appointmentEvent.getAppointmentId());
-		appointmentCalendarEvent.setGoogleCalendarEventId(googleCalendarEventId);
+		appointmentCalendarEvent.setGoogleCalendarEventId(googleEvent.getId());
 		appointmentCalendarEventRepository.save(appointmentCalendarEvent);
+        meetingStateService.capture(meeting, googleEvent, appointmentEvent.getModeType());
 	}
 
-	private void rescheduleInvite(AppointmentEvent appointmentEvent) throws Exception {
+	private void rescheduleInvite(AppointmentEvent appointmentEvent, com.org.notificationService.Entity.AppointmentMeetingState meeting) throws Exception {
 
 		Optional<AppointmentCalendarEvent> existingCalendarEvent = appointmentCalendarEventRepository.findById(appointmentEvent.getAppointmentId());
 
 		if (existingCalendarEvent.isEmpty()) {
-			logger.info("No existing invite for appointmentId={}; skipping reschedule update", appointmentEvent.getAppointmentId());
-			return;
+			// Preserve production behavior: a missing mapping is never automatically repaired.
+            // It may represent an orphaned Google event; creating another could duplicate invitations.
+            if (Boolean.TRUE.equals(appointmentEvent.getCalendarEligible())) {
+                meeting.setMeetingUrl(null); meeting.setMeetingStatus("FAILED");
+                meetingStateService.save(meeting);
+            } else {
+                // False or unknown eligibility without a mapping never proves an invite existed.
+                meetingStateService.clear(meeting);
+            }
+            return;
 		}
 
 		ClientProjection clientProjection = clientProjectionRepository.findById(appointmentEvent.getClientId())
@@ -149,9 +179,9 @@ public class AppointmentEventConsumer {
 
 		ZoneId zone = resolveZone(appointmentEvent.getTherapistId());
 
-		String title = "Therapy Session with " + clientProjection.getFirstName() + " " + clientProjection.getLastName();
+		String title = appointmentTitle(clientProjection);
 
-		googleCalendarService.updateAppointmentEvent(
+		var googleEvent = googleCalendarService.updateAppointmentEvent(
 				existingCalendarEvent.get().getGoogleCalendarEventId(),
 				clientProjection.getEmail(),
 				resolveTherapistEmail(appointmentEvent.getTherapistId()),
@@ -163,13 +193,15 @@ public class AppointmentEventConsumer {
 				appointmentEvent.getAddress(),
 				zone
 				);
+		meetingStateService.capture(meeting, googleEvent, appointmentEvent.getModeType());
 	}
 
-	private void cancelInvite(AppointmentEvent appointmentEvent) throws Exception {
+	private void cancelInvite(AppointmentEvent appointmentEvent, com.org.notificationService.Entity.AppointmentMeetingState meeting) throws Exception {
 
 		Optional<AppointmentCalendarEvent> mapping = appointmentCalendarEventRepository.findById(appointmentEvent.getAppointmentId());
 		if (mapping.isEmpty()) {
-			logger.warn("Calendar mapping not found for cancel. appointmentId={}", appointmentEvent.getAppointmentId());
+			meetingStateService.clear(meeting);
+            logger.warn("Calendar mapping not found for cancel. appointmentId={}", appointmentEvent.getAppointmentId());
 			return;
 		}
 
@@ -184,5 +216,7 @@ public class AppointmentEventConsumer {
 			logger.warn("Calendar event already gone for appointmentId={}; removing mapping", appointmentEvent.getAppointmentId());
 		}
 		appointmentCalendarEventRepository.delete(mapping.get());
+        meetingStateService.clear(meeting);
 	}
 }
+

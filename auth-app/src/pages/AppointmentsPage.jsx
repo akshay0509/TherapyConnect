@@ -13,6 +13,7 @@ import MobileAgenda, { dateValue, dayLabel } from "../components/MobileAgenda";
 import useMediaQuery from "../hooks/useMediaQuery";
 import useMobileDialog from "../hooks/useMobileDialog";
 import { fittingRescheduleStarts } from "../utils/rescheduleAvailability.mjs";
+import MeetingJoin from "../components/MeetingJoin";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const DAY_SHORT = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
@@ -674,6 +675,8 @@ export default function AppointmentsPage() {
       endTime: appt.endTime,
       appointmentStatus: appt.status,
       modeId: appt.modeId,
+      meetingUrl: appt.meetingUrl,
+      meetingStatus: appt.meetingStatus,
       ...(isPhone ? { serviceId: appt.serviceId, reason: appt.reason } : {}),
       slotId: slot?.slotId,
     };
@@ -938,6 +941,28 @@ export default function AppointmentsPage() {
     refreshToday();
     setAgendaRevision(n => n + 1);
   };
+
+  const refreshPanelMeeting = async () => {
+    const requested = panelMeetingAppointment;
+    const panelAtRequest = panelSlot;
+    const requestedStatus = requested?.status ?? requested?.appointmentStatus;
+    if (!requested?.appointmentId) return;
+    const date = toISODate(new Date(requested.startTime));
+    const data = await getAvailability(date, date);
+    const fresh = data.appointments?.find(a => a.appointmentId === requested.appointmentId);
+    if (!fresh) throw new Error("Appointment is no longer available.");
+    // Never let a late refresh replace another appointment or a locally changed session.
+    setPanelSlot(current => current?.appointmentId === requested.appointmentId
+      && current.startTime === requested.startTime && current.appointmentStatus === panelAtRequest?.appointmentStatus
+      ? { ...current, ...fresh, appointmentStatus: fresh.status } : current);
+    setAppointments(current => current.map(a => a.appointmentId === fresh.appointmentId
+      && a.startTime === requested.startTime && a.status === requestedStatus ? fresh : a));
+    setTodayAppointments(current => current.map(a => a.appointmentId === fresh.appointmentId
+      && a.startTime === requested.startTime && a.status === requestedStatus ? fresh : a));
+  };
+
+  const panelMeetingAppointment = appointments.find(a => a.appointmentId === panelSlot?.appointmentId)
+    || todayAppointments.find(a => a.appointmentId === panelSlot?.appointmentId) || panelSlot;
 
   const handleReschedule = async () => {
     if (!reschedNewSlot) { setReschedError("Please select a new slot."); return; }
@@ -1499,6 +1524,8 @@ export default function AppointmentsPage() {
               </div>
               <div className={styles.panelForm}>
                 <div className={styles.slotSummary}>
+                  <MeetingJoin appointment={panelMeetingAppointment}
+                    modeType={modeMap[panelMeetingAppointment?.modeId]?.modeType} onRefresh={refreshPanelMeeting} />
                   <div className={styles.summaryRow}>
                     <span className={styles.summaryLabel}>Client</span>
                     <span className={styles.clientLink} onClick={() => navigate(`/therapist/clients/${panelSlot.clientId}`)}>{panelSlot.clientName}</span>

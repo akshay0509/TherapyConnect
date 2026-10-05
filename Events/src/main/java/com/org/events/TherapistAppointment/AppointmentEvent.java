@@ -10,6 +10,9 @@ import lombok.Data;
 public class AppointmentEvent {
 
 	private String eventId;
+    // Null identifies events written by the old production application.
+    private Long calendarRevision;
+    private Boolean calendarEligible;
 	private String eventType;
 	private String appointmentId;
 	private String slotId;
